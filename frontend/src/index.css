@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	body {
+		@apply antialiased;
+	}
+}
+
+/* Email HTML content reset — isolate rendered email from app styles */
+.email-content img {
+	max-width: 100%;
+	height: auto;
+}
+
+.email-content a {
+	@apply text-stork-600 dark:text-stork-400 underline;
+}
+
+.email-content blockquote {
+	@apply border-l-2 border-gray-300 dark:border-gray-600 pl-3 ml-2 text-gray-600 dark:text-gray-400;
+}
+
+/* Welcome screen animation */
+.animate-fadeIn {
+	animation: fadeIn 0.4s ease-out;
+}
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* Toast slide-up animation */
+.animate-slideUp {
+	animation: slideUp 0.25s ease-out;
+}
+@keyframes slideUp {
+	from {
+		opacity: 0;
+		transform: translateY(12px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+	width: 6px;
+}
+::-webkit-scrollbar-track {
+	@apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+	@apply bg-gray-300 dark:bg-gray-700 rounded-full;
+}

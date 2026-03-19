@@ -1,0 +1,119 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import type { Folder } from "../../api";
+import { BulkActionsBar } from "../BulkActionsBar";
+
+const mockFolders: Folder[] = [
+	{
+		id: 1,
+		path: "INBOX",
+		name: "Inbox",
+		special_use: null,
+		message_count: 5,
+		unread_count: 2,
+		last_synced_at: null,
+	},
+	{
+		id: 2,
+		path: "Archive",
+		name: "Archive",
+		special_use: "\\Archive",
+		message_count: 10,
+		unread_count: 0,
+		last_synced_at: null,
+	},
+	{
+		id: 3,
+		path: "Trash",
+		name: "Trash",
+		special_use: "\\Trash",
+		message_count: 0,
+		unread_count: 0,
+		last_synced_at: null,
+	},
+];
+
+function defaultProps(overrides = {}) {
+	return {
+		count: 3,
+		total: 10,
+		allSelected: false,
+		onSelectAll: vi.fn(),
+		onClearSelection: vi.fn(),
+		onDelete: vi.fn(),
+		onMarkRead: vi.fn(),
+		onMarkUnread: vi.fn(),
+		onMove: vi.fn(),
+		folders: mockFolders,
+		...overrides,
+	};
+}
+
+describe("BulkActionsBar", () => {
+	it("displays selected count", () => {
+		render(<BulkActionsBar {...defaultProps({ count: 5 })} />);
+		expect(screen.getByText(/5 selected/i)).toBeInTheDocument();
+	});
+
+	it('shows "Select all N" when not all selected', () => {
+		render(<BulkActionsBar {...defaultProps({ count: 3, total: 10, allSelected: false })} />);
+		expect(screen.getByText(/Select all 10/i)).toBeInTheDocument();
+	});
+
+	it('hides "Select all" when all selected', () => {
+		render(<BulkActionsBar {...defaultProps({ allSelected: true })} />);
+		expect(screen.queryByText(/Select all/i)).not.toBeInTheDocument();
+	});
+
+	it("calls onSelectAll when select-all button clicked", () => {
+		const onSelectAll = vi.fn();
+		render(<BulkActionsBar {...defaultProps({ onSelectAll })} />);
+		fireEvent.click(screen.getByText(/Select all 10/i));
+		expect(onSelectAll).toHaveBeenCalledTimes(1);
+	});
+
+	it("calls onClearSelection when clear button clicked", () => {
+		const onClearSelection = vi.fn();
+		render(<BulkActionsBar {...defaultProps({ onClearSelection })} />);
+		fireEvent.click(screen.getByTitle("Clear selection"));
+		expect(onClearSelection).toHaveBeenCalledTimes(1);
+	});
+
+	it("calls onDelete when delete button clicked", () => {
+		const onDelete = vi.fn();
+		render(<BulkActionsBar {...defaultProps({ onDelete })} />);
+		fireEvent.click(screen.getByTitle("Delete selected"));
+		expect(onDelete).toHaveBeenCalledTimes(1);
+	});
+
+	it("calls onMarkRead when mark-read button clicked", () => {
+		const onMarkRead = vi.fn();
+		render(<BulkActionsBar {...defaultProps({ onMarkRead })} />);
+		fireEvent.click(screen.getByTitle("Mark as read"));
+		expect(onMarkRead).toHaveBeenCalledTimes(1);
+	});
+
+	it("calls onMarkUnread when mark-unread button clicked", () => {
+		const onMarkUnread = vi.fn();
+		render(<BulkActionsBar {...defaultProps({ onMarkUnread })} />);
+		fireEvent.click(screen.getByTitle("Mark as unread"));
+		expect(onMarkUnread).toHaveBeenCalledTimes(1);
+	});
+
+	it("calls onMove with archive folder id when archive button clicked", () => {
+		const onMove = vi.fn();
+		render(<BulkActionsBar {...defaultProps({ onMove })} />);
+		fireEvent.click(screen.getByTitle("Archive selected"));
+		expect(onMove).toHaveBeenCalledWith(2); // Archive folder id=2
+	});
+
+	it("renders the bulk actions bar with testid", () => {
+		render(<BulkActionsBar {...defaultProps()} />);
+		expect(screen.getByTestId("bulk-actions-bar")).toBeInTheDocument();
+	});
+
+	it("hides folder button when no folders provided", () => {
+		render(<BulkActionsBar {...defaultProps({ folders: [] })} />);
+		expect(screen.queryByTitle("Move to folder")).not.toBeInTheDocument();
+	});
+});

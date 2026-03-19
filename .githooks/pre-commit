@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Pre-commit hook: run lint + tests before allowing commits.
+# This prevents broken commits from reaching the public repo.
+#
+# Install: git config core.hooksPath .githooks
+set -euo pipefail
+
+echo "=== Pre-commit: running lint ==="
+bun run lint
+echo "=== Pre-commit: lint passed ==="
+
+echo "=== Pre-commit: running tests ==="
+bun run test
+echo "=== Pre-commit: all tests passed ==="
+
+echo "=== Pre-commit: running backend build ==="
+bun run build
+echo "=== Pre-commit: backend build passed ==="
+
+echo "=== Pre-commit: running frontend build (tsc + vite) ==="
+cd frontend && bun run build && cd ..
+echo "=== Pre-commit: frontend build passed ==="
+
+echo "=== Pre-commit: all checks passed ==="

@@ -1,0 +1,19 @@
+services:
+  stork:
+    build: .
+    init: true
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - stork-data:/app/data
+    environment:
+      - STORK_PORT=3100
+    restart: unless-stopped
+    mem_swappiness: 0
+    ulimits:
+      core: 0
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  stork-data:
