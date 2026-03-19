@@ -1,0 +1,183 @@
+/**
+ * Starts a stork server with pre-seeded test data for E2E tests.
+ * Used by Playwright's webServer config.
+ */
+import { createApp } from "../../src/api/server.js";
+import {
+	addMessageLabel,
+	createTestAccount,
+	createTestDb,
+	createTestFolder,
+	createTestLabel,
+	createTestMessage,
+} from "../helpers/test-db.js";
+
+const PORT = 13200;
+const db = createTestDb();
+
+// Seed test data
+const accountId = createTestAccount(db, {
+	name: "E2E Test Account",
+	email: "e2e@test.local",
+	imapHost: "127.0.0.1",
+	imapPort: 9993,
+	smtpHost: "127.0.0.1",
+	smtpPort: 9587,
+});
+
+const inboxId = createTestFolder(db, accountId, "INBOX", {
+	name: "INBOX",
+	specialUse: "\\Inbox",
+});
+const sentId = createTestFolder(db, accountId, "Sent", {
+	name: "Sent",
+	specialUse: "\\Sent",
+});
+const draftsId = createTestFolder(db, accountId, "Drafts", {
+	name: "Drafts",
+	specialUse: "\\Drafts",
+});
+const trashId = createTestFolder(db, accountId, "Trash", {
+	name: "Trash",
+	specialUse: "\\Trash",
+});
+
+// Create IMAP-sourced labels (mirrors the folders — populated by IMAP sync in production)
+const inboxLabelId = createTestLabel(db, accountId, "INBOX", { source: "imap" });
+const sentLabelId = createTestLabel(db, accountId, "Sent", { source: "imap" });
+const draftsLabelId = createTestLabel(db, accountId, "Drafts", { source: "imap" });
+createTestLabel(db, accountId, "Trash", { source: "imap" });
+
+// Create inbox messages with varied content
+const now = new Date();
+const inboxMessageIds: number[] = [];
+for (let i = 1; i <= 10; i++) {
+	const date = new Date(now.getTime() - i * 3600_000);
+	const msgId = createTestMessage(db, accountId, inboxId, i, {
+		subject: `E2E Test Email #${i}`,
+		fromAddress: `sender${i}@example.com`,
+		fromName: `Sender ${i}`,
+		toAddresses: '["e2e@test.local"]',
+		date: date.toISOString(),
+		textBody: `This is the body of test email number ${i}. It contains some text for testing purposes.`,
+		htmlBody: `<p>This is the <strong>HTML body</strong> of test email number ${i}.</p>`,
+		flags: i <= 3 ? "" : "\\Seen",
+	});
+	inboxMessageIds.push(msgId);
+}
+
+// Create a starred message
+const starredMsgId = createTestMessage(db, accountId, inboxId, 11, {
+	subject: "Important Starred Email",
+	fromAddress: "vip@example.com",
+	fromName: "VIP Sender",
+	toAddresses: '["e2e@test.local"]',
+	date: new Date(now.getTime() - 100_000).toISOString(),
+	textBody: "This is a very important email that has been starred.",
+	flags: "\\Seen,\\Flagged",
+});
+inboxMessageIds.push(starredMsgId);
+
+// Create a threaded conversation
+const threadMsgId1 = "<thread-1@test.local>";
+const threadMsgId2 = "<thread-2@test.local>";
+const threadMsgId3 = "<thread-3@test.local>";
+
+const thread1Id = createTestMessage(db, accountId, inboxId, 12, {
+	messageId: threadMsgId1,
+	subject: "Thread: Project Discussion",
+	fromAddress: "alice@example.com",
+	fromName: "Alice",
+	toAddresses: '["e2e@test.local"]',
+	date: new Date(now.getTime() - 7200_000).toISOString(),
+	textBody: "Let's discuss the project timeline.",
+	flags: "\\Seen",
+});
+inboxMessageIds.push(thread1Id);
+
+const thread2Id = createTestMessage(db, accountId, inboxId, 13, {
+	messageId: threadMsgId2,
+	subject: "Re: Thread: Project Discussion",
+	fromAddress: "e2e@test.local",
+	fromName: "E2E Test",
+	toAddresses: '["alice@example.com"]',
+	date: new Date(now.getTime() - 3600_000).toISOString(),
+	textBody: "Sounds good, how about next week?",
+	inReplyTo: threadMsgId1,
+	references: threadMsgId1,
+	flags: "\\Seen",
+});
+inboxMessageIds.push(thread2Id);
+
+const thread3Id = createTestMessage(db, accountId, inboxId, 14, {
+	messageId: threadMsgId3,
+	subject: "Re: Thread: Project Discussion",
+	fromAddress: "alice@example.com",
+	fromName: "Alice",
+	toAddresses: '["e2e@test.local"]',
+	date: new Date(now.getTime() - 1800_000).toISOString(),
+	textBody: "Next week works for me!",
+	inReplyTo: threadMsgId2,
+	references: `${threadMsgId1} ${threadMsgId2}`,
+	flags: "\\Seen",
+});
+inboxMessageIds.push(thread3Id);
+
+// Create sent messages
+const sentMsgId = createTestMessage(db, accountId, sentId, 1, {
+	subject: "Outgoing Test",
+	fromAddress: "e2e@test.local",
+	fromName: "E2E Test Account",
+	toAddresses: '["recipient@example.com"]',
+	date: new Date(now.getTime() - 5000_000).toISOString(),
+	textBody: "This is a sent message.",
+	flags: "\\Seen",
+});
+
+// Create a message with attachment metadata
+const attachMsgId = createTestMessage(db, accountId, inboxId, 15, {
+	subject: "Email with Attachment",
+	fromAddress: "files@example.com",
+	fromName: "File Sender",
+	toAddresses: '["e2e@test.local"]',
+	date: new Date(now.getTime() - 500_000).toISOString(),
+	textBody: "Please see the attached document.",
+	hasAttachments: 1,
+	flags: "\\Seen",
+});
+inboxMessageIds.push(attachMsgId);
+
+// Add attachment record
+db.prepare(`
+	INSERT INTO attachments (message_id, filename, content_type, size, data)
+	VALUES (?, ?, ?, ?, ?)
+`).run(attachMsgId, "document.pdf", "application/pdf", 12345, Buffer.from("fake pdf content"));
+
+// Link messages to labels (mirrors what IMAP sync does in production)
+for (const msgId of inboxMessageIds) {
+	addMessageLabel(db, msgId, inboxLabelId);
+}
+addMessageLabel(db, sentMsgId, sentLabelId);
+
+// Drafts label has no messages (so the "empty folder" test passes)
+void draftsLabelId;
+
+// Update folder counts
+db.prepare("UPDATE folders SET message_count = ?, unread_count = ? WHERE id = ?").run(
+	15,
+	3,
+	inboxId,
+);
+db.prepare("UPDATE folders SET message_count = 1, unread_count = 0 WHERE id = ?").run(sentId);
+
+const { app, scheduler } = createApp(db);
+
+// Don't actually try to sync — we have no real IMAP server
+await scheduler.stop();
+
+console.log(`E2E test server starting on http://127.0.0.1:${PORT}`);
+
+export default {
+	port: PORT,
+	fetch: app.fetch,
+};

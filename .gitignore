@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.db
+*.db-wal
+*.db-shm
+.env
+.DS_Store
+data/
+test-results/
+playwright-report/
+frontend/tsconfig.tsbuildinfo
+
+# Local-only hooks
+.githooks/pre-push
+.githooks/commit-msg

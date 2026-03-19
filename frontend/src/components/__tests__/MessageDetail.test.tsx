@@ -1,0 +1,254 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Message } from "../../api";
+import { MessageDetail } from "../MessageDetail";
+
+// Mock the api module
+vi.mock("../../api", () => ({
+	api: {
+		messages: {
+			updateFlags: vi.fn().mockResolvedValue({ ok: true, flags: "\\Seen" }),
+			delete: vi.fn().mockResolvedValue({ ok: true }),
+			attachments: vi.fn().mockResolvedValue([]),
+		},
+	},
+}));
+
+function makeMessage(overrides: Partial<Message> = {}): Message {
+	return {
+		id: 1,
+		uid: 1,
+		message_id: "<msg1@test>",
+		subject: "Test Subject",
+		from_address: "sender@test.com",
+		from_name: "Test Sender",
+		to_addresses: "me@test.com",
+		cc_addresses: null,
+		bcc_addresses: null,
+		in_reply_to: null,
+		references: null,
+		date: "2026-01-15T10:00:00Z",
+		text_body: "Hello, this is a test email body.",
+		html_body: null,
+		flags: null,
+		size: 1000,
+		has_attachments: 0,
+		preview: null,
+		folder_path: "INBOX",
+		folder_name: "Inbox",
+		...overrides,
+	};
+}
+
+const defaultProps = {
+	message: makeMessage(),
+	thread: [],
+	loading: false,
+	onReply: vi.fn(),
+	onReplyAll: vi.fn(),
+	onForward: vi.fn(),
+	onBack: vi.fn(),
+	onMessageChanged: vi.fn(),
+	onMessageDeleted: vi.fn(),
+};
+
+describe("MessageDetail", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("shows loading state", () => {
+		render(<MessageDetail {...defaultProps} message={null} loading={true} />);
+		expect(screen.getByText("Loading message…")).toBeInTheDocument();
+	});
+
+	it("shows empty state when no message selected", () => {
+		render(<MessageDetail {...defaultProps} message={null} loading={false} />);
+		expect(screen.getByText("Select a message to read")).toBeInTheDocument();
+	});
+
+	it("renders message subject", () => {
+		render(<MessageDetail {...defaultProps} />);
+		expect(screen.getByText("Test Subject")).toBeInTheDocument();
+	});
+
+	it("renders (no subject) when subject is empty", () => {
+		render(<MessageDetail {...defaultProps} message={makeMessage({ subject: "" })} />);
+		expect(screen.getByText("(no subject)")).toBeInTheDocument();
+	});
+
+	it("renders sender name and address", () => {
+		render(<MessageDetail {...defaultProps} />);
+		expect(screen.getByText("Test Sender")).toBeInTheDocument();
+		expect(screen.getByText(/sender@test\.com/)).toBeInTheDocument();
+	});
+
+	it("renders text body", () => {
+		render(<MessageDetail {...defaultProps} />);
+		expect(screen.getByText("Hello, this is a test email body.")).toBeInTheDocument();
+	});
+
+	it("renders (empty message) when no body", () => {
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({ text_body: null, html_body: null })}
+			/>,
+		);
+		expect(screen.getByText("(empty message)")).toBeInTheDocument();
+	});
+
+	it("renders HTML body when available", () => {
+		const { container } = render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body: "<p>Formatted <strong>content</strong></p>",
+					text_body: "Formatted content",
+				})}
+			/>,
+		);
+		// HTML body is rendered via dangerouslySetInnerHTML with DOMPurify
+		const emailContent = container.querySelector(".email-content");
+		expect(emailContent).toBeInTheDocument();
+	});
+
+	it("forces all links in HTML body to open in a new tab", () => {
+		const { container } = render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body: '<a href="https://example.com">Click me</a>',
+					text_body: "Click me",
+				})}
+			/>,
+		);
+		const link = container.querySelector(".email-content a") as HTMLAnchorElement | null;
+		expect(link).toBeInTheDocument();
+		expect(link?.getAttribute("target")).toBe("_blank");
+		expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+	});
+
+	it("adds target and rel even to links that already have a different target", () => {
+		const { container } = render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body: '<a href="https://example.com" target="_self">Click</a>',
+					text_body: "Click",
+				})}
+			/>,
+		);
+		const link = container.querySelector(".email-content a") as HTMLAnchorElement | null;
+		expect(link?.getAttribute("target")).toBe("_blank");
+		expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+	});
+
+	it("shows toggle between HTML and plain text", () => {
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body: "<p>HTML version</p>",
+					text_body: "Plain version",
+				})}
+			/>,
+		);
+		expect(screen.getByText("Show plain text")).toBeInTheDocument();
+	});
+
+	it("calls onReply when Reply button is clicked", async () => {
+		const onReply = vi.fn();
+		render(<MessageDetail {...defaultProps} onReply={onReply} />);
+		// Button renders <ReplyIcon /> (SVG title "Reply") + text " Reply"
+		const buttons = screen.getAllByRole("button");
+		const replyBtn = buttons.find(
+			(btn) =>
+				btn.textContent?.includes("Reply") &&
+				!btn.textContent?.includes("All") &&
+				!btn.textContent?.includes("Mark"),
+		) as HTMLElement;
+		expect(replyBtn).toBeTruthy();
+		await userEvent.click(replyBtn);
+		expect(onReply).toHaveBeenCalledWith(defaultProps.message);
+	});
+
+	it("calls onReplyAll when Reply All button is clicked", async () => {
+		const onReplyAll = vi.fn();
+		render(<MessageDetail {...defaultProps} onReplyAll={onReplyAll} />);
+		const buttons = screen.getAllByRole("button");
+		const replyAllBtn = buttons.find((btn) =>
+			btn.textContent?.includes("Reply All"),
+		) as HTMLElement;
+		expect(replyAllBtn).toBeTruthy();
+		await userEvent.click(replyAllBtn);
+		expect(onReplyAll).toHaveBeenCalledWith(defaultProps.message);
+	});
+
+	it("calls onForward when Forward button is clicked", async () => {
+		const onForward = vi.fn();
+		render(<MessageDetail {...defaultProps} onForward={onForward} />);
+		const buttons = screen.getAllByRole("button");
+		const forwardBtn = buttons.find((btn) => btn.textContent?.includes("Forward")) as HTMLElement;
+		expect(forwardBtn).toBeTruthy();
+		await userEvent.click(forwardBtn);
+		expect(onForward).toHaveBeenCalledWith(defaultProps.message);
+	});
+
+	it("calls onBack when Back button is clicked", async () => {
+		const onBack = vi.fn();
+		render(<MessageDetail {...defaultProps} onBack={onBack} />);
+		await userEvent.click(screen.getByText("← Back"));
+		expect(onBack).toHaveBeenCalledOnce();
+	});
+
+	it("shows star button reflecting unflagged state", () => {
+		render(<MessageDetail {...defaultProps} message={makeMessage({ flags: null })} />);
+		expect(screen.getByTitle("Star message")).toBeInTheDocument();
+	});
+
+	it("shows star button reflecting flagged state", () => {
+		render(<MessageDetail {...defaultProps} message={makeMessage({ flags: '["\\\\Flagged"]' })} />);
+		expect(screen.getByTitle("Remove star")).toBeInTheDocument();
+	});
+
+	it("shows mark read/unread button for unread message", () => {
+		render(<MessageDetail {...defaultProps} message={makeMessage({ flags: null })} />);
+		expect(screen.getByTitle("Mark as read")).toBeInTheDocument();
+	});
+
+	it("shows mark read/unread button for read message", () => {
+		render(<MessageDetail {...defaultProps} message={makeMessage({ flags: '["\\\\Seen"]' })} />);
+		expect(screen.getByTitle("Mark as unread")).toBeInTheDocument();
+	});
+
+	it("renders thread count when thread has multiple messages", () => {
+		const msg1 = makeMessage({ id: 1 });
+		const msg2 = makeMessage({ id: 2, subject: "Re: Test Subject" });
+		render(<MessageDetail {...defaultProps} message={msg1} thread={[msg1, msg2]} />);
+		expect(screen.getByText("2 messages")).toBeInTheDocument();
+	});
+
+	it("does not show thread count for single message", () => {
+		render(<MessageDetail {...defaultProps} thread={[]} />);
+		expect(screen.queryByText(/messages$/)).not.toBeInTheDocument();
+	});
+
+	it("shows To addresses in expanded message", () => {
+		render(<MessageDetail {...defaultProps} />);
+		expect(screen.getByText(/To: me@test\.com/)).toBeInTheDocument();
+	});
+
+	it("shows CC addresses when present", () => {
+		render(
+			<MessageDetail {...defaultProps} message={makeMessage({ cc_addresses: "cc@test.com" })} />,
+		);
+		expect(screen.getByText(/CC: cc@test\.com/)).toBeInTheDocument();
+	});
+
+	it("renders delete button", () => {
+		render(<MessageDetail {...defaultProps} />);
+		expect(screen.getByTitle("Delete message")).toBeInTheDocument();
+	});
+});

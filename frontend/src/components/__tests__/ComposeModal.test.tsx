@@ -1,0 +1,267 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Account, Message } from "../../api";
+import { ComposeModal } from "../ComposeModal";
+
+function makeMessage(overrides: Partial<Message> = {}): Message {
+	return {
+		id: 1,
+		uid: 1,
+		message_id: "<msg1@test>",
+		subject: "Test Subject",
+		from_address: "sender@test.com",
+		from_name: "Test Sender",
+		to_addresses: '["me@test.com"]',
+		cc_addresses: null,
+		bcc_addresses: null,
+		in_reply_to: null,
+		references: null,
+		date: "2026-01-15T10:00:00Z",
+		text_body: "Original message body.",
+		html_body: null,
+		flags: null,
+		size: 1000,
+		has_attachments: 0,
+		preview: null,
+		folder_path: "INBOX",
+		folder_name: "Inbox",
+		...overrides,
+	};
+}
+
+function makeAccount(overrides: Partial<Account> = {}): Account {
+	return {
+		id: 1,
+		name: "Test User",
+		email: "test@example.com",
+		imap_host: "imap.example.com",
+		smtp_host: "smtp.example.com",
+		created_at: "2026-01-01T00:00:00Z",
+		...overrides,
+	};
+}
+
+describe("ComposeModal", () => {
+	afterEach(() => {
+		localStorage.clear();
+	});
+	it("renders new message mode", () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		expect(screen.getByText("New Message")).toBeInTheDocument();
+		expect(screen.getByPlaceholderText("recipient@example.com")).toHaveValue("");
+	});
+
+	it("renders reply mode with prefilled fields", () => {
+		render(
+			<ComposeModal
+				mode={{ type: "reply", original: makeMessage() }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		expect(screen.getByText("Reply")).toBeInTheDocument();
+		// To field should be prefilled with original sender
+		expect(screen.getByPlaceholderText("recipient@example.com")).toHaveValue("sender@test.com");
+	});
+
+	it("renders reply-all mode with CC", () => {
+		const msg = makeMessage({
+			from_address: "alice@test.com",
+			to_addresses: "me@test.com, bob@test.com",
+			cc_addresses: "carol@test.com",
+		});
+		render(
+			<ComposeModal
+				mode={{ type: "reply-all", original: msg }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		expect(screen.getByText("Reply All")).toBeInTheDocument();
+	});
+
+	it("renders forward mode with Fwd: subject", () => {
+		render(
+			<ComposeModal
+				mode={{ type: "forward", original: makeMessage({ subject: "Important" }) }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		expect(screen.getByText("Forward")).toBeInTheDocument();
+		// Subject should have Fwd: prefix
+		const subjectInput = screen.getByLabelText("Subj");
+		expect(subjectInput).toHaveValue("Fwd: Important");
+	});
+
+	it("calls onClose when close button is clicked", async () => {
+		const onClose = vi.fn();
+		render(<ComposeModal mode={{ type: "new" }} onClose={onClose} onSend={vi.fn()} />);
+
+		await userEvent.click(screen.getByTitle("Close"));
+		expect(onClose).toHaveBeenCalledOnce();
+	});
+
+	it("calls onClose when Discard is clicked", async () => {
+		const onClose = vi.fn();
+		render(<ComposeModal mode={{ type: "new" }} onClose={onClose} onSend={vi.fn()} />);
+
+		await userEvent.click(screen.getByText("Discard"));
+		expect(onClose).toHaveBeenCalledOnce();
+	});
+
+	it("calls onSend with form data including accountId", async () => {
+		const onSend = vi.fn();
+		render(
+			<ComposeModal
+				mode={{ type: "new" }}
+				accounts={[makeAccount({ id: 7 })]}
+				selectedAccountId={7}
+				onClose={vi.fn()}
+				onSend={onSend}
+			/>,
+		);
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "bob@test.com");
+		const subjectInput = screen.getByLabelText("Subj");
+		await userEvent.type(subjectInput, "Hello");
+		await userEvent.type(screen.getByPlaceholderText("Write your message…"), "Hi Bob!");
+
+		await userEvent.click(screen.getByText("Send"));
+		expect(onSend).toHaveBeenCalledWith({
+			accountId: 7,
+			to: "bob@test.com",
+			cc: "",
+			subject: "Hello",
+			body: "Hi Bob!",
+		});
+	});
+
+	it("disables send when To is empty", () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		expect(screen.getByText("Send")).toBeDisabled();
+	});
+
+	it("does not prepend Re: twice", () => {
+		render(
+			<ComposeModal
+				mode={{ type: "reply", original: makeMessage({ subject: "Re: Already replied" }) }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		const subjectInput = screen.getByLabelText("Subj");
+		expect(subjectInput).toHaveValue("Re: Already replied");
+	});
+
+	it("does not prepend Fwd: twice", () => {
+		render(
+			<ComposeModal
+				mode={{ type: "forward", original: makeMessage({ subject: "Fwd: Already forwarded" }) }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		const subjectInput = screen.getByLabelText("Subj");
+		expect(subjectInput).toHaveValue("Fwd: Already forwarded");
+	});
+
+	it("shows From selector when multiple accounts provided", () => {
+		const accounts = [
+			makeAccount({ id: 1, email: "alice@example.com", name: "Alice" }),
+			makeAccount({ id: 2, email: "bob@example.com", name: "Bob" }),
+		];
+		render(
+			<ComposeModal
+				mode={{ type: "new" }}
+				accounts={accounts}
+				selectedAccountId={1}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		expect(screen.getByLabelText("From")).toBeInTheDocument();
+	});
+
+	it("hides From selector for single account", () => {
+		render(
+			<ComposeModal
+				mode={{ type: "new" }}
+				accounts={[makeAccount({ id: 1 })]}
+				selectedAccountId={1}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		expect(screen.queryByLabelText("From")).not.toBeInTheDocument();
+	});
+
+	it("saves draft to localStorage as user types", async () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "draft@test.com");
+		const subjectInput = screen.getByLabelText("Subj");
+		await userEvent.type(subjectInput, "Draft subject");
+
+		const draft = JSON.parse(localStorage.getItem("stork-compose-draft") ?? "{}");
+		expect(draft.to).toBe("draft@test.com");
+		expect(draft.subject).toBe("Draft subject");
+	});
+
+	it("restores draft from localStorage for new messages", () => {
+		localStorage.setItem(
+			"stork-compose-draft",
+			JSON.stringify({ to: "saved@test.com", cc: "", subject: "Saved draft", body: "draft body" }),
+		);
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+
+		expect(screen.getByPlaceholderText("recipient@example.com")).toHaveValue("saved@test.com");
+		expect(screen.getByLabelText("Subj")).toHaveValue("Saved draft");
+	});
+
+	it("does not restore draft for reply mode", () => {
+		localStorage.setItem(
+			"stork-compose-draft",
+			JSON.stringify({
+				to: "draft@test.com",
+				cc: "",
+				subject: "Draft subject",
+				body: "draft body",
+			}),
+		);
+		render(
+			<ComposeModal
+				mode={{ type: "reply", original: makeMessage() }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		// Reply pre-fills with original sender, not draft
+		expect(screen.getByPlaceholderText("recipient@example.com")).toHaveValue("sender@test.com");
+	});
+
+	it("clears draft from localStorage when message is sent", async () => {
+		localStorage.setItem(
+			"stork-compose-draft",
+			JSON.stringify({ to: "", cc: "", subject: "", body: "" }),
+		);
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "bob@test.com");
+		await userEvent.click(screen.getByText("Send"));
+
+		expect(localStorage.getItem("stork-compose-draft")).toBeNull();
+	});
+
+	it("clears draft from localStorage when Discard is clicked", async () => {
+		localStorage.setItem(
+			"stork-compose-draft",
+			JSON.stringify({ to: "x@test.com", cc: "", subject: "hello", body: "" }),
+		);
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+
+		await userEvent.click(screen.getByText("Discard"));
+		expect(localStorage.getItem("stork-compose-draft")).toBeNull();
+	});
+});
