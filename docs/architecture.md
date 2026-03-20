@@ -13,6 +13,9 @@ Stork is a self-hosted email client that syncs mail from IMAP servers into local
 ├─────────────────────────────────────────────┤
 │                REST API                      │
 │              (Hono/Node.js)                  │
+├─────────────────────────────────────────────┤
+│             Encryption Layer                 │
+│  SQLCipher (AES-256) + Vault Key Pattern    │
 ├──────────┬──────────┬───────────────────────┤
 │  IMAP    │  SQLite  │  Full-Text            │
 │  Sync    │  Storage │  Search (FTS5)        │
@@ -24,19 +27,32 @@ Stork is a self-hosted email client that syncs mail from IMAP servers into local
 
 1. **Connector Layer** — abstracts how mail enters and leaves the system (IMAP, SMTP, future: Cloudflare Workers, SES).
 2. **Sync + Storage** — the IMAP sync engine pulls mail into SQLite; the FTS5 index enables search.
-3. **REST API** — Hono routes expose accounts, folders, messages, search, and sync controls.
-4. **Web UI** — React SPA talks to the REST API.
+3. **Encryption Layer** — whole-database encryption via SQLCipher. Vault key pattern with password and recovery key envelopes. Container boots locked; unlocking loads the vault key into memory and opens the database.
+4. **REST API** — Hono routes expose container lifecycle (setup, unlock, password management), accounts, folders, messages, search, and sync controls.
+5. **Web UI** — React SPA talks to the REST API.
 
 ## Directory Structure
 
 ```
 src/
-  index.ts                   Entry point — opens DB, starts API + scheduler
-  api/server.ts              REST API routes (Hono)
+  index.ts                   Entry point — boots container, starts API server
+  api/
+    server.ts                App composition — mounts route modules, lock middleware
+    routes/
+      encryption.ts          Setup, unlock, password change, recovery key rotation
+      accounts.ts            Account CRUD, folders, folder messages, labels, sync trigger
+      messages.ts            Message CRUD, threads, flags, bulk ops, message labels
+      labels.ts              Label update/delete, messages-by-label
+      attachments.ts         Attachment download
+      search.ts              Full-text search
+      sync.ts                Sync status
+  crypto/
+    keys.ts                  Vault key management, Argon2id KDF, AES-256-GCM envelopes
+    lifecycle.ts             Container state machine (setup → locked → unlocked)
   connectors/types.ts        Connector interfaces (IngestConnector, SendConnector)
   search/search.ts           Full-text search using FTS5
   storage/
-    db.ts                    Database initialization, WAL mode, schema bootstrap
+    db.ts                    Database initialization (SQLCipher), WAL mode, schema bootstrap
     schema.ts                Schema DDL + migrations (versioned)
     migrate.ts               Standalone migration runner
   sync/
@@ -72,11 +88,24 @@ e2e/                         Playwright end-to-end tests
 On startup, Stork:
 
 1. Creates the data directory (`STORK_DATA_DIR`, default `./data`).
-2. Opens the SQLite database and runs any pending migrations.
-3. Creates the Hono app and sync scheduler via `createApp(db)`.
-4. Loads existing accounts from the database and starts background sync.
-5. Listens on `STORK_PORT` (default 3100).
-6. Registers SIGINT/SIGTERM handlers for graceful shutdown (stops scheduler, closes DB).
+2. Boots the container via `bootContainer()` — checks for `stork.keys` to determine initial state (`setup` or `locked`).
+3. Creates the Hono app with all route modules. Data routes are gated behind lock middleware (return `423` until unlocked).
+4. Listens on `STORK_PORT` (default 3100).
+5. Registers SIGINT/SIGTERM handlers for graceful shutdown (stops scheduler, closes DB).
+
+The database is **not opened until the user unlocks the container** — only after a successful `POST /api/unlock` (or `POST /api/setup` on first run) does the system open the encrypted SQLite database, start the sync scheduler, and begin serving data.
+
+### Encryption (`src/crypto/`)
+
+**Key management** (`keys.ts`):
+- Vault key pattern (same design as Bitwarden/1Password): a random 256-bit vault key encrypts the database; the vault key itself is encrypted twice — once with a password-derived key (Argon2id), once with a recovery key (BIP39 mnemonic).
+- Password and recovery key changes are O(1) — only the envelope blob is re-encrypted, never the database.
+- Key file format: `stork.keys` stores KDF parameters and two AES-256-GCM-wrapped copies of the vault key.
+
+**Container lifecycle** (`lifecycle.ts`):
+- State machine: `setup` → `locked` → `unlocked`.
+- `bootContainer()` initializes the context and creates the app.
+- `transitionToUnlocked()` opens the database with the vault key, zeros the key from memory, starts the sync scheduler, and transitions to `unlocked`.
 
 ### IMAP Sync Engine (`src/sync/imap-sync.ts`)
 
@@ -123,7 +152,8 @@ Future connectors (Cloudflare Email Workers, SES, etc.) will implement these int
 ### SQLite Storage (`src/storage/`)
 
 **Database initialization** (`db.ts`):
-- Opens SQLite at `$STORK_DATA_DIR/stork.db`.
+- Opens SQLite via `@signalapp/better-sqlite3` (SQLCipher fork) at `$STORK_DATA_DIR/stork.db`.
+- Applies the vault key via `PRAGMA key` for transparent encryption/decryption.
 - Enables WAL mode for concurrent reads during sync.
 - Enables foreign keys for cascading deletes.
 - Sets busy timeout to 5 seconds.
@@ -144,9 +174,18 @@ Future connectors (Cloudflare Email Workers, SES, etc.) will implement these int
 - FTS5 content table syncs via INSERT/UPDATE/DELETE triggers on the messages table.
 - Attachments store binary data directly in SQLite BLOBs — simple and avoids filesystem management.
 
-### REST API (`src/api/server.ts`)
+### REST API (`src/api/`)
 
-Built with Hono. All routes are mounted under `/api/`. The frontend is served as static files with SPA fallback.
+Built with Hono. The API is composed from domain-specific route modules (`src/api/routes/`), each responsible for a single concern. `server.ts` wires them together with CORS, static file serving, and the lock middleware.
+
+Route modules:
+- **`encryption.ts`** — container lifecycle: health, status, setup, unlock, password change, recovery key rotation. These endpoints handle their own auth checks (setup/locked state guards).
+- **`accounts.ts`** — account CRUD, folder listing, folder messages, account labels, sync trigger.
+- **`messages.ts`** — message CRUD, threading, flags, move, bulk operations, attachments listing, message labels.
+- **`labels.ts`** — label update/delete, messages-by-label listing.
+- **`attachments.ts`** — raw attachment download with content-type and sanitized filenames.
+- **`search.ts`** — FTS5-powered full-text search.
+- **`sync.ts`** — sync status for all accounts.
 
 See [API Reference](./api.md) for the full endpoint listing.
 

@@ -66,13 +66,20 @@ For security, bind to `127.0.0.1` so Stork is not accessible from the network:
 
 ## Database
 
-Stork uses SQLite with the following PRAGMA settings applied at startup:
+Stork uses SQLite via SQLCipher (`@signalapp/better-sqlite3`) for transparent encryption at rest. The following PRAGMA settings are applied at startup:
 
 | PRAGMA | Value | Purpose |
 |--------|-------|---------|
+| `key` | (vault key) | AES-256 encryption key derived from user password — applied before any other operations |
 | `journal_mode` | WAL | Allows concurrent reads during writes (sync + API reads) |
 | `foreign_keys` | ON | Enforces cascading deletes (delete account → delete folders → delete messages) |
 | `busy_timeout` | 5000 | Waits up to 5 seconds for a lock before returning SQLITE_BUSY |
+
+### Encryption
+
+All database files (`stork.db`, `stork.db-shm`, `stork.db-wal`) are encrypted at the page level by SQLCipher. The encryption key (vault key) is loaded into memory only after the user unlocks the container, and is zeroed from memory immediately after being passed to SQLCipher.
+
+Key derivation uses Argon2id with 64 MiB memory cost, 3 iterations, and 1 parallelism lane. The container requires a minimum of 512 MiB RAM.
 
 ### Schema Migrations
 
