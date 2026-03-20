@@ -2,6 +2,7 @@ import Database from "@signalapp/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { MIGRATIONS } from "../src/storage/schema.js";
 import { ConnectionPool } from "../src/sync/connection-pool.js";
+import type { PooledConnection } from "../src/sync/connection-pool.js";
 import type { ImapSync } from "../src/sync/imap-sync.js";
 
 function createTestDb(): Database {
@@ -317,5 +318,79 @@ describe("ConnectionPool — idle eviction (evictIdle)", () => {
 		expect(stale1.disconnect).toHaveBeenCalledTimes(1);
 		expect(stale2.disconnect).toHaveBeenCalledTimes(1);
 		expect(fresh.disconnect).not.toHaveBeenCalled();
+	});
+});
+
+// Tests for the real ConnectionPool.acquire() implementation paths
+// (previous tests override acquire() with a mock; these test the actual method)
+describe("ConnectionPool — real acquire() limit checks", () => {
+	type InternalPool = {
+		connections: Map<number, PooledConnection[]>;
+	};
+
+	let db: Database;
+
+	beforeEach(() => {
+		db = new Database(":memory:");
+		db.exec("PRAGMA journal_mode = WAL");
+		db.exec("PRAGMA foreign_keys = ON");
+		for (const migration of MIGRATIONS) {
+			db.exec(migration);
+		}
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	test("throws per-account limit error when all connections for account are busy", async () => {
+		const pool = new ConnectionPool(db, { maxPerAccount: 1, maxTotal: 10 });
+		const internal = pool as unknown as InternalPool;
+
+		// Directly inject a busy connection for account 1 (bypassing connect())
+		const mockSync = {
+			connect: vi.fn(() => Promise.resolve()),
+			disconnect: vi.fn(() => Promise.resolve()),
+		} as unknown as ImapSync;
+		internal.connections.set(1, [
+			{ sync: mockSync, accountId: 1, lastUsed: Date.now(), busy: true },
+		]);
+
+		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
+		// Acquire should throw: account is at maxPerAccount=1 with no idle connection to discard
+		await expect(pool.acquire(1, config)).rejects.toThrow(
+			"Connection limit reached for account 1 (max: 1)",
+		);
+
+		await pool.shutdown();
+	});
+
+	test("throws total limit error when all connections across accounts are busy", async () => {
+		const pool = new ConnectionPool(db, { maxPerAccount: 5, maxTotal: 2 });
+		const internal = pool as unknown as InternalPool;
+
+		// Directly inject two busy connections (filling total capacity)
+		const mockSync1 = {
+			connect: vi.fn(() => Promise.resolve()),
+			disconnect: vi.fn(() => Promise.resolve()),
+		} as unknown as ImapSync;
+		const mockSync2 = {
+			connect: vi.fn(() => Promise.resolve()),
+			disconnect: vi.fn(() => Promise.resolve()),
+		} as unknown as ImapSync;
+		internal.connections.set(1, [
+			{ sync: mockSync1, accountId: 1, lastUsed: Date.now(), busy: true },
+		]);
+		internal.connections.set(2, [
+			{ sync: mockSync2, accountId: 2, lastUsed: Date.now(), busy: true },
+		]);
+
+		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
+		// Acquire for a third account: total=2=maxTotal, evictOldestIdle() finds nothing → throws
+		await expect(pool.acquire(3, config)).rejects.toThrow(
+			"Total connection limit reached (max: 2), all connections busy",
+		);
+
+		await pool.shutdown();
 	});
 });
