@@ -76,8 +76,8 @@ export function SetupScreen({ onUnlocked, dark, onToggleDark }: SetupScreenProps
 							Set Up Encryption
 						</h1>
 						<p className="text-sm text-gray-500 dark:text-gray-400 mt-2 leading-relaxed">
-							Stork encrypts your email database with a password you choose. You'll also receive
-							a 24-word recovery phrase — keep it safe.
+							Stork encrypts your email database with a password you choose. You'll also receive a
+							24-word recovery phrase — keep it safe.
 						</p>
 					</div>
 
@@ -101,7 +101,6 @@ export function SetupScreen({ onUnlocked, dark, onToggleDark }: SetupScreenProps
 								onChange={(e) => setPassword(e.target.value)}
 								placeholder="At least 12 characters"
 								required
-								// biome-ignore lint/jsx-a11y/no-autofocus: intentional first field
 								autoFocus
 								className="w-full text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-1.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-stork-500 focus:border-stork-500"
 							/>
@@ -137,8 +136,8 @@ export function SetupScreen({ onUnlocked, dark, onToggleDark }: SetupScreenProps
 							Save Your Recovery Phrase
 						</h2>
 						<p className="text-sm text-gray-500 dark:text-gray-400 mt-2 leading-relaxed">
-							This 24-word phrase is the only way to recover your vault if you forget your
-							password. Write it down and store it somewhere safe. You will not see it again.
+							This 24-word phrase is the only way to recover your vault if you forget your password.
+							Write it down and store it somewhere safe. You will not see it again.
 						</p>
 					</div>
 
@@ -170,8 +169,8 @@ export function SetupScreen({ onUnlocked, dark, onToggleDark }: SetupScreenProps
 								className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
 							/>
 							<span className="text-sm text-gray-600 dark:text-gray-400">
-								I've written down my recovery phrase and stored it safely. I understand that
-								losing both my password and recovery phrase means permanent loss of access.
+								I've written down my recovery phrase and stored it safely. I understand that losing
+								both my password and recovery phrase means permanent loss of access.
 							</span>
 						</label>
 

@@ -68,11 +68,7 @@ export function UnlockScreen({ onUnlocked, dark, onToggleDark }: UnlockScreenPro
 			<div className="w-full max-w-md animate-fadeIn">
 				<div className="mb-6 text-center">
 					<div className="mb-4">
-						<img
-							src="/stork.svg"
-							alt="Stork"
-							className="w-16 h-16 mx-auto rounded-2xl shadow-lg"
-						/>
+						<img src="/stork.svg" alt="Stork" className="w-16 h-16 mx-auto rounded-2xl shadow-lg" />
 					</div>
 					<h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
 						{recoveryMode ? "Recover Access" : "Unlock Stork"}
@@ -106,7 +102,6 @@ export function UnlockScreen({ onUnlocked, dark, onToggleDark }: UnlockScreenPro
 									placeholder="word1 word2 word3 … (24 words)"
 									required
 									rows={3}
-									// biome-ignore lint/jsx-a11y/no-autofocus: intentional first field
 									autoFocus
 									className="w-full text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-1.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-stork-500 focus:border-stork-500 resize-none"
 								/>
@@ -142,16 +137,13 @@ export function UnlockScreen({ onUnlocked, dark, onToggleDark }: UnlockScreenPro
 						</>
 					) : (
 						<label className="block">
-							<span className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-								Password
-							</span>
+							<span className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Password</span>
 							<input
 								type="password"
 								value={password}
 								onChange={(e) => setPassword(e.target.value)}
 								placeholder="Your encryption password"
 								required
-								// biome-ignore lint/jsx-a11y/no-autofocus: intentional first field
 								autoFocus
 								className="w-full text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-1.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-stork-500 focus:border-stork-500"
 							/>

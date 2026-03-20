@@ -33,9 +33,7 @@ describe("UnlockScreen — password mode", () => {
 		render(<UnlockScreen onUnlocked={noop} dark={false} onToggleDark={noop} />);
 		await userEvent.type(screen.getByPlaceholderText("Your encryption password"), "mypassword123!");
 		await userEvent.click(screen.getByRole("button", { name: /^unlock$/i }));
-		await waitFor(() =>
-			expect(mockUnlock).toHaveBeenCalledWith({ password: "mypassword123!" }),
-		);
+		await waitFor(() => expect(mockUnlock).toHaveBeenCalledWith({ password: "mypassword123!" }));
 	});
 
 	it("calls onUnlocked after successful unlock", async () => {
