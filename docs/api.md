@@ -2,6 +2,136 @@
 
 Stork exposes a REST API at `/api/`. All responses are JSON.
 
+## Container Lifecycle
+
+Stork boots into an encrypted, locked state. Before any data routes are accessible, the container must be set up (first run) or unlocked (subsequent runs). All data endpoints return `423 Locked` until the container is unlocked.
+
+### Get container status
+
+```
+GET /api/status
+```
+
+Returns the current container state: `setup` (no encryption configured), `locked` (encrypted, awaiting password), or `unlocked` (ready for use).
+
+**Response**: `200 OK`
+```json
+{ "state": "locked" }
+```
+
+### Initial setup
+
+```
+POST /api/setup
+Content-Type: application/json
+```
+
+First-run endpoint. Creates the encryption keys and unlocks the container. Only accessible when the container is in the `setup` state.
+
+**Request body**:
+```json
+{ "password": "your-secure-password" }
+```
+
+Password must be at least 12 characters.
+
+**Response**: `201 Created`
+```json
+{ "recoveryMnemonic": "abandon ability able about above absent absorb abstract absurd abuse access accident..." }
+```
+
+The response includes a 24-word BIP39 recovery mnemonic. **Store this securely — it is the only way to recover your data if you forget your password.** It is shown once and cannot be retrieved again.
+
+**Response**: `409 Conflict` (if already initialized)
+
+### Unlock
+
+```
+POST /api/unlock
+Content-Type: application/json
+```
+
+Unlocks the container with a password or recovery mnemonic. Only accessible in the `locked` state. Failed attempts trigger progressive rate limiting (exponential backoff).
+
+**With password**:
+```json
+{ "password": "your-secure-password" }
+```
+
+**With recovery mnemonic** (resets password):
+```json
+{
+  "recoveryMnemonic": "abandon ability able ...",
+  "newPassword": "your-new-password"
+}
+```
+
+When using the recovery mnemonic, a `newPassword` is required — the old password is replaced.
+
+**Response**: `200 OK`
+```json
+{ "ok": true }
+```
+
+**Response**: `401 Unauthorized` (invalid credentials) | `409 Conflict` (not initialized)
+
+### Change password
+
+```
+POST /api/change-password
+Content-Type: application/json
+```
+
+Changes the encryption password. Requires the container to be unlocked. This is an O(1) operation — the vault key is re-wrapped with the new password; the database is not re-encrypted.
+
+**Request body**:
+```json
+{
+  "currentPassword": "old-password",
+  "newPassword": "new-password"
+}
+```
+
+New password must be at least 12 characters.
+
+**Response**: `200 OK` | `401 Unauthorized` (wrong current password)
+
+### Rotate recovery key
+
+```
+POST /api/rotate-recovery-key
+Content-Type: application/json
+```
+
+Generates a new recovery mnemonic, invalidating the old one. Requires the container to be unlocked. This is an O(1) operation — only the recovery envelope is re-wrapped.
+
+**Request body**:
+```json
+{ "password": "your-current-password" }
+```
+
+**Response**: `200 OK`
+```json
+{ "recoveryMnemonic": "new mnemonic words..." }
+```
+
+**Response**: `401 Unauthorized` (wrong password)
+
+## Health
+
+### Health check
+
+```
+GET /api/health
+```
+
+Always accessible regardless of container state. Use for Docker health checks and load balancer probes.
+
+**Response**: `200 OK`
+```json
+{ "status": "ok", "version": "0.1.0" }
+```
+
 ## Accounts
 
 ### List accounts
@@ -506,16 +636,3 @@ GET /api/accounts/:accountId/sync-status
 ```
 
 Returns per-folder sync details including last synced UID.
-
-## Health
-
-### Health check
-
-```
-GET /api/health
-```
-
-**Response**: `200 OK`
-```json
-{ "status": "ok", "version": "0.1.0" }
-```

@@ -43,9 +43,35 @@ cd frontend && npm install && npm run build && cd ..
 npm run build && npm start
 ```
 
+## First-Run Setup: Encryption
+
+When you first start Stork, you'll be prompted to create an encryption password. This password protects your entire database — all emails, attachments, and account credentials are encrypted at rest using SQLCipher (AES-256).
+
+**Choose a strong password** (minimum 12 characters). Stork uses Argon2id key derivation with 64 MiB memory cost to resist brute-force attacks.
+
+After setting your password, Stork displays a **24-word recovery mnemonic**. This is your only fallback if you forget your password.
+
+**Write it down and store it securely.** If you lose both your password and recovery mnemonic, your data is permanently unrecoverable. There is no backdoor, no master key, and no password reset mechanism.
+
+### Unlocking
+
+Every time the container starts, it boots into a locked state. Open the web UI and enter your password to unlock. All API endpoints return `423 Locked` until you do.
+
+### Changing Your Password
+
+Go to Settings > Security to change your password. This is instant regardless of database size — only the key envelope is re-wrapped, not the data.
+
+### Rotating the Recovery Key
+
+If you suspect your recovery mnemonic has been compromised, rotate it from Settings > Security. This generates a new 24-word mnemonic and invalidates the old one. Like password changes, this is an O(1) operation.
+
+### Password Recovery
+
+If you forget your password but have your recovery mnemonic, use it on the unlock screen. You'll be prompted to set a new password. The recovery mnemonic is not invalidated by this process.
+
 ## Adding an Email Account
 
-When you first open Stork, you'll see the Welcome screen prompting you to add an account.
+After unlocking, you'll see the Welcome screen prompting you to add an account.
 
 You'll need:
 - **IMAP server hostname** (e.g., `imap.fastmail.com`, `imap.gmail.com`)
@@ -163,8 +189,9 @@ Stork is configured via environment variables:
 ### Data Storage
 
 All data is stored in `$STORK_DATA_DIR`:
-- `stork.db` — SQLite database (accounts, folders, messages, FTS index)
-- Attachments are stored inside the SQLite database as BLOBs
+- `stork.db` — encrypted SQLite database (accounts, folders, messages, FTS index)
+- `stork.keys` — encrypted vault key envelopes (password + recovery key wrappings)
+- Attachments are stored inside the SQLite database as BLOBs (encrypted along with everything else)
 
 ### Backups
 
@@ -211,8 +238,9 @@ mail.example.com {
 
 ### Security Considerations
 
-- Stork does not include built-in authentication. If exposed beyond localhost, put it behind a reverse proxy with authentication (e.g., Authelia, Authentik, HTTP Basic Auth, VPN).
-- IMAP/SMTP credentials are stored in the SQLite database in plain text. Protect the data directory with appropriate file permissions.
+- **Encryption at rest**: All data (emails, credentials, attachments, FTS index) is encrypted using SQLCipher (AES-256). The database files on disk are opaque bytes without the password.
+- **Authentication**: The encryption password serves as the primary authentication mechanism. If exposed beyond localhost, you should still use a reverse proxy with additional authentication (e.g., Authelia, Authentik, HTTP Basic Auth, VPN) as defense in depth.
+- **Container security**: The `docker-compose.yml` and recommended `docker run` flags disable swap (`mem_swappiness: 0`), core dumps (`ulimit core=0`), and privilege escalation (`no-new-privileges`) to protect the in-memory vault key.
 - The web UI sanitizes HTML email content with DOMPurify to prevent XSS attacks.
 - Attachment filenames are sanitized to prevent path traversal.
 
