@@ -2,9 +2,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { createApp } from "../src/api/server.js";
-import { keysFileExists } from "../src/crypto/keys.js";
-import { bootContainer } from "../src/crypto/lifecycle.js";
+import { createApp } from "../../src/api/server.js";
+import { keysFileExists } from "../../src/crypto/keys.js";
+import { bootContainer } from "../../src/crypto/lifecycle.js";
 
 let dataDir: string;
 
