@@ -83,7 +83,7 @@ Open `http://localhost:3100` and configure your IMAP connection.
 │            (React + Tailwind)                │
 ├─────────────────────────────────────────────┤
 │                REST API                      │
-│               (Hono/Bun)                     │
+│              (Hono/Node.js)                  │
 ├──────────┬──────────┬───────────────────────┤
 │  IMAP    │  SQLite  │  Full-Text            │
 │  Sync    │  Storage │  Search (FTS5)        │
@@ -122,21 +122,21 @@ Open `http://localhost:3100` and configure your IMAP connection.
 
 ```bash
 # Install dependencies
-bun install
+npm install
 
 # Run in development mode
-bun run dev
+npm run dev
 
 # Run tests
-bun test
+npm test
 
 # Lint
-bun run lint
+npm run lint
 ```
 
 ## Tech Stack
 
-- **Runtime**: [Bun](https://bun.sh)
+- **Runtime**: [Node.js](https://nodejs.org) 22+
 - **Backend**: [Hono](https://hono.dev) (lightweight web framework)
 - **Database**: SQLite via [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) + [SQLCipher](https://www.zetetic.net/sqlcipher/) (AES-256 encryption at rest)
 - **Search**: SQLite FTS5

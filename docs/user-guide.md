@@ -33,14 +33,14 @@ Your data is stored as regular files at `~/stork-data`. The security flags match
 
 ### From Source
 
-Requires [Bun](https://bun.sh) 1.2 or later.
+Requires [Node.js](https://nodejs.org) 22 or later.
 
 ```bash
 git clone https://github.com/paperkite-hq/stork.git
 cd stork
-bun install
-cd frontend && bun install && bun run build && cd ..
-bun run src/index.ts
+npm install
+cd frontend && npm install && npm run build && cd ..
+npm run build && npm start
 ```
 
 ## Adding an Email Account

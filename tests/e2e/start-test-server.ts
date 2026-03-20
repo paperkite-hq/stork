@@ -2,6 +2,7 @@
  * Starts a stork server with pre-seeded test data for E2E tests.
  * Used by Playwright's webServer config.
  */
+import { serve } from "@hono/node-server";
 import { createApp } from "../../src/api/server.js";
 import {
 	addMessageLabel,
@@ -177,7 +178,4 @@ await scheduler.stop();
 
 console.log(`E2E test server starting on http://127.0.0.1:${PORT}`);
 
-export default {
-	port: PORT,
-	fetch: app.fetch,
-};
+serve({ port: PORT, fetch: app.fetch });

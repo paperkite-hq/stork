@@ -58,7 +58,7 @@ Whole-database encryption substantially reduces this attack surface: a locked co
 
 ### Implementation approach
 
-Stork uses **SQLCipher** — a widely-deployed SQLite extension that encrypts the entire database at the page level using AES-256. Bun's built-in SQLite does not support SQLCipher, so Stork uses `better-sqlite3` compiled against SQLCipher as a drop-in replacement. This is transparent to the application: all SQL queries work normally, FTS5 full-text search works normally, and WAL files (`stork.db-shm`, `stork.db-wal`) are encrypted automatically alongside the main database file.
+Stork uses **SQLCipher** — a widely-deployed SQLite extension that encrypts the entire database at the page level using AES-256. Stork uses `better-sqlite3` compiled against SQLCipher as a drop-in replacement for standard SQLite. This is transparent to the application: all SQL queries work normally, FTS5 full-text search works normally, and WAL files (`stork.db-shm`, `stork.db-wal`) are encrypted automatically alongside the main database file.
 
 SQLCipher was chosen over the alternative (an encrypted filesystem layer such as gocryptfs) because it requires no OS-level FUSE dependencies, is battle-tested across large-scale production deployments (Signal, WhatsApp, and others), and handles all three SQLite files transparently with no container configuration changes.
 
@@ -73,7 +73,7 @@ Full-text search (FTS5) is fully supported under whole-database encryption. SQLC
 | Key derivation | Argon2id | 64 MiB memory, 3 iterations, 1 parallelism, 32-byte output |
 | Database encryption | AES-256 (via SQLCipher) | 4096-byte page encryption, PBKDF2 key derivation disabled (we supply raw key) |
 | Key wrapping | AES-256-GCM | 12-byte random IV, 16-byte auth tag (wraps MDK with KEK) |
-| Random generation | Bun `crypto.randomBytes` | CSPRNG for MDK, salts, IVs — backed by OS `getrandom(2)` on Linux |
+| Random generation | Node.js `crypto.randomBytes` | CSPRNG for MDK, salts, IVs — backed by OS `getrandom(2)` on Linux |
 
 ## Key Storage
 
@@ -202,5 +202,5 @@ The `stork.keys` file format (see [Key Storage](#key-storage)) stores both the p
 - **Argon2id parameters**: The parameters (64 MiB memory, 3 iterations) are non-negotiable. Stork requires a minimum of **512 MiB RAM** in the container — reducing Argon2id parameters to accommodate under-resourced containers is not supported. Under-resourcing the container is a misconfiguration, not a use case.
 - **SQLCipher key supply**: SQLCipher's built-in PBKDF2 key derivation is disabled (`PRAGMA key` receives the raw MDK). This prevents key-stretching from being done twice and gives us full control over the KDF (Argon2id is superior to SQLCipher's default PBKDF2).
 - **Side-channel resistance**: Argon2id is designed to resist timing attacks. Password comparison uses `crypto.timingSafeEqual`.
-- **Memory zeroing**: Bun (like all JS runtimes) does not guarantee that the GC zeroes memory before reclaiming it. Stork explicitly overwrites sensitive Buffers (MDK, KEK) using `crypto.randomFill` before releasing references — this is the best available mitigation under Bun's memory model and overwrites the bytes before the GC can move the object.
+- **Memory zeroing**: Node.js (like all JS runtimes) does not guarantee that the GC zeroes memory before reclaiming it. Stork explicitly overwrites sensitive Buffers (MDK, KEK) using `crypto.randomFill` before releasing references — this is the best available mitigation under Node.js's memory model and overwrites the bytes before the GC can move the object.
 - **Swap/core dumps**: The MDK exists in memory while the container is unlocked and could be swapped to disk or appear in core dumps. The provided `docker-compose.yml` sets `mem_swappiness: 0` and `ulimits: core: 0` to mitigate this. These settings are not optional — do not remove them in production deployments.

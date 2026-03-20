@@ -16,7 +16,7 @@ export default defineConfig({
 		},
 	],
 	webServer: {
-		command: "bun run tests/e2e/start-test-server.ts",
+		command: "npx tsx tests/e2e/start-test-server.ts",
 		port: 13200,
 		reuseExistingServer: false,
 		timeout: 15_000,

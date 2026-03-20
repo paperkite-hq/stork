@@ -11,21 +11,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: 22
 
       - name: Install dependencies
-        run: bun install && cd frontend && bun install
+        run: npm ci && cd frontend && npm ci
 
       - name: Lint
-        run: bun run lint
+        run: npm run lint
 
       - name: Test
-        run: bun run test
+        run: npm test
 
       - name: Build
-        run: bun run build
+        run: npm run build
 
   docker:
     runs-on: ubuntu-latest

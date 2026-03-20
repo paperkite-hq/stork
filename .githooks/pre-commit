@@ -6,19 +6,19 @@
 set -euo pipefail
 
 echo "=== Pre-commit: running lint ==="
-bun run lint
+npm run lint
 echo "=== Pre-commit: lint passed ==="
 
 echo "=== Pre-commit: running tests ==="
-bun run test
+npm test
 echo "=== Pre-commit: all tests passed ==="
 
 echo "=== Pre-commit: running backend build ==="
-bun run build
+npm run build
 echo "=== Pre-commit: backend build passed ==="
 
 echo "=== Pre-commit: running frontend build (tsc + vite) ==="
-cd frontend && bun run build && cd ..
+cd frontend && npm run build && cd ..
 echo "=== Pre-commit: frontend build passed ==="
 
 echo "=== Pre-commit: all checks passed ==="
