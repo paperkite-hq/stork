@@ -79,7 +79,7 @@ Stork uses SQLite with the following PRAGMA settings applied at startup:
 Migrations run automatically on startup. The current schema version is tracked in the `schema_version` table. To run migrations manually:
 
 ```bash
-bun run src/storage/migrate.ts
+npm run db:migrate
 ```
 
 ## Sync Settings

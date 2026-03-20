@@ -4,17 +4,18 @@
 	"description": "Self-hosted email client with IMAP sync, local storage, and full-text search",
 	"type": "module",
 	"scripts": {
-		"dev": "node --experimental-vm-modules dist/index.js",
-		"build": "bun build src/index.ts --outdir dist --target node",
-		"test": "vitest run tests/api.test.ts tests/api-edge-cases.test.ts tests/api-bulk.test.ts tests/imap-sync.test.ts tests/imap-sync-integration.test.ts tests/imap-sync-edge-cases.test.ts tests/imap-sync-labels.test.ts tests/smtp-send.test.ts tests/search.test.ts tests/search-advanced.test.ts tests/sync-scheduler.test.ts tests/connection-pool.test.ts tests/connection-pool-advanced.test.ts tests/db.test.ts tests/crypto.test.ts tests/encryption-lifecycle.test.ts && cd frontend && bun run test",
+		"dev": "tsx src/index.ts",
+		"build": "esbuild src/index.ts --bundle --outdir=dist --platform=node --format=esm --packages=external",
+		"start": "node dist/index.js",
+		"test": "vitest run tests/api.test.ts tests/api-edge-cases.test.ts tests/api-bulk.test.ts tests/imap-sync.test.ts tests/imap-sync-integration.test.ts tests/imap-sync-edge-cases.test.ts tests/imap-sync-labels.test.ts tests/smtp-send.test.ts tests/search.test.ts tests/search-advanced.test.ts tests/sync-scheduler.test.ts tests/connection-pool.test.ts tests/connection-pool-advanced.test.ts tests/db.test.ts tests/crypto.test.ts tests/encryption-lifecycle.test.ts && cd frontend && npm test",
 		"test:backend": "vitest run tests/api.test.ts tests/api-edge-cases.test.ts tests/api-bulk.test.ts tests/imap-sync.test.ts tests/imap-sync-integration.test.ts tests/imap-sync-edge-cases.test.ts tests/imap-sync-labels.test.ts tests/smtp-send.test.ts tests/search.test.ts tests/search-advanced.test.ts tests/sync-scheduler.test.ts tests/connection-pool.test.ts tests/connection-pool-advanced.test.ts tests/db.test.ts tests/crypto.test.ts tests/encryption-lifecycle.test.ts",
 		"test:coverage": "vitest run --coverage tests/api.test.ts tests/api-edge-cases.test.ts tests/api-bulk.test.ts tests/imap-sync.test.ts tests/imap-sync-integration.test.ts tests/imap-sync-edge-cases.test.ts tests/imap-sync-labels.test.ts tests/smtp-send.test.ts tests/search.test.ts tests/search-advanced.test.ts tests/sync-scheduler.test.ts tests/connection-pool.test.ts tests/connection-pool-advanced.test.ts tests/db.test.ts tests/crypto.test.ts tests/encryption-lifecycle.test.ts",
-		"test:frontend": "cd frontend && bun run test",
+		"test:frontend": "cd frontend && npm test",
 		"test:e2e": "vitest run tests/e2e-container.test.ts",
 		"test:e2e-ui": "npx playwright test",
 		"lint": "biome check .",
 		"format": "biome format --write .",
-		"db:migrate": "bun run src/storage/migrate.ts"
+		"db:migrate": "tsx src/storage/migrate.ts"
 	},
 	"dependencies": {
 		"@hono/node-server": "^1.19.11",
@@ -30,10 +31,12 @@
 		"@biomejs/biome": "^1.9.0",
 		"@playwright/test": "^1.58.2",
 		"@types/better-sqlite3": "^7.6.13",
-		"@types/bun": "^1.2.0",
 		"@types/mailparser": "^3.4.6",
+		"@types/node": "^22.0.0",
 		"@types/nodemailer": "^6.4.17",
 		"@vitest/coverage-v8": "^4.1.0",
+		"esbuild": "^0.25.0",
+		"tsx": "^4.19.0",
 		"vitest": "^4.1.0"
 	},
 	"license": "AGPL-3.0-only"

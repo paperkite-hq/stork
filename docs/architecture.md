@@ -12,7 +12,7 @@ Stork is a self-hosted email client that syncs mail from IMAP servers into local
 │            (React + Tailwind)                │
 ├─────────────────────────────────────────────┤
 │                REST API                      │
-│               (Hono/Bun)                     │
+│              (Hono/Node.js)                  │
 ├──────────┬──────────┬───────────────────────┤
 │  IMAP    │  SQLite  │  Full-Text            │
 │  Sync    │  Storage │  Search (FTS5)        │
@@ -192,17 +192,17 @@ Key state:
 ### Build
 
 The frontend is built with Vite and served as static files by the Hono backend:
-- Development: `cd frontend && bun run dev` (Vite dev server with HMR on port 5173).
-- Production: `cd frontend && bun run build` outputs to `frontend/dist/`, served by Hono's `serveStatic`.
+- Development: `cd frontend && npm run dev` (Vite dev server with HMR on port 5173).
+- Production: `cd frontend && npm run build` outputs to `frontend/dist/`, served by Hono's `serveStatic`.
 
 ## Deployment
 
 Stork ships as a single Docker container:
 
 ```dockerfile
-FROM oven/bun:1.2 AS base
+FROM node:22-slim AS base
 # Install deps, build frontend + backend, expose port 3100
-CMD ["bun", "run", "src/index.ts"]
+CMD ["node", "dist/index.js"]
 ```
 
 The container:

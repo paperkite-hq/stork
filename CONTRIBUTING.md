@@ -9,15 +9,15 @@ Thanks for your interest in contributing! Here's how to get started.
 git clone https://github.com/paperkite-hq/stork.git
 cd stork
 
-# Install dependencies (requires Bun 1.2+)
-bun install
-cd frontend && bun install && cd ..
+# Install dependencies (requires Node.js 22+)
+npm install
+cd frontend && npm install && cd ..
 
 # Run in development mode (backend + frontend)
-bun run dev
+npm run dev
 
 # In a separate terminal, run the frontend dev server
-cd frontend && bun run dev
+cd frontend && npm run dev
 ```
 
 Open `http://localhost:5173` for the frontend dev server (hot reload), or `http://localhost:3100` for the built version.
@@ -26,31 +26,31 @@ Open `http://localhost:5173` for the frontend dev server (hot reload), or `http:
 
 ```bash
 # All tests (backend + frontend)
-bun test
+npm test
 
 # Backend only
-bun run test:backend
+npm run test:backend
 
 # Frontend only
-bun run test:frontend
+npm run test:frontend
 
 # E2E container test (requires Docker)
-bun run test:e2e
+npm run test:e2e
 ```
 
 ## Code Style
 
 - TypeScript throughout (backend and frontend)
 - Formatting and linting via [Biome](https://biomejs.dev/)
-- Run `bun run lint` before submitting a PR
-- Run `bun run format` to auto-fix formatting
+- Run `npm run lint` before submitting a PR
+- Run `npm run format` to auto-fix formatting
 
 ## Submitting Changes
 
 1. Fork the repo and create a branch from `main`
 2. Make your changes
 3. Add tests if you're adding new functionality
-4. Run `bun test` and `bun run lint` to verify
+4. Run `npm test` and `npm run lint` to verify
 5. Open a pull request with a clear description of what you changed and why
 
 ## Project Structure
@@ -80,4 +80,4 @@ Found a bug or have a feature request? Open an issue on GitHub. Please include:
 - What you expected to happen
 - What actually happened
 - Steps to reproduce (if applicable)
-- Your environment (OS, Bun version, Docker version)
+- Your environment (OS, Node.js version, Docker version)
