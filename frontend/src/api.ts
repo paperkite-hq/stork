@@ -144,8 +144,23 @@ export interface GlobalSyncStatus {
 	};
 }
 
+export type ContainerState = "setup" | "locked" | "unlocked";
+
 // API calls
 export const api = {
+	status: () => fetchJSON<{ state: ContainerState }>("/status"),
+	encryption: {
+		setup: (password: string) =>
+			fetchJSON<{ recoveryMnemonic: string }>("/setup", {
+				method: "POST",
+				body: JSON.stringify({ password }),
+			}),
+		unlock: (opts: { password: string } | { recoveryMnemonic: string; newPassword: string }) =>
+			fetchJSON<{ ok: boolean }>("/unlock", {
+				method: "POST",
+				body: JSON.stringify(opts),
+			}),
+	},
 	accounts: {
 		list: () => fetchJSON<Account[]>("/accounts"),
 		get: (id: number) => fetchJSON<AccountDetail>(`/accounts/${id}`),

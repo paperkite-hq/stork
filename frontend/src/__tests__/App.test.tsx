@@ -10,6 +10,11 @@ import type { Account, Label, Message, MessageSummary } from "../api";
 
 vi.mock("../api", () => ({
 	api: {
+		status: vi.fn().mockResolvedValue({ state: "unlocked" }),
+		encryption: {
+			setup: vi.fn(),
+			unlock: vi.fn(),
+		},
 		accounts: {
 			list: vi.fn(),
 			get: vi.fn(),
@@ -156,6 +161,41 @@ beforeEach(() => {
 });
 
 // ------------------------------------------------------------------
+// Tests: Container state gates
+// ------------------------------------------------------------------
+
+describe("App — Container state", () => {
+	it("shows SetupScreen when container state is setup", async () => {
+		const { api: mockApiModule } = await import("../api");
+		(mockApiModule.status as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "setup" });
+		render(<App />);
+		await waitFor(() => {
+			expect(screen.getByText("Set Up Encryption")).toBeInTheDocument();
+		});
+	});
+
+	it("shows UnlockScreen when container state is locked", async () => {
+		const { api: mockApiModule } = await import("../api");
+		(mockApiModule.status as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "locked" });
+		render(<App />);
+		await waitFor(() => {
+			expect(screen.getByText("Unlock Stork")).toBeInTheDocument();
+		});
+	});
+
+	it("proceeds to app when container state is unlocked", async () => {
+		const { api: mockApiModule } = await import("../api");
+		(mockApiModule.status as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "unlocked" });
+		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.labels.list.mockResolvedValue([makeLabel()]);
+		mockApi.labels.messages.mockResolvedValue([]);
+		mockApi.folders.list.mockResolvedValue([]);
+		render(<App />);
+		await waitForAppLayout();
+	});
+});
+
+// ------------------------------------------------------------------
 // Tests: Welcome screen
 // ------------------------------------------------------------------
 
@@ -207,8 +247,11 @@ describe("App — Main layout", () => {
 		);
 		render(<App />);
 		await waitForAppLayout();
-		// Multiple accounts → select dropdown shows names
-		expect(screen.getByText("Account One (one@example.com)")).toBeInTheDocument();
+		// Multiple accounts → select dropdown shows names.
+		// waitFor needed because accounts load in a second async step after status check.
+		await waitFor(() => {
+			expect(screen.getByText("Account One (one@example.com)")).toBeInTheDocument();
+		});
 		expect(screen.getByText("Account Two (two@example.com)")).toBeInTheDocument();
 	});
 
