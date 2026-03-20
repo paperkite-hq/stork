@@ -8,6 +8,7 @@ dist/
 data/
 test-results/
 playwright-report/
+coverage/
 frontend/tsconfig.tsbuildinfo
 
 # Local-only hooks

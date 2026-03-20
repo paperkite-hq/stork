@@ -17,8 +17,10 @@ import { argon2id } from "@noble/hashes/argon2.js";
 import { generateMnemonic, mnemonicToEntropy, validateMnemonic } from "bip39";
 
 // ── Argon2id parameters ────────────────────────────────────────────────────
-const ARGON2_MEMORY = 65536; // 64 MiB
-const ARGON2_ITERATIONS = 3;
+// Use fast KDF in test mode to avoid timeouts under coverage instrumentation
+const FAST_KDF = process.env.STORK_FAST_KDF === "1";
+const ARGON2_MEMORY = FAST_KDF ? 1024 : 65536; // 1 MiB test / 64 MiB prod
+const ARGON2_ITERATIONS = FAST_KDF ? 1 : 3;
 const ARGON2_PARALLELISM = 1;
 const KEY_BYTES = 32; // 256-bit keys throughout
 
