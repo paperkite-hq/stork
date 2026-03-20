@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { type Message, type MessageSummary, api } from "./api";
+import { type ContainerState, type Message, type MessageSummary, api } from "./api";
 import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { AlertCircleIcon } from "./components/Icons";
 import { MessageDetail } from "./components/MessageDetail";
 import { MessageList } from "./components/MessageList";
 import { SearchPanel } from "./components/SearchPanel";
+import { SetupScreen } from "./components/SetupScreen";
 import { Settings } from "./components/Settings";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
 import { Sidebar } from "./components/Sidebar";
 import { ToastContainer, toast } from "./components/Toast";
+import { UnlockScreen } from "./components/UnlockScreen";
 import { Welcome } from "./components/Welcome";
 import { useAsync, useDarkMode, useKeyboardShortcuts, useSyncPoller } from "./hooks";
 
@@ -17,6 +19,15 @@ const PAGE_SIZE = 50;
 
 export function App() {
 	const [dark, toggleDark] = useDarkMode();
+
+	// Container lock state — checked before any data fetching
+	const [containerState, setContainerState] = useState<ContainerState | "loading">("loading");
+
+	useEffect(() => {
+		api.status()
+			.then(({ state }) => setContainerState(state))
+			.catch(() => setContainerState("unlocked")); // server error — let data routes surface it
+	}, []);
 
 	// Data state
 	const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
@@ -40,12 +51,15 @@ export function App() {
 	const [hasMore, setHasMore] = useState(false);
 	const [loadingMore, setLoadingMore] = useState(false);
 
-	// Fetch accounts
+	// Fetch accounts — only when container is unlocked
 	const {
 		data: accounts,
 		error: accountsError,
 		refetch: refetchAccounts,
-	} = useAsync(() => api.accounts.list(), []);
+	} = useAsync(
+		() => (containerState === "unlocked" ? api.accounts.list() : Promise.resolve(null)),
+		[containerState],
+	);
 
 	// Auto-select first account
 	const effectiveAccountId = selectedAccountId ?? accounts?.[0]?.id ?? null;
@@ -447,6 +461,35 @@ export function App() {
 
 	useKeyboardShortcuts(shortcuts);
 
+	// Container state gates — render before any data UI
+	if (containerState === "loading") {
+		return (
+			<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+				<div className="w-6 h-6 border-2 border-stork-600 border-t-transparent rounded-full animate-spin" />
+			</div>
+		);
+	}
+
+	if (containerState === "setup") {
+		return (
+			<SetupScreen
+				onUnlocked={() => setContainerState("unlocked")}
+				dark={dark}
+				onToggleDark={toggleDark}
+			/>
+		);
+	}
+
+	if (containerState === "locked") {
+		return (
+			<UnlockScreen
+				onUnlocked={() => setContainerState("unlocked")}
+				dark={dark}
+				onToggleDark={toggleDark}
+			/>
+		);
+	}
+
 	// Fatal error: can't load accounts
 	if (accountsError) {
 		return (
@@ -467,8 +510,8 @@ export function App() {
 		);
 	}
 
-	// First-run: show welcome screen when no accounts exist
-	if (accounts && accounts.length === 0) {
+	// First-run: show welcome screen when no accounts exist yet
+	if (Array.isArray(accounts) && accounts.length === 0) {
 		return <Welcome onAccountCreated={refetchAccounts} dark={dark} onToggleDark={toggleDark} />;
 	}
 

@@ -75,11 +75,20 @@ describe("Container E2E", () => {
 		expect(body.status).toBe("ok");
 	});
 
-	test("GET /api/accounts returns empty array", async () => {
-		const res = await fetch(`http://127.0.0.1:${PORT}/api/accounts`);
+	test("GET /api/status returns setup state on fresh container", async () => {
+		const res = await fetch(`http://127.0.0.1:${PORT}/api/status`);
 		expect(res.status).toBe(200);
 		const body = await res.json();
-		expect(Array.isArray(body)).toBe(true);
+		expect(body.state).toBe("setup");
+	});
+
+	test("GET /api/accounts returns 423 before vault is initialized", async () => {
+		// A fresh container starts in 'setup' state — data routes are gated until
+		// the vault is initialized via POST /api/setup and unlocked.
+		const res = await fetch(`http://127.0.0.1:${PORT}/api/accounts`);
+		expect(res.status).toBe(423);
+		const body = await res.json();
+		expect(body.state).toBe("setup");
 	});
 
 	test("SPA routes return index.html (not 404)", async () => {
