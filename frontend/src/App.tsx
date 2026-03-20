@@ -6,8 +6,8 @@ import { AlertCircleIcon } from "./components/Icons";
 import { MessageDetail } from "./components/MessageDetail";
 import { MessageList } from "./components/MessageList";
 import { SearchPanel } from "./components/SearchPanel";
-import { SetupScreen } from "./components/SetupScreen";
 import { Settings } from "./components/Settings";
+import { SetupScreen } from "./components/SetupScreen";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
 import { Sidebar } from "./components/Sidebar";
 import { ToastContainer, toast } from "./components/Toast";
@@ -24,7 +24,8 @@ export function App() {
 	const [containerState, setContainerState] = useState<ContainerState | "loading">("loading");
 
 	useEffect(() => {
-		api.status()
+		api
+			.status()
 			.then(({ state }) => setContainerState(state))
 			.catch(() => setContainerState("unlocked")); // server error — let data routes surface it
 	}, []);
