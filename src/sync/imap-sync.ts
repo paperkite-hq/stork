@@ -95,6 +95,7 @@ export class ImapSync {
 			// instance on each retry to avoid "Can not re-use ImapFlow instance".
 			// Close the previous client first to release the underlying TCP socket
 			// before creating a new one.
+			suppressImapFlowErrors(this.client);
 			try {
 				this.client.close();
 			} catch {
@@ -123,6 +124,7 @@ export class ImapSync {
 	 * async iterators that are waiting for server data.
 	 */
 	forceClose(): void {
+		suppressImapFlowErrors(this.client);
 		try {
 			this.client.close();
 		} catch {
@@ -705,6 +707,32 @@ function formatHeaders(parsed: ParsedMail): string | null {
 		);
 	}
 	return lines.join("\r\n");
+}
+
+/**
+ * Suppress async errors from an ImapFlow client before closing it.
+ *
+ * ImapFlow's close() removes socket error handlers before destroying the socket,
+ * creating a race where ECONNRESET fires with no listener (uncaught exception).
+ * Additionally, close() may be deferred via setImmediate (closeAfter), producing
+ * unhandled rejections when pending operations are rejected asynchronously.
+ *
+ * Adding noop handlers to both the socket and the ImapFlow EventEmitter prevents
+ * these expected teardown errors from surfacing as test/process failures.
+ */
+function suppressImapFlowErrors(client: ImapFlow): void {
+	const noop = () => {};
+	// Suppress errors emitted on the ImapFlow EventEmitter (e.g. from emitError)
+	if (!client.listenerCount("error")) {
+		client.on("error", noop);
+	}
+	// Suppress socket-level errors (ECONNRESET) after handler removal
+	const socket = (
+		client as unknown as { socket?: { on?: (event: string, fn: () => void) => void } }
+	).socket;
+	if (socket && typeof socket.on === "function") {
+		socket.on("error", noop);
+	}
 }
 
 /**
