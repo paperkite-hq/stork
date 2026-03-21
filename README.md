@@ -19,9 +19,9 @@ Stork takes a different approach: **let your mail server handle the hard parts**
 - **Recovery key** — 24-word BIP39 mnemonic backup so a forgotten password doesn't mean lost mail
 - **Labels, not folders** — Gmail-style labels replace rigid folder hierarchies
 - **Modern web UI** — something you'd actually want to use daily
-- **Delete from server** — reduce your cloud footprint and exposure
 - **Docker deployment** — `docker compose up` and you're running
-- **Pluggable connectors** — swap in Cloudflare Email Workers, SES, or other services
+- **Delete from server** _(planned)_ — opt-in workflow to remove synced messages from the IMAP server after local storage
+- **Pluggable connectors** _(planned)_ — swap in Cloudflare Email Workers, SES, or other services
 
 ## Labels Over Folders
 
@@ -105,7 +105,7 @@ Open `http://localhost:3100` and configure your IMAP connection.
 - [x] Web UI — inbox, threads, compose, search
 - [x] Docker single-container deployment
 - [x] Label-based organization (Gmail-style, replaces folder navigation)
-- [ ] Encryption at rest (AES-256 via SQLCipher, locked boot, BIP39 recovery key)
+- [x] Encryption at rest (AES-256 via SQLCipher, locked boot, BIP39 recovery key)
 - [ ] Pluggable connector architecture
 - [ ] Delete-from-server workflow
 - [ ] Multi-account support
@@ -143,6 +143,26 @@ npm run lint
 - **IMAP**: [ImapFlow](https://github.com/postalsys/imapflow)
 - **SMTP**: [Nodemailer](https://nodemailer.com)
 - **Frontend**: React + Tailwind CSS + Vite
+
+## How Stork Compares
+
+| | Stork | Roundcube | Cypht | Thunderbird |
+|---|---|---|---|---|
+| **Deployment** | Docker (single container) | PHP + web server + DB | PHP | Desktop app |
+| **Encryption at rest** | ✅ AES-256 SQLCipher | ❌ | ❌ | ❌ |
+| **Local storage** | ✅ SQLite on your host | ✅ MySQL/PostgreSQL | ❌ (stateless) | ✅ local files |
+| **Full-text search** | ✅ FTS5 (fast, indexed) | ⚠️ basic | ⚠️ basic | ✅ |
+| **Web UI** | ✅ | ✅ | ✅ | ❌ |
+| **Label-based org** | ✅ | ❌ (folders only) | ❌ (folders only) | ⚠️ partial |
+| **Compose/send** | ✅ | ✅ | ✅ | ✅ |
+| **Recovery key** | ✅ BIP39 mnemonic | ❌ | ❌ | ❌ |
+| **Self-contained** | ✅ (no PHP, no extra DB) | ❌ | ❌ | ✅ |
+
+**Roundcube** is the most mature option and has the deepest plugin ecosystem. If you need plugins, calendar integration, or multi-user shared hosting, Roundcube is the better fit. Stork's advantages are its single-container deployment, encryption at rest, and modern React UI.
+
+**Cypht** is stateless and modular — good if you want a lightweight webmail that aggregates multiple accounts without local storage. Stork keeps a local encrypted copy of your mail, enabling offline-capable search and a faster interface.
+
+**Thunderbird** is the gold standard for desktop email. If you're happy with a native desktop app, Thunderbird is excellent. Stork is for people who want web-based access to their mail from any device, without sending their data to a cloud provider.
 
 ## FAQ
 
