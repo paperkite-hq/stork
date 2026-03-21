@@ -174,8 +174,17 @@ export function ComposeModal({
 
 	// Auto-focus the To field on mount
 	useEffect(() => {
-		// Timeout allows the modal animation to complete before focusing
-		const timer = setTimeout(() => toInputRef.current?.focus(), 50);
+		const timer = setTimeout(() => {
+			// Don't steal focus if the user has already clicked into another field
+			const modal = toInputRef.current?.closest('[role="dialog"]');
+			if (
+				modal?.contains(document.activeElement) &&
+				document.activeElement !== toInputRef.current
+			) {
+				return;
+			}
+			toInputRef.current?.focus();
+		}, 50);
 		return () => clearTimeout(timer);
 	}, []);
 

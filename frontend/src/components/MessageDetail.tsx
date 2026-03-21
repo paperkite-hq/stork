@@ -311,15 +311,22 @@ export function MessageDetail({
 								onClick={() => setShowMoveMenu((v) => !v)}
 								className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
 								title="Move to folder"
+								aria-label="Move to folder"
+								aria-haspopup="true"
+								aria-expanded={showMoveMenu}
 							>
 								<FolderIcon className="w-4 h-4" />
 							</button>
 							{showMoveMenu && (
-								<div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 z-10 max-h-64 overflow-y-auto">
+								<div
+									role="menu"
+									className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 z-10 max-h-64 overflow-y-auto"
+								>
 									{folders.map((f) => (
 										<button
 											key={f.id}
 											type="button"
+											role="menuitem"
 											onClick={() => handleMove(message, f.id)}
 											className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
 										>
