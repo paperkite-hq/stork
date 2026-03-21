@@ -480,8 +480,7 @@ describe("IMAP sync edge cases", () => {
 
 		expect(flagsBefore).toBeTruthy();
 		if (flagsBefore) {
-			const parsedFlags = JSON.parse(flagsBefore.flags);
-			expect(parsedFlags).toContain("\\Seen");
+			expect(flagsBefore.flags).toContain("\\Seen");
 		}
 
 		await sync1.disconnect();
@@ -503,8 +502,7 @@ describe("IMAP sync edge cases", () => {
 
 		expect(flagsAfter).toBeTruthy();
 		if (flagsAfter) {
-			const parsedFlags = JSON.parse(flagsAfter.flags);
-			expect(parsedFlags).toContain("\\Flagged");
+			expect(flagsAfter.flags).toContain("\\Flagged");
 		}
 
 		await sync2.disconnect();

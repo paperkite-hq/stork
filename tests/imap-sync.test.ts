@@ -333,9 +333,8 @@ describe("database operations", () => {
 		const msg = db
 			.prepare("SELECT flags FROM messages WHERE folder_id = ? AND uid = ?")
 			.get(folderId, 1) as { flags: string };
-		const flags = JSON.parse(msg.flags);
-		expect(flags).toContain("\\Seen");
-		expect(flags).toContain("\\Flagged");
+		expect(msg.flags).toContain("\\Seen");
+		expect(msg.flags).toContain("\\Flagged");
 
 		db.close();
 	});

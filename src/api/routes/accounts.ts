@@ -193,7 +193,7 @@ export function accountRoutes(
 					(SELECT COUNT(*) FROM message_labels ml2
 						JOIN messages m ON m.id = ml2.message_id
 						WHERE ml2.label_id = l.id
-						AND m.flags NOT LIKE '%Seen%') as unread_count
+						AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%')) as unread_count
 				FROM labels l
 				LEFT JOIN message_labels ml ON ml.label_id = l.id
 				WHERE l.account_id = ?
@@ -253,7 +253,7 @@ export function accountRoutes(
 		const row = db
 			.prepare(`
 				SELECT COUNT(*) as total,
-					(SELECT COUNT(*) FROM messages WHERE account_id = ? AND flags NOT LIKE '%Seen%') as unread
+					(SELECT COUNT(*) FROM messages WHERE account_id = ? AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')) as unread
 				FROM messages WHERE account_id = ?
 			`)
 			.get(accountId, accountId) as { total: number; unread: number };

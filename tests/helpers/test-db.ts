@@ -139,7 +139,7 @@ export function createTestMessage(
 		overrides.date ?? new Date().toISOString(),
 		overrides.textBody ?? `Body of message ${uid}`,
 		overrides.htmlBody ?? null,
-		overrides.flags ?? "[]",
+		overrides.flags ?? "",
 		overrides.hasAttachments ?? 0,
 		overrides.inReplyTo ?? null,
 		overrides.references ?? null,

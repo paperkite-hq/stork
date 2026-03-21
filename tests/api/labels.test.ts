@@ -177,9 +177,9 @@ describe("Labels API", () => {
 			const folderId = createTestFolder(db, accountId, "INBOX");
 			const labelId = createTestLabel(db, accountId, "Inbox");
 			const msg1 = createTestMessage(db, accountId, folderId, 1, {
-				flags: '["\\\\Seen"]',
+				flags: "\\Seen",
 			});
-			const msg2 = createTestMessage(db, accountId, folderId, 2, { flags: "[]" });
+			const msg2 = createTestMessage(db, accountId, folderId, 2, { flags: "" });
 			addMessageLabel(db, msg1, labelId);
 			addMessageLabel(db, msg2, labelId);
 

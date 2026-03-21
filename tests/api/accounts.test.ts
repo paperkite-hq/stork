@@ -387,9 +387,9 @@ describe("Accounts API", () => {
 		test("GET /api/accounts/:id/all-messages/count returns total and unread", async () => {
 			const accountId = createTestAccount(db);
 			const folderId = createTestFolder(db, accountId, "INBOX");
-			createTestMessage(db, accountId, folderId, 1, { flags: '["Seen"]' });
-			createTestMessage(db, accountId, folderId, 2, { flags: "[]" });
-			createTestMessage(db, accountId, folderId, 3, { flags: "[]" });
+			createTestMessage(db, accountId, folderId, 1, { flags: "\\Seen" });
+			createTestMessage(db, accountId, folderId, 2, { flags: "" });
+			createTestMessage(db, accountId, folderId, 3, { flags: "" });
 
 			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/all-messages/count`);
 			expect(status).toBe(200);
@@ -402,6 +402,23 @@ describe("Accounts API", () => {
 			const { body } = await jsonRequest(`/api/accounts/${accountId}/all-messages/count`);
 			expect(body.total).toBe(0);
 			expect(body.unread).toBe(0);
+		});
+
+		test("GET /api/accounts/:id/all-messages/count counts NULL flags as unread", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			// Insert a message with NULL flags (could happen with older schema or edge cases)
+			db.prepare(`
+				INSERT INTO messages (account_id, folder_id, uid, message_id, subject,
+					from_address, date, flags, size, has_attachments)
+				VALUES (?, ?, 99, '<null-flags@test>', 'Null flags msg',
+					'sender@test', datetime('now'), NULL, 1000, 0)
+			`).run(accountId, folderId);
+			createTestMessage(db, accountId, folderId, 1, { flags: "\\Seen" });
+
+			const { body } = await jsonRequest(`/api/accounts/${accountId}/all-messages/count`);
+			expect(body.total).toBe(2);
+			expect(body.unread).toBe(1); // NULL flags message should count as unread
 		});
 	});
 });

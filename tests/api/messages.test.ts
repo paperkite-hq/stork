@@ -171,7 +171,7 @@ describe("Messages API", () => {
 		});
 
 		test("PATCH /api/messages/:id/flags updates flags", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1, { flags: "[]" });
+			const msgId = createTestMessage(db, accountId, folderId, 1, { flags: "" });
 
 			const { status, body } = await jsonRequest(`/api/messages/${msgId}/flags`, {
 				method: "PATCH",
