@@ -19,6 +19,8 @@ export function SetupScreen({ onUnlocked, dark, onToggleDark }: SetupScreenProps
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
+	const passwordStrength = getPasswordStrength(password);
+
 	const handleSetup = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (password !== confirm) {
@@ -104,6 +106,28 @@ export function SetupScreen({ onUnlocked, dark, onToggleDark }: SetupScreenProps
 								autoFocus
 								className="w-full text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-1.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-stork-500 focus:border-stork-500"
 							/>
+							{password.length > 0 && (
+								<div className="mt-1.5 space-y-1">
+									<div className="flex gap-1">
+										{[1, 2, 3, 4].map((level) => (
+											<div
+												key={level}
+												className={`h-1 flex-1 rounded-full transition-colors ${
+													level <= passwordStrength.score
+														? passwordStrength.color
+														: "bg-gray-200 dark:bg-gray-700"
+												}`}
+											/>
+										))}
+									</div>
+									<p
+										className={`text-xs ${passwordStrength.textColor}`}
+										data-testid="password-strength"
+									>
+										{passwordStrength.label}
+									</p>
+								</div>
+							)}
 						</label>
 
 						<label className="block">
@@ -187,4 +211,32 @@ export function SetupScreen({ onUnlocked, dark, onToggleDark }: SetupScreenProps
 			)}
 		</div>
 	);
+}
+
+function getPasswordStrength(password: string): {
+	score: number;
+	label: string;
+	color: string;
+	textColor: string;
+} {
+	if (password.length === 0) return { score: 0, label: "", color: "", textColor: "" };
+
+	let score = 0;
+	if (password.length >= 12) score++;
+	if (password.length >= 16) score++;
+	if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+	if (/\d/.test(password)) score++;
+	if (/[^a-zA-Z0-9]/.test(password)) score++;
+
+	// Clamp to 1–4
+	score = Math.max(1, Math.min(4, score));
+
+	const levels: Record<number, { label: string; color: string; textColor: string }> = {
+		1: { label: "Weak", color: "bg-red-500", textColor: "text-red-500" },
+		2: { label: "Fair", color: "bg-orange-500", textColor: "text-orange-500" },
+		3: { label: "Good", color: "bg-yellow-500", textColor: "text-yellow-500" },
+		4: { label: "Strong", color: "bg-green-500", textColor: "text-green-500" },
+	};
+
+	return { score, ...levels[score] };
 }

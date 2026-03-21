@@ -41,6 +41,12 @@ vi.mock("../../api", () => ({
 				},
 			]),
 		},
+		encryption: {
+			changePassword: vi.fn().mockResolvedValue({ ok: true }),
+			rotateRecoveryKey: vi.fn().mockResolvedValue({
+				recoveryMnemonic: Array(24).fill("word").join(" "),
+			}),
+		},
 	},
 }));
 
@@ -189,5 +195,146 @@ describe("Settings", () => {
 				screen.getByText("No accounts configured. Add one to get started."),
 			).toBeInTheDocument();
 		});
+	});
+
+	it("shows Security tab", () => {
+		render(<Settings onClose={vi.fn()} />);
+		// "Security" appears as tab button text and SVG title — use getAllByText
+		expect(screen.getAllByText("Security").length).toBeGreaterThanOrEqual(1);
+	});
+});
+
+describe("Settings — Security tab", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorageMock.clear();
+	});
+
+	it("shows change password and rotate recovery key sections", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		expect(screen.getByRole("heading", { name: "Change Password" })).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "Rotate Recovery Key" })).toBeInTheDocument();
+	});
+
+	it("shows validation error when new passwords do not match", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.type(
+			screen.getByPlaceholderText("Your current encryption password"),
+			"oldpassword123!",
+		);
+		await userEvent.type(screen.getByPlaceholderText("At least 12 characters"), "newpassword123!");
+		await userEvent.type(
+			screen.getByPlaceholderText("Repeat your new password"),
+			"different12345!",
+		);
+		await userEvent.click(screen.getByRole("button", { name: /change password/i }));
+		expect(screen.getByText("New passwords do not match.")).toBeInTheDocument();
+	});
+
+	it("shows validation error when new password is too short", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.type(
+			screen.getByPlaceholderText("Your current encryption password"),
+			"oldpassword123!",
+		);
+		await userEvent.type(screen.getByPlaceholderText("At least 12 characters"), "short");
+		await userEvent.type(screen.getByPlaceholderText("Repeat your new password"), "short");
+		await userEvent.click(screen.getByRole("button", { name: /change password/i }));
+		expect(screen.getByText("New password must be at least 12 characters.")).toBeInTheDocument();
+	});
+
+	it("calls changePassword API on valid submit", async () => {
+		const { api } = await import("../../api");
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.type(
+			screen.getByPlaceholderText("Your current encryption password"),
+			"oldpassword123!",
+		);
+		await userEvent.type(screen.getByPlaceholderText("At least 12 characters"), "newpassword123!");
+		await userEvent.type(
+			screen.getByPlaceholderText("Repeat your new password"),
+			"newpassword123!",
+		);
+		await userEvent.click(screen.getByRole("button", { name: /change password/i }));
+		await waitFor(() =>
+			expect(api.encryption.changePassword).toHaveBeenCalledWith(
+				"oldpassword123!",
+				"newpassword123!",
+			),
+		);
+		expect(screen.getByText("Password changed successfully.")).toBeInTheDocument();
+	});
+
+	it("shows API error on change password failure", async () => {
+		const { api } = await import("../../api");
+		(api.encryption.changePassword as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Current password is incorrect"),
+		);
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.type(
+			screen.getByPlaceholderText("Your current encryption password"),
+			"wrongpassword!!",
+		);
+		await userEvent.type(screen.getByPlaceholderText("At least 12 characters"), "newpassword123!");
+		await userEvent.type(
+			screen.getByPlaceholderText("Repeat your new password"),
+			"newpassword123!",
+		);
+		await userEvent.click(screen.getByRole("button", { name: /change password/i }));
+		await waitFor(() =>
+			expect(screen.getByText("Current password is incorrect")).toBeInTheDocument(),
+		);
+	});
+
+	it("calls rotateRecoveryKey API and shows mnemonic", async () => {
+		const { api } = await import("../../api");
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.type(
+			screen.getByPlaceholderText("Confirm your encryption password"),
+			"mypassword123!",
+		);
+		await userEvent.click(screen.getByRole("button", { name: /rotate recovery key/i }));
+		await waitFor(() =>
+			expect(api.encryption.rotateRecoveryKey).toHaveBeenCalledWith("mypassword123!"),
+		);
+		expect(screen.getByText("New Recovery Phrase")).toBeInTheDocument();
+		// All 24 words are "word" — verify mnemonic grid renders
+		expect(screen.getAllByText("word").length).toBe(24);
+	});
+
+	it("shows API error on rotate recovery key failure", async () => {
+		const { api } = await import("../../api");
+		(api.encryption.rotateRecoveryKey as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Incorrect password"),
+		);
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.type(
+			screen.getByPlaceholderText("Confirm your encryption password"),
+			"wrongpassword!!",
+		);
+		await userEvent.click(screen.getByRole("button", { name: /rotate recovery key/i }));
+		await waitFor(() => expect(screen.getByText("Incorrect password")).toBeInTheDocument());
+	});
+
+	it("requires acknowledgement checkbox before Done button works", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.type(
+			screen.getByPlaceholderText("Confirm your encryption password"),
+			"mypassword123!",
+		);
+		await userEvent.click(screen.getByRole("button", { name: /rotate recovery key/i }));
+		await waitFor(() => expect(screen.getByText("New Recovery Phrase")).toBeInTheDocument());
+		const doneBtn = screen.getByRole("button", { name: "Done" });
+		expect(doneBtn).toBeDisabled();
+		await userEvent.click(screen.getByRole("checkbox"));
+		expect(doneBtn).toBeEnabled();
 	});
 });
