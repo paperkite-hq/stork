@@ -191,6 +191,30 @@ describe("Accounts API", () => {
 		});
 	});
 
+	// ─── Sync trigger ───────────────────────────────────────
+	describe("Sync trigger", () => {
+		test("POST /api/accounts/:id/sync returns 500 when sync fails", async () => {
+			// Account with unreachable IMAP server — syncNow throws, route returns 500
+			const accountId = createTestAccount(db, {
+				imapHost: "127.0.0.1",
+				imapPort: 19999, // no server listening here
+			});
+			scheduler.addAccount({
+				accountId,
+				imapConfig: {
+					host: "127.0.0.1",
+					port: 19999,
+					secure: false,
+					auth: { user: "test", pass: "test" },
+				},
+			});
+			const { status } = await jsonRequest(`/api/accounts/${accountId}/sync`, {
+				method: "POST",
+			});
+			expect(status).toBe(500);
+		});
+	});
+
 	// ─── Delete cascades ────────────────────────────────────
 	describe("Delete cascades", () => {
 		test("deleting account removes its folders and messages", async () => {

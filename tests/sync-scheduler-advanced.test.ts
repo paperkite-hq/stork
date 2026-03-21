@@ -1,5 +1,5 @@
 import type Database from "@signalapp/better-sqlite3";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { SyncScheduler } from "../src/sync/sync-scheduler.js";
 import { MockImapServer } from "./helpers/mock-imap-server.js";
 import { createTestAccount, createTestDb } from "./helpers/test-db.js";
@@ -330,5 +330,63 @@ describe("SyncScheduler runSync paths", () => {
 		scheduler.loadAccountsFromDb();
 
 		expect(scheduler.getStatus().size).toBe(2);
+	});
+
+	test("exponential backoff reschedules timer with longer interval after repeated errors", async () => {
+		// This test covers the backoff branch in runSync (lines 309-316):
+		// when consecutiveErrors > 1 AND a timer is active, the scheduler
+		// clears the existing interval and replaces it with a longer one.
+		//
+		// The branch only fires when start() has been called (which sets scheduled.timer).
+		// Tests that use syncNow() directly never set a timer, so this path was untested.
+
+		const baseInterval = 1000; // 1 second
+		scheduler = new SyncScheduler(db, { defaultIntervalMs: baseInterval });
+
+		mockServer = new MockImapServer({
+			user: "testuser",
+			pass: "testpass",
+			mailboxes: EMPTY_INBOX,
+		});
+		const port = await mockServer.start();
+		const accountId = createTestAccount(db, { imapPort: port, imapHost: "127.0.0.1" });
+		scheduler.addAccount({
+			accountId,
+			imapConfig: makeImapConfig(port, "testuser", "wrongpass"),
+		});
+
+		// Inject a fake timer into the internal scheduled state to simulate start() having
+		// been called. Without this, scheduled.timer is null and the backoff branch is skipped.
+		type InternalScheduler = {
+			accounts: Map<
+				number,
+				{ consecutiveErrors: number; timer: ReturnType<typeof setInterval> | null }
+			>;
+		};
+		const internalScheduler = scheduler as unknown as InternalScheduler;
+		const scheduled = internalScheduler.accounts.get(accountId);
+		if (!scheduled) throw new Error("account not found in scheduler");
+
+		// Simulate: first error already happened (consecutiveErrors=1), timer is running
+		scheduled.consecutiveErrors = 1;
+		const placeholderTimer = setInterval(() => {}, 999999);
+		scheduled.timer = placeholderTimer;
+
+		const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+		const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+
+		// Second failure: consecutiveErrors becomes 2, backoff branch fires
+		await expect(scheduler.syncNow(accountId)).rejects.toThrow();
+
+		// Old timer should be cleared and new timer set with backoff interval
+		// Backoff: min(baseInterval * 2^(2-1), MAX_BACKOFF_MS) = min(2000, 1800000) = 2000
+		expect(clearIntervalSpy).toHaveBeenCalledWith(placeholderTimer);
+		const backoffInterval = baseInterval * 2 ** 1; // 2000ms
+		expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), backoffInterval);
+
+		expect(scheduled.consecutiveErrors).toBe(2);
+
+		vi.restoreAllMocks();
+		clearInterval(placeholderTimer);
 	});
 });
