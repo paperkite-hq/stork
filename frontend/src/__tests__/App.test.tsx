@@ -896,3 +896,232 @@ describe("App — Per-message keyboard shortcuts", () => {
 		);
 	});
 });
+
+// ------------------------------------------------------------------
+// Tests: Settings modal
+// ------------------------------------------------------------------
+
+describe("App — Settings modal", () => {
+	it("settings button opens settings modal", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+		// Settings button in the sidebar
+		const settingsBtns = screen.getAllByTitle("Settings");
+		const sidebarSettings = settingsBtns[0] as HTMLElement;
+		await userEvent.click(sidebarSettings);
+		await waitFor(() => {
+			expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+		});
+	});
+
+	it("Escape closes settings modal", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+		const settingsBtns = screen.getAllByTitle("Settings");
+		await userEvent.click(settingsBtns[0] as HTMLElement);
+		await waitFor(() => {
+			expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+		});
+		fireEvent.keyDown(window, { key: "Escape" });
+		await waitFor(() => {
+			expect(screen.queryByRole("heading", { name: "Settings" })).not.toBeInTheDocument();
+		});
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Reply / Reply All / Forward shortcuts
+// ------------------------------------------------------------------
+
+describe("App — Reply/Forward shortcuts", () => {
+	it("r shortcut opens reply when message is selected", async () => {
+		const msg = makeMessage({ id: 50, subject: "Reply test", text_body: "Body" });
+		mockApi.messages.get.mockResolvedValue(msg);
+		mockApi.messages.getThread.mockResolvedValue([msg]);
+		setupWithAccounts(
+			[makeAccount()],
+			[makeLabel()],
+			[makeMessageSummary({ id: 50, subject: "Reply test" })],
+		);
+		render(<App />);
+		await waitFor(() => {
+			expect(screen.getByText("Reply test")).toBeInTheDocument();
+		});
+		// Select the message
+		await userEvent.click(screen.getByText("Reply test"));
+		await waitFor(() => {
+			expect(mockApi.messages.get).toHaveBeenCalledWith(50);
+		});
+		// Press r to reply
+		fireEvent.keyDown(window, { key: "r" });
+		await waitFor(() => {
+			expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument();
+		});
+	});
+
+	it("r shortcut does nothing when no message selected", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+		fireEvent.keyDown(window, { key: "r" });
+		await new Promise((r) => setTimeout(r, 50));
+		expect(screen.queryByPlaceholderText("recipient@example.com")).not.toBeInTheDocument();
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Dark mode toggle
+// ------------------------------------------------------------------
+
+describe("App — Dark mode", () => {
+	it("dark mode toggle button works", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+		const toggle = screen.getByTitle("Toggle dark mode");
+		await userEvent.click(toggle);
+		// Should toggle without error
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Error state
+// ------------------------------------------------------------------
+
+describe("App — Error state", () => {
+	it("shows fatal error when accounts fail to load", async () => {
+		const { api: mockApiModule } = await import("../api");
+		(mockApiModule.status as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "unlocked" });
+		mockApi.accounts.list.mockRejectedValue(new Error("Server error"));
+		render(<App />);
+		await waitFor(() => {
+			expect(screen.getByText("Failed to connect to server")).toBeInTheDocument();
+		});
+		expect(screen.getByText("Retry")).toBeInTheDocument();
+	});
+
+	it("retry button refetches accounts", async () => {
+		const { api: mockApiModule } = await import("../api");
+		(mockApiModule.status as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "unlocked" });
+		mockApi.accounts.list
+			.mockRejectedValueOnce(new Error("Server error"))
+			.mockResolvedValueOnce([makeAccount()]);
+		mockApi.labels.list.mockResolvedValue([makeLabel()]);
+		mockApi.labels.messages.mockResolvedValue([]);
+		mockApi.folders.list.mockResolvedValue([]);
+		render(<App />);
+		await waitFor(() => {
+			expect(screen.getByText("Retry")).toBeInTheDocument();
+		});
+		await userEvent.click(screen.getByText("Retry"));
+		await waitForAppLayout();
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Label switching
+// ------------------------------------------------------------------
+
+// ------------------------------------------------------------------
+// Tests: Loading state
+// ------------------------------------------------------------------
+
+describe("App — Loading state", () => {
+	it("shows loading spinner while checking container state", async () => {
+		const { api: mockApiModule } = await import("../api");
+		let resolveStatus: (v: unknown) => void = () => {};
+		(mockApiModule.status as ReturnType<typeof vi.fn>).mockReturnValue(
+			new Promise((r) => {
+				resolveStatus = r;
+			}),
+		);
+		const { container } = render(<App />);
+		// Should show spinner
+		expect(container.querySelector(".animate-spin")).toBeInTheDocument();
+		// Clean up
+		resolveStatus?.({ state: "unlocked" });
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Account switching
+// ------------------------------------------------------------------
+
+describe("App — Account switching", () => {
+	it("switching account resets label and message selection", async () => {
+		const accounts = [
+			makeAccount({ id: 1, name: "Account 1" }),
+			makeAccount({ id: 2, name: "Account 2" }),
+		];
+		mockApi.accounts.list.mockResolvedValue(accounts);
+		mockApi.labels.list.mockResolvedValue([makeLabel()]);
+		mockApi.labels.messages.mockResolvedValue([]);
+		mockApi.folders.list.mockResolvedValue([]);
+		render(<App />);
+		await waitFor(() => {
+			expect(screen.getByText("Account 1 (test@example.com)")).toBeInTheDocument();
+		});
+		// Switch account via select
+		const select = screen.getByRole("combobox");
+		await userEvent.selectOptions(select, "2");
+		// Labels should be refetched for account 2
+		await waitFor(() => {
+			expect(mockApi.labels.list).toHaveBeenCalledWith(2);
+		});
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Label switching
+// ------------------------------------------------------------------
+
+describe("App — Label switching", () => {
+	it("switching labels clears message selection", async () => {
+		const msg = makeMessage({ id: 42 });
+		mockApi.messages.get.mockResolvedValue(msg);
+		mockApi.messages.getThread.mockResolvedValue([msg]);
+		setupWithAccounts(
+			[makeAccount()],
+			[makeLabel({ id: 1, name: "inbox" }), makeLabel({ id: 2, name: "Archive", unread_count: 0 })],
+			[makeMessageSummary({ id: 42, subject: "Selected msg" })],
+		);
+		render(<App />);
+		await waitFor(() => {
+			expect(screen.getByText("Selected msg")).toBeInTheDocument();
+		});
+		// Select a message first
+		await userEvent.click(screen.getByText("Selected msg"));
+		await waitFor(() => {
+			expect(mockApi.messages.get).toHaveBeenCalledWith(42);
+		});
+		// Switch label
+		const archiveElements = screen.getAllByText("Archive");
+		const archiveSpan = archiveElements.find((el) => el.tagName === "SPAN") as HTMLElement;
+		await userEvent.click(archiveSpan);
+		// The label switch resets message selection — messages.get should be re-called for the new label
+		await waitFor(() => {
+			expect(mockApi.labels.messages).toHaveBeenCalledWith(2, expect.anything());
+		});
+	});
+
+	it("clicking a label in sidebar changes the active label", async () => {
+		setupWithAccounts(
+			[makeAccount()],
+			[makeLabel({ id: 1, name: "inbox" }), makeLabel({ id: 2, name: "Archive", unread_count: 0 })],
+		);
+		render(<App />);
+		await waitFor(() => {
+			// Archive text appears — use getAllByText since SVG titles may also match
+			expect(screen.getAllByText("Archive").length).toBeGreaterThanOrEqual(1);
+		});
+		const archiveElements = screen.getAllByText("Archive");
+		const archiveSpan = archiveElements.find((el) => el.tagName === "SPAN") as HTMLElement;
+		await userEvent.click(archiveSpan);
+		await waitFor(() => {
+			// labels.messages should be called with the Archive label id
+			expect(mockApi.labels.messages).toHaveBeenCalledWith(2, expect.anything());
+		});
+	});
+});

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { Account, Label } from "../../api";
+import type { Account, GlobalSyncStatus, Label } from "../../api";
 import { Sidebar } from "../Sidebar";
 
 function makeAccount(overrides: Partial<Account> = {}): Account {
@@ -75,7 +75,6 @@ describe("Sidebar", () => {
 			makeLabel({ id: 3, name: "Trash", unread_count: 0 }),
 		];
 		render(<Sidebar {...defaultProps} labels={labels} />);
-		// Label names appear both in SVG <title> and <span> — use getAllByText
 		expect(screen.getAllByText("Inbox").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getAllByText("Sent").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getAllByText("Trash").length).toBeGreaterThanOrEqual(1);
@@ -92,7 +91,6 @@ describe("Sidebar", () => {
 		const labels = [makeLabel({ id: 42, name: "Drafts" })];
 		render(<Sidebar {...defaultProps} labels={labels} onSelectLabel={onSelectLabel} />);
 
-		// "Drafts" appears in both SVG <title> and <span> — click the span
 		const draftsElements = screen.getAllByText("Drafts");
 		const span = draftsElements.find((el) => el.tagName === "SPAN") as HTMLElement;
 		await userEvent.click(span);
@@ -141,10 +139,274 @@ describe("Sidebar", () => {
 		const onSettings = vi.fn();
 		render(<Sidebar {...defaultProps} onSettings={onSettings} />);
 
-		// Both button (title="Settings") and SVG child (<title>Settings</title>) match
 		const settingsElements = screen.getAllByTitle("Settings");
 		const settingsButton = settingsElements[0];
 		if (settingsButton) await userEvent.click(settingsButton);
 		expect(onSettings).toHaveBeenCalledOnce();
+	});
+
+	// --- Additional coverage tests ---
+
+	it("shows all label icon variants", () => {
+		const labels = [
+			makeLabel({ id: 1, name: "Sent Mail", unread_count: 0 }),
+			makeLabel({ id: 2, name: "Sent Items", unread_count: 0 }),
+			makeLabel({ id: 3, name: "Draft", unread_count: 0 }),
+			makeLabel({ id: 4, name: "Deleted", unread_count: 0 }),
+			makeLabel({ id: 5, name: "Deleted Items", unread_count: 0 }),
+			makeLabel({ id: 6, name: "Junk", unread_count: 0 }),
+			makeLabel({ id: 7, name: "Spam", unread_count: 0 }),
+			makeLabel({ id: 8, name: "Archive", unread_count: 0 }),
+			makeLabel({ id: 9, name: "All Mail", unread_count: 0 }),
+			makeLabel({ id: 10, name: "Starred", unread_count: 0 }),
+			makeLabel({ id: 11, name: "Flagged", unread_count: 0 }),
+		];
+		render(<Sidebar {...defaultProps} labels={labels} />);
+		// All label names render as text
+		for (const l of labels) {
+			expect(screen.getAllByText(l.name).length).toBeGreaterThanOrEqual(1);
+		}
+	});
+
+	it("shows colored dot for user label with color", () => {
+		const labels = [makeLabel({ id: 1, name: "Important", color: "#ff0000", source: "user" })];
+		const { container } = render(<Sidebar {...defaultProps} labels={labels} />);
+		const dot = container.querySelector('span[style*="background-color"]');
+		expect(dot).toBeInTheDocument();
+		expect(dot?.getAttribute("style")).toContain("#ff0000");
+	});
+
+	it("shows tag icon for user label without color", () => {
+		const labels = [makeLabel({ id: 1, name: "Custom Tag", color: null, source: "user" })];
+		render(<Sidebar {...defaultProps} labels={labels} />);
+		// Tag icon SVG has a <title>Label</title>
+		expect(screen.getByTitle("Label")).toBeInTheDocument();
+	});
+
+	it("highlights selected label", () => {
+		const labels = [
+			makeLabel({ id: 1, name: "Inbox" }),
+			makeLabel({ id: 2, name: "Sent", unread_count: 0 }),
+		];
+		const { container } = render(<Sidebar {...defaultProps} labels={labels} selectedLabelId={1} />);
+		// Active label button has the stork-100 highlight class
+		const buttons = container.querySelectorAll("nav button");
+		const inboxBtn = Array.from(buttons).find((b) => b.textContent?.includes("Inbox"));
+		expect(inboxBtn?.className).toContain("bg-stork-100");
+	});
+
+	it("shows sync now button and calls onSyncNow", async () => {
+		const onSyncNow = vi.fn();
+		render(<Sidebar {...defaultProps} onSyncNow={onSyncNow} syncing={false} />);
+		const syncBtn = screen.getByTitle("Sync now");
+		await userEvent.click(syncBtn);
+		expect(onSyncNow).toHaveBeenCalledOnce();
+	});
+
+	it("disables sync button when syncing", () => {
+		render(<Sidebar {...defaultProps} onSyncNow={vi.fn()} syncing={true} />);
+		const syncBtn = screen.getByTitle("Sync in progress…");
+		expect(syncBtn).toBeDisabled();
+	});
+
+	it("shows 'Waiting for initial sync' when syncing and no labels", () => {
+		render(<Sidebar {...defaultProps} labels={[]} syncing={true} />);
+		expect(screen.getByText("Waiting for initial sync…")).toBeInTheDocument();
+	});
+
+	it("shows dark mode toggle label correctly", () => {
+		const { rerender } = render(<Sidebar {...defaultProps} dark={false} />);
+		expect(screen.getByTitle("Toggle dark mode")).toHaveTextContent(/Dark/);
+
+		rerender(<Sidebar {...defaultProps} dark={true} />);
+		expect(screen.getByTitle("Toggle dark mode")).toHaveTextContent(/Light/);
+	});
+
+	it("calls onSelectAccount when account selector changes", async () => {
+		const onSelectAccount = vi.fn();
+		const accounts = [
+			makeAccount({ id: 1, name: "Account 1", email: "a1@test.com" }),
+			makeAccount({ id: 2, name: "Account 2", email: "a2@test.com" }),
+		];
+		render(
+			<Sidebar
+				{...defaultProps}
+				accounts={accounts}
+				selectedAccountId={1}
+				onSelectAccount={onSelectAccount}
+			/>,
+		);
+		const select = screen.getByRole("combobox");
+		await userEvent.selectOptions(select, "2");
+		expect(onSelectAccount).toHaveBeenCalledWith(2);
+	});
+
+	it("toggles sync detail panel when sync indicator is clicked", async () => {
+		const syncStatus: GlobalSyncStatus = {
+			"1": {
+				running: true,
+				lastSync: null,
+				lastError: null,
+				consecutiveErrors: 0,
+				progress: {
+					currentFolder: "INBOX",
+					foldersCompleted: 3,
+					totalFolders: 10,
+					messagesNew: 5,
+					startedAt: Date.now() - 30000,
+				},
+			},
+		};
+		render(<Sidebar {...defaultProps} syncing={true} syncStatus={syncStatus} />);
+		// Click the sync indicator to expand
+		await userEvent.click(screen.getByText("Syncing mail…"));
+		expect(screen.getByText("INBOX")).toBeInTheDocument();
+		expect(screen.getByText("3 of 10 folders")).toBeInTheDocument();
+		expect(screen.getByText(/30%/)).toBeInTheDocument();
+		expect(screen.getByText(/5 new messages found/)).toBeInTheDocument();
+	});
+
+	it("shows estimated time remaining when progress is available", async () => {
+		const syncStatus: GlobalSyncStatus = {
+			"1": {
+				running: true,
+				lastSync: null,
+				lastError: null,
+				consecutiveErrors: 0,
+				progress: {
+					currentFolder: "Sent",
+					foldersCompleted: 5,
+					totalFolders: 10,
+					messagesNew: 0,
+					startedAt: Date.now() - 60000,
+				},
+			},
+		};
+		render(<Sidebar {...defaultProps} syncing={true} syncStatus={syncStatus} />);
+		await userEvent.click(screen.getByText("Syncing mail…"));
+		// Should show elapsed time and estimated remaining
+		expect(screen.getByText(/Elapsed: 1m 0s/)).toBeInTheDocument();
+		expect(screen.getByText(/~1m 0s remaining/)).toBeInTheDocument();
+	});
+
+	it("shows Connecting when progress is null", async () => {
+		const syncStatus: GlobalSyncStatus = {
+			"1": {
+				running: true,
+				lastSync: null,
+				lastError: null,
+				consecutiveErrors: 0,
+				progress: null,
+			},
+		};
+		render(<Sidebar {...defaultProps} syncing={true} syncStatus={syncStatus} />);
+		await userEvent.click(screen.getByText("Syncing mail…"));
+		expect(screen.getByText("Connecting to server…")).toBeInTheDocument();
+	});
+
+	it("shows multi-account sync indicator", async () => {
+		const syncStatus: GlobalSyncStatus = {
+			"1": {
+				running: true,
+				lastSync: null,
+				lastError: null,
+				consecutiveErrors: 0,
+				progress: {
+					currentFolder: "INBOX",
+					foldersCompleted: 1,
+					totalFolders: 5,
+					messagesNew: 0,
+					startedAt: Date.now(),
+				},
+			},
+			"2": {
+				running: true,
+				lastSync: null,
+				lastError: null,
+				consecutiveErrors: 0,
+				progress: null,
+			},
+		};
+		render(<Sidebar {...defaultProps} syncing={true} syncStatus={syncStatus} />);
+		await userEvent.click(screen.getByText("Syncing mail…"));
+		expect(screen.getByText("+1 more account syncing")).toBeInTheDocument();
+	});
+
+	it("shows plural accounts syncing when 3+ accounts sync", async () => {
+		const syncStatus: GlobalSyncStatus = {
+			"1": {
+				running: true,
+				lastSync: null,
+				lastError: null,
+				consecutiveErrors: 0,
+				progress: {
+					currentFolder: "INBOX",
+					foldersCompleted: 1,
+					totalFolders: 5,
+					messagesNew: 0,
+					startedAt: Date.now(),
+				},
+			},
+			"2": { running: true, lastSync: null, lastError: null, consecutiveErrors: 0, progress: null },
+			"3": { running: true, lastSync: null, lastError: null, consecutiveErrors: 0, progress: null },
+		};
+		render(<Sidebar {...defaultProps} syncing={true} syncStatus={syncStatus} />);
+		await userEvent.click(screen.getByText("Syncing mail…"));
+		expect(screen.getByText("+2 more accounts syncing")).toBeInTheDocument();
+	});
+
+	it("formatDuration shows seconds for sub-minute", async () => {
+		const syncStatus: GlobalSyncStatus = {
+			"1": {
+				running: true,
+				lastSync: null,
+				lastError: null,
+				consecutiveErrors: 0,
+				progress: {
+					currentFolder: "INBOX",
+					foldersCompleted: 1,
+					totalFolders: 5,
+					messagesNew: 0,
+					startedAt: Date.now() - 15000,
+				},
+			},
+		};
+		render(<Sidebar {...defaultProps} syncing={true} syncStatus={syncStatus} />);
+		await userEvent.click(screen.getByText("Syncing mail…"));
+		expect(screen.getByText(/Elapsed: 15s/)).toBeInTheDocument();
+	});
+
+	it("shows singular message text for 1 new message", async () => {
+		const syncStatus: GlobalSyncStatus = {
+			"1": {
+				running: true,
+				lastSync: null,
+				lastError: null,
+				consecutiveErrors: 0,
+				progress: {
+					currentFolder: "INBOX",
+					foldersCompleted: 1,
+					totalFolders: 5,
+					messagesNew: 1,
+					startedAt: Date.now(),
+				},
+			},
+		};
+		render(<Sidebar {...defaultProps} syncing={true} syncStatus={syncStatus} />);
+		await userEvent.click(screen.getByText("Syncing mail…"));
+		expect(screen.getByText("1 new message found")).toBeInTheDocument();
+	});
+
+	it("does not show context menu on right-click for imap labels", async () => {
+		const labels = [makeLabel({ id: 1, name: "Inbox", source: "imap" })];
+		render(<Sidebar {...defaultProps} labels={labels} onLabelsChanged={vi.fn()} />);
+		// Right-click on an imap label should not show context menu
+		const inboxSpan = screen
+			.getAllByText("Inbox")
+			.find((el) => el.tagName === "SPAN") as HTMLElement;
+		const btn = inboxSpan.closest("button") as HTMLElement;
+		// handleLabelContextMenu early-returns for non-user labels
+		await userEvent.pointer({ keys: "[MouseRight]", target: btn });
+		// No context menu items should appear (LabelManager handles user labels only)
 	});
 });

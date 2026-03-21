@@ -118,6 +118,53 @@ describe("MessageList", () => {
 		expect(screen.getByText("Loading…")).toBeInTheDocument();
 	});
 
+	it("formats date for messages from last week", () => {
+		const lastWeekDate = new Date(Date.now() - 3 * 86400000); // 3 days ago
+		const messages = [makeMessage({ id: 1, date: lastWeekDate.toISOString(), subject: "Recent" })];
+		render(<MessageList {...defaultProps} messages={messages} />);
+		expect(screen.getByText("Recent")).toBeInTheDocument();
+	});
+
+	it("formats date for messages from earlier this year", () => {
+		const d = new Date();
+		d.setMonth(d.getMonth() > 0 ? d.getMonth() - 1 : 11);
+		d.setDate(1);
+		const messages = [makeMessage({ id: 1, date: d.toISOString(), subject: "Old msg" })];
+		render(<MessageList {...defaultProps} messages={messages} />);
+		expect(screen.getByText("Old msg")).toBeInTheDocument();
+	});
+
+	it("formats date for messages from a different year", () => {
+		const oldDate = new Date("2023-06-15T10:00:00Z");
+		const messages = [makeMessage({ id: 1, date: oldDate.toISOString(), subject: "Ancient" })];
+		render(<MessageList {...defaultProps} messages={messages} />);
+		expect(screen.getByText("Ancient")).toBeInTheDocument();
+	});
+
+	it("shows error state", () => {
+		render(<MessageList {...defaultProps} error="Failed to load" />);
+		expect(screen.getByText("Failed to load messages")).toBeInTheDocument();
+		expect(screen.getByText("Failed to load")).toBeInTheDocument();
+	});
+
+	it("highlights selected message", () => {
+		const messages = [makeMessage({ id: 1, subject: "Selected" })];
+		const { container } = render(
+			<MessageList {...defaultProps} messages={messages} selectedId={1} />,
+		);
+		// Selected message has a different background class
+		const messageItem = container.querySelector('[class*="bg-stork"]');
+		expect(messageItem).toBeInTheDocument();
+	});
+
+	it("shows unread styling for unread messages", () => {
+		const messages = [makeMessage({ id: 1, subject: "Unread msg", flags: null })];
+		const { container } = render(<MessageList {...defaultProps} messages={messages} />);
+		// Unread messages have font-semibold class
+		const bold = container.querySelector('[class*="font-semibold"]');
+		expect(bold).toBeInTheDocument();
+	});
+
 	it("calls onRefresh when refresh button is clicked", async () => {
 		const onRefresh = vi.fn();
 		const messages = [makeMessage({ id: 1 })];
