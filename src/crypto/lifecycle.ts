@@ -64,6 +64,7 @@ export async function bootContainer(
 		if (context.db) {
 			context.db.close();
 		}
+		clearTimeout(forceTimer);
 		process.exit(0);
 	}
 
