@@ -21,7 +21,7 @@ import {
 	useMessageActions,
 	useSyncPoller,
 } from "./hooks";
-import { getPageSize } from "./utils";
+import { getPageSize, isFlagged } from "./utils";
 
 export function App() {
 	const [dark, toggleDark] = useDarkMode();
@@ -227,6 +227,32 @@ export function App() {
 			// Sync trigger is best-effort; sync status poller will show any errors
 		}
 	}, [effectiveAccountId]);
+
+	// Inline star toggle from message list
+	const handleToggleStar = useCallback(
+		async (messageId: number) => {
+			const msg = allMessages.find((m) => m.id === messageId);
+			if (!msg) return;
+			const flagged = isFlagged(msg.flags);
+			const flagsUpdate = flagged ? { remove: ["\\Flagged"] } : { add: ["\\Flagged"] };
+			// Optimistic update
+			setAllMessages((prev) =>
+				prev.map((m) => {
+					if (m.id !== messageId) return m;
+					const flagSet = new Set((m.flags ?? "").split(",").filter(Boolean));
+					if (flagged) flagSet.delete("\\Flagged");
+					else flagSet.add("\\Flagged");
+					return { ...m, flags: [...flagSet].join(",") };
+				}),
+			);
+			try {
+				await api.messages.updateFlags(messageId, flagsUpdate);
+			} catch {
+				refetchMessages();
+			}
+		},
+		[allMessages, refetchMessages],
+	);
 
 	// Bulk selection (state + action handlers extracted to hook)
 	const bulk = useBulkSelection({
@@ -528,6 +554,7 @@ export function App() {
 						hasMore={hasMore}
 						onLoadMore={handleLoadMore}
 						loadingMore={loadingMore}
+						onToggleStar={handleToggleStar}
 						totalCount={
 							isAllMail
 								? allMailCount?.total

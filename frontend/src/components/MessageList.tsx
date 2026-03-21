@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { Folder, MessageSummary } from "../api";
-import { isUnread } from "../utils";
+import { isFlagged, isUnread } from "../utils";
 import { BulkActionsBar } from "./BulkActionsBar";
-import { AlertCircleIcon, InboxEmptyIcon, PaperclipIcon, RefreshIcon } from "./Icons";
+import { AlertCircleIcon, InboxEmptyIcon, PaperclipIcon, RefreshIcon, StarIcon } from "./Icons";
 
 function formatDate(dateStr: string): string {
 	const d = new Date(dateStr);
@@ -60,6 +60,7 @@ interface MessageListProps {
 	onLoadMore?: () => void;
 	loadingMore?: boolean;
 	totalCount?: number;
+	onToggleStar?: (id: number) => void;
 	// Bulk selection
 	selectedIds?: Set<number>;
 	onToggleSelect?: (id: number) => void;
@@ -83,6 +84,7 @@ export function MessageList({
 	hasMore,
 	onLoadMore,
 	loadingMore,
+	onToggleStar,
 	selectedIds,
 	onToggleSelect,
 	onSelectAll,
@@ -205,6 +207,7 @@ export function MessageList({
 				)}
 				{messages.map((msg, idx) => {
 					const unread = isUnread(msg.flags);
+					const starred = isFlagged(msg.flags);
 					const active = msg.id === selectedId;
 					const bulkSelected = selectedIds?.has(msg.id) ?? false;
 					return (
@@ -218,6 +221,26 @@ export function MessageList({
 										: "hover:bg-gray-50 dark:hover:bg-gray-900"
 							}`}
 						>
+							{/* Star toggle — shown on hover or when starred */}
+							{onToggleStar && (
+								<button
+									type="button"
+									aria-label={starred ? "Remove star" : "Star message"}
+									onClick={(e) => {
+										e.stopPropagation();
+										onToggleStar(msg.id);
+									}}
+									className={`absolute right-2 top-1/2 -translate-y-1/2 z-10 transition-opacity ${
+										starred ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+									}`}
+								>
+									<StarIcon
+										className={`w-4 h-4 ${starred ? "text-amber-500" : "text-gray-300 dark:text-gray-600 hover:text-amber-400"}`}
+										filled={starred}
+									/>
+								</button>
+							)}
+
 							{/* Checkbox — shown on hover or when any selected */}
 							{onToggleSelect && (
 								<button
@@ -263,7 +286,7 @@ export function MessageList({
 									onToggleSelect ? hasBulk || "group-hover:[&]:pl-8" : ""
 								} ${hasBulk || bulkSelected ? "pl-8 pr-4" : "px-4"}`}
 							>
-								<div className="flex items-start gap-3 min-w-0">
+								<div className="flex items-start gap-2 min-w-0">
 									{/* Unread dot */}
 									<div className="pt-1.5 flex-shrink-0">
 										{unread ? (
@@ -274,7 +297,7 @@ export function MessageList({
 									</div>
 
 									<div className="flex-1 min-w-0">
-										<div className="flex items-baseline gap-2">
+										<div className="flex items-center gap-2">
 											<span
 												className={`truncate text-sm ${
 													unread
@@ -284,7 +307,7 @@ export function MessageList({
 											>
 												{msg.from_name || msg.from_address}
 											</span>
-											<span className="flex-shrink-0 text-xs text-gray-400">
+											<span className="flex-shrink-0 text-xs text-gray-400 ml-auto">
 												{formatDate(msg.date)}
 											</span>
 										</div>

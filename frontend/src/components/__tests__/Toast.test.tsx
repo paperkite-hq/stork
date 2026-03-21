@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastContainer, _resetToastDedup, toast } from "../Toast";
 
@@ -33,7 +33,8 @@ describe("ToastContainer", () => {
 		});
 		const el = screen.getByText("Something failed");
 		expect(el).toBeInTheDocument();
-		expect(el.className).toContain("bg-red-600");
+		// Background class is on the parent <div> wrapper
+		expect(el.closest("[class*='bg-red-600']")).toBeInTheDocument();
 	});
 
 	it("displays an info toast with gray styling", () => {
@@ -43,7 +44,7 @@ describe("ToastContainer", () => {
 		});
 		const el = screen.getByText("Just FYI");
 		expect(el).toBeInTheDocument();
-		expect(el.className).toContain("bg-gray-700");
+		expect(el.closest("[class*='bg-gray-700']")).toBeInTheDocument();
 	});
 
 	it("auto-dismisses after 3 seconds", () => {
@@ -97,6 +98,63 @@ describe("ToastContainer", () => {
 		// The first one auto-dismissed after 3s but was re-created at 2.1s — both may be visible
 		// depending on timing. The important thing is the second call wasn't blocked.
 		expect(screen.getAllByText("Repeat me").length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("renders action button when provided", () => {
+		render(<ToastContainer />);
+		const onClick = vi.fn();
+		act(() => {
+			toast("Archived", "success", { label: "Undo", onClick });
+		});
+		expect(screen.getByText("Archived")).toBeInTheDocument();
+		expect(screen.getByText("Undo")).toBeInTheDocument();
+	});
+
+	it("calls action onClick and dismisses toast when action button clicked", () => {
+		render(<ToastContainer />);
+		const onClick = vi.fn();
+		act(() => {
+			toast("Archived", "success", { label: "Undo", onClick });
+		});
+		const undoBtn = screen.getByText("Undo");
+		act(() => {
+			fireEvent.click(undoBtn);
+		});
+		expect(onClick).toHaveBeenCalledOnce();
+		// Toast should be dismissed after clicking the action
+		expect(screen.queryByText("Archived")).not.toBeInTheDocument();
+	});
+
+	it("action toasts stay visible for 5 seconds instead of 3", () => {
+		render(<ToastContainer />);
+		act(() => {
+			toast("Archived", "success", { label: "Undo", onClick: vi.fn() });
+		});
+		expect(screen.getByText("Archived")).toBeInTheDocument();
+
+		// Still visible at 3s
+		act(() => {
+			vi.advanceTimersByTime(3000);
+		});
+		expect(screen.getByText("Archived")).toBeInTheDocument();
+
+		// Dismissed at 5s
+		act(() => {
+			vi.advanceTimersByTime(2000);
+		});
+		expect(screen.queryByText("Archived")).not.toBeInTheDocument();
+	});
+
+	it("action toasts are never deduped", () => {
+		render(<ToastContainer />);
+		const onClick1 = vi.fn();
+		const onClick2 = vi.fn();
+		act(() => {
+			toast("Archived", "success", { label: "Undo", onClick: onClick1 });
+			toast("Archived", "success", { label: "Undo", onClick: onClick2 });
+		});
+		// Both should be shown since action toasts bypass dedup
+		expect(screen.getAllByText("Archived")).toHaveLength(2);
 	});
 
 	it("dismisses toasts independently", () => {

@@ -178,6 +178,35 @@ describe("MessageList", () => {
 		expect(screen.getByText("2 messages")).toBeInTheDocument();
 	});
 
+	it("shows star toggle button for starred messages", () => {
+		const messages = [makeMessage({ id: 1, flags: "\\Flagged", subject: "Starred msg" })];
+		render(<MessageList {...defaultProps} messages={messages} onToggleStar={vi.fn()} />);
+		expect(screen.getByLabelText("Remove star")).toBeInTheDocument();
+	});
+
+	it("shows star toggle on hover for unstarred messages", () => {
+		const messages = [makeMessage({ id: 1, flags: "\\Seen", subject: "Read msg" })];
+		render(<MessageList {...defaultProps} messages={messages} onToggleStar={vi.fn()} />);
+		// The star button exists in the DOM but is hidden via opacity
+		const starBtn = screen.getByLabelText("Star message");
+		expect(starBtn).toBeInTheDocument();
+		expect(starBtn.className).toContain("opacity-0");
+	});
+
+	it("calls onToggleStar when star button is clicked", async () => {
+		const onToggleStar = vi.fn();
+		const messages = [makeMessage({ id: 42, flags: "\\Seen", subject: "Star me" })];
+		render(<MessageList {...defaultProps} messages={messages} onToggleStar={onToggleStar} />);
+		await userEvent.click(screen.getByLabelText("Star message"));
+		expect(onToggleStar).toHaveBeenCalledWith(42);
+	});
+
+	it("does not show star toggle when onToggleStar is not provided", () => {
+		const messages = [makeMessage({ id: 1, flags: "\\Flagged", subject: "Starred" })];
+		render(<MessageList {...defaultProps} messages={messages} />);
+		expect(screen.queryByLabelText("Remove star")).not.toBeInTheDocument();
+	});
+
 	it("calls onRefresh when refresh button is clicked", async () => {
 		const onRefresh = vi.fn();
 		const messages = [makeMessage({ id: 1 })];
