@@ -518,4 +518,197 @@ describe("IMAP sync edge cases", () => {
 		// Should resolve without throwing despite the broken connection
 		await expect(sync.disconnect()).resolves.toBeUndefined();
 	});
+
+	test("\\Noselect folder is skipped during syncFolders", async () => {
+		const mailboxes: MockMailbox[] = [
+			{
+				path: "INBOX",
+				name: "Inbox",
+				delimiter: "/",
+				flags: ["\\HasNoChildren"],
+				specialUse: "\\Inbox",
+				uidValidity: 1,
+				uidNext: 1,
+				messages: [],
+			},
+			{
+				// A namespace root that should not be selectable
+				path: "[Gmail]",
+				name: "[Gmail]",
+				delimiter: "/",
+				flags: ["\\Noselect", "\\HasChildren"],
+				uidValidity: 0,
+				uidNext: 0,
+				messages: [],
+			},
+		];
+
+		await setupServer(mailboxes);
+		const sync = makeSync();
+		await sync.connect();
+		await sync.syncFolders();
+
+		const folders = db.prepare("SELECT path FROM folders WHERE account_id = ?").all(accountId) as {
+			path: string;
+		}[];
+
+		const paths = folders.map((f) => f.path);
+		// The \Noselect folder must be filtered out
+		expect(paths).not.toContain("[Gmail]");
+		expect(paths).toContain("INBOX");
+
+		await sync.disconnect();
+	});
+
+	test("special-use folder detection: additional name variants (Sent Mail, Deleted Items, [Gmail]/All Mail)", async () => {
+		const mailboxes: MockMailbox[] = [
+			{
+				path: "INBOX",
+				name: "Inbox",
+				delimiter: "/",
+				flags: [],
+				uidValidity: 1,
+				uidNext: 1,
+				messages: [],
+			},
+			{
+				path: "Sent Mail",
+				name: "Sent Mail",
+				delimiter: "/",
+				flags: [],
+				uidValidity: 1,
+				uidNext: 1,
+				messages: [],
+			},
+			{
+				path: "Sent Items",
+				name: "Sent Items",
+				delimiter: "/",
+				flags: [],
+				uidValidity: 1,
+				uidNext: 1,
+				messages: [],
+			},
+			{
+				path: "Draft",
+				name: "Draft",
+				delimiter: "/",
+				flags: [],
+				uidValidity: 1,
+				uidNext: 1,
+				messages: [],
+			},
+			{
+				path: "Deleted",
+				name: "Deleted",
+				delimiter: "/",
+				flags: [],
+				uidValidity: 1,
+				uidNext: 1,
+				messages: [],
+			},
+			{
+				path: "Deleted Items",
+				name: "Deleted Items",
+				delimiter: "/",
+				flags: [],
+				uidValidity: 1,
+				uidNext: 1,
+				messages: [],
+			},
+			{
+				path: "Spam",
+				name: "Spam",
+				delimiter: "/",
+				flags: [],
+				uidValidity: 1,
+				uidNext: 1,
+				messages: [],
+			},
+			{
+				path: "Archive",
+				name: "Archive",
+				delimiter: "/",
+				flags: [],
+				uidValidity: 1,
+				uidNext: 1,
+				messages: [],
+			},
+			{
+				path: "[Gmail]/All Mail",
+				name: "All Mail",
+				delimiter: "/",
+				flags: [],
+				uidValidity: 1,
+				uidNext: 1,
+				messages: [],
+			},
+			{
+				// Path with no matching special-use name — should remain null
+				path: "Custom Folder",
+				name: "Custom Folder",
+				delimiter: "/",
+				flags: [],
+				uidValidity: 1,
+				uidNext: 1,
+				messages: [],
+			},
+		];
+
+		await setupServer(mailboxes);
+		const sync = makeSync();
+		await sync.connect();
+		await sync.syncFolders();
+
+		const folders = db
+			.prepare("SELECT path, special_use FROM folders WHERE account_id = ? ORDER BY path")
+			.all(accountId) as { path: string; special_use: string | null }[];
+
+		const folderMap = new Map(folders.map((f) => [f.path, f.special_use]));
+
+		expect(folderMap.get("Sent Mail")).toBe("\\Sent");
+		expect(folderMap.get("Sent Items")).toBe("\\Sent");
+		expect(folderMap.get("Draft")).toBe("\\Drafts");
+		expect(folderMap.get("Deleted")).toBe("\\Trash");
+		expect(folderMap.get("Deleted Items")).toBe("\\Trash");
+		expect(folderMap.get("Spam")).toBe("\\Junk");
+		expect(folderMap.get("Archive")).toBe("\\Archive");
+		expect(folderMap.get("[Gmail]/All Mail")).toBe("\\Archive");
+		expect(folderMap.get("Custom Folder")).toBeNull();
+
+		await sync.disconnect();
+	});
+
+	test("flag sync with no flag changes does not update the database", async () => {
+		// Set up with one message
+		const mailboxes = makeMailboxes();
+		await setupServer(mailboxes);
+
+		// First sync — establishes baseline flags
+		const sync1 = makeSync();
+		await sync1.connect();
+		await sync1.syncAll();
+		await sync1.disconnect();
+
+		// Read the initial flags
+		const flagsBefore = db
+			.prepare("SELECT flags FROM messages WHERE account_id = ? AND uid = 1")
+			.get(accountId) as { flags: string };
+		expect(flagsBefore).toBeTruthy();
+
+		// Second sync — server flags are unchanged
+		const sync2 = makeSync();
+		await sync2.connect();
+		const result = await sync2.syncAll();
+		await sync2.disconnect();
+
+		// Flags should be unchanged in the DB (false branch of oldFlags !== newFlags)
+		const flagsAfter = db
+			.prepare("SELECT flags FROM messages WHERE account_id = ? AND uid = 1")
+			.get(accountId) as { flags: string };
+		expect(flagsAfter.flags).toBe(flagsBefore.flags);
+
+		// No errors from sync
+		expect(result.totalErrors).toBe(0);
+	});
 });
