@@ -385,11 +385,23 @@ export function useMessageActions(opts: {
 			// Optimistic: remove from list
 			setAllMessages((prev) => prev.filter((m) => m.id !== msg.id));
 			if (selectedMessageId === msg.id) setSelectedMessageId(null);
-			toast("Archived");
 			try {
 				await api.messages.removeLabel(msg.id, currentLabel.id);
 				refetchLabels();
 				refetchAllMailCount();
+				toast("Archived", "success", {
+					label: "Undo",
+					onClick: () => {
+						api.messages
+							.addLabels(msg.id, [currentLabel.id])
+							.then(() => {
+								refetchMessages();
+								refetchLabels();
+								refetchAllMailCount();
+							})
+							.catch(() => toast("Failed to undo", "error"));
+					},
+				});
 			} catch (err) {
 				refetchMessages(); // Revert on failure
 				toast(

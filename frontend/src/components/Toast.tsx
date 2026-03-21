@@ -4,6 +4,7 @@ export interface ToastMessage {
 	id: number;
 	text: string;
 	type: "success" | "error" | "info";
+	action?: { label: string; onClick: () => void };
 }
 
 let nextId = 0;
@@ -17,7 +18,11 @@ export function _resetToastDedup() {
 	recentToasts.length = 0;
 }
 
-export function toast(text: string, type: ToastMessage["type"] = "success") {
+export function toast(
+	text: string,
+	type: ToastMessage["type"] = "success",
+	action?: { label: string; onClick: () => void },
+) {
 	const now = Date.now();
 	// Prune expired entries
 	while (
@@ -27,11 +32,11 @@ export function toast(text: string, type: ToastMessage["type"] = "success") {
 	) {
 		recentToasts.shift();
 	}
-	// Skip if an identical toast was shown recently
-	if (recentToasts.some((t) => t.text === text && t.type === type)) return;
+	// Skip if an identical toast was shown recently (action toasts are never deduped)
+	if (!action && recentToasts.some((t) => t.text === text && t.type === type)) return;
 	recentToasts.push({ text, type, time: now });
 
-	const msg: ToastMessage = { id: nextId++, text, type };
+	const msg: ToastMessage = { id: nextId++, text, type, action };
 	for (const fn of listeners) fn(msg);
 }
 
@@ -71,9 +76,10 @@ function ToastItem({
 	onDismiss,
 }: { toast: ToastMessage; onDismiss: (id: number) => void }) {
 	useEffect(() => {
-		const timer = setTimeout(() => onDismiss(t.id), 3000);
+		// Action toasts stay longer so the user can click the action
+		const timer = setTimeout(() => onDismiss(t.id), t.action ? 5000 : 3000);
 		return () => clearTimeout(timer);
-	}, [t.id, onDismiss]);
+	}, [t.id, t.action, onDismiss]);
 
 	const bg =
 		t.type === "error"
@@ -83,12 +89,29 @@ function ToastItem({
 				: "bg-stork-600 dark:bg-stork-700";
 
 	return (
-		<button
-			type="button"
-			onClick={() => onDismiss(t.id)}
-			className={`${bg} text-white text-sm px-4 py-2.5 rounded-lg shadow-lg pointer-events-auto animate-slideUp max-w-xs cursor-pointer text-left`}
+		<div
+			className={`${bg} text-white text-sm rounded-lg shadow-lg pointer-events-auto animate-slideUp max-w-xs flex items-center gap-2`}
 		>
-			{t.text}
-		</button>
+			<button
+				type="button"
+				onClick={() => onDismiss(t.id)}
+				className="flex-1 text-left px-4 py-2.5 cursor-pointer"
+			>
+				{t.text}
+			</button>
+			{t.action && (
+				<button
+					type="button"
+					onClick={(e) => {
+						e.stopPropagation();
+						t.action?.onClick();
+						onDismiss(t.id);
+					}}
+					className="pr-3 py-2.5 font-semibold text-white/90 hover:text-white underline underline-offset-2 flex-shrink-0"
+				>
+					{t.action.label}
+				</button>
+			)}
+		</div>
 	);
 }
