@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { formatAddressList, getPageSize, isFlagged, isUnread } from "../utils.js";
+import { formatAddressList, getPageSize, isFlagged, isUnread, parseFlags } from "../utils.js";
 
 describe("isUnread", () => {
 	test("null flags → unread", () => {
@@ -11,15 +11,15 @@ describe("isUnread", () => {
 	});
 
 	test("flags without \\Seen → unread", () => {
-		expect(isUnread("\\Flagged \\Answered")).toBe(true);
+		expect(isUnread("\\Flagged,\\Answered")).toBe(true);
 	});
 
 	test("flags with \\Seen → read", () => {
 		expect(isUnread("\\Seen")).toBe(false);
 	});
 
-	test("\\Seen among multiple flags → read", () => {
-		expect(isUnread("\\Seen \\Flagged")).toBe(false);
+	test("\\Seen among comma-separated flags → read", () => {
+		expect(isUnread("\\Seen,\\Flagged")).toBe(false);
 	});
 });
 
@@ -33,15 +33,43 @@ describe("isFlagged", () => {
 	});
 
 	test("flags without \\Flagged → not flagged", () => {
-		expect(isFlagged("\\Seen \\Answered")).toBe(false);
+		expect(isFlagged("\\Seen,\\Answered")).toBe(false);
 	});
 
 	test("flags with \\Flagged → flagged", () => {
 		expect(isFlagged("\\Flagged")).toBe(true);
 	});
 
-	test("\\Flagged among multiple flags → flagged", () => {
-		expect(isFlagged("\\Seen \\Flagged \\Answered")).toBe(true);
+	test("\\Flagged among comma-separated flags → flagged", () => {
+		expect(isFlagged("\\Seen,\\Flagged,\\Answered")).toBe(true);
+	});
+});
+
+describe("parseFlags", () => {
+	test("null → empty set", () => {
+		expect(parseFlags(null)).toEqual(new Set());
+	});
+
+	test("empty string → empty set", () => {
+		expect(parseFlags("")).toEqual(new Set());
+	});
+
+	test("single flag → set with one entry", () => {
+		expect(parseFlags("\\Seen")).toEqual(new Set(["\\Seen"]));
+	});
+
+	test("comma-separated flags → set with all entries", () => {
+		expect(parseFlags("\\Seen,\\Flagged,\\Answered")).toEqual(
+			new Set(["\\Seen", "\\Flagged", "\\Answered"]),
+		);
+	});
+
+	test("trailing comma → no empty entries", () => {
+		expect(parseFlags("\\Seen,")).toEqual(new Set(["\\Seen"]));
+	});
+
+	test("leading comma → no empty entries", () => {
+		expect(parseFlags(",\\Seen")).toEqual(new Set(["\\Seen"]));
 	});
 });
 
