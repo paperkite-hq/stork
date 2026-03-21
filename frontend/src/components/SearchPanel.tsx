@@ -101,6 +101,7 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 	const handleKeyDown = useCallback(
 		(e: React.KeyboardEvent) => {
 			if (e.key === "Escape") {
+				e.stopPropagation();
 				onClose();
 				return;
 			}
@@ -130,6 +131,12 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 			role="dialog"
 			aria-modal="true"
 			aria-label="Search messages"
+			onClick={(e) => {
+				if (e.target === e.currentTarget) onClose();
+			}}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onClose();
+			}}
 		>
 			<div className="w-full max-w-xl bg-white dark:bg-gray-900 rounded-xl shadow-2xl flex flex-col max-h-[70vh]">
 				{/* Search input */}
