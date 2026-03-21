@@ -1,5 +1,5 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
-import type { GlobalSyncStatus, MessageSummary } from "./api";
+import type { Folder, GlobalSyncStatus, Label, MessageSummary } from "./api";
 import { api } from "./api";
 import { toast } from "./components/Toast";
 
@@ -284,6 +284,189 @@ export function useBulkSelection(opts: {
 		markRead,
 		markUnread,
 		move,
+	};
+}
+
+/**
+ * Manages per-message action handlers for the focused message in the list:
+ * optimistic star/unstar, mark read/unread, archive, and delete.
+ * Extracted from App.tsx to reduce component complexity.
+ */
+export function useMessageActions(opts: {
+	messages: MessageSummary[];
+	messageListIndex: number;
+	selectedMessageId: number | null;
+	setSelectedMessageId: (id: number | null) => void;
+	setAllMessages: React.Dispatch<React.SetStateAction<MessageSummary[]>>;
+	labels: Label[] | null;
+	folders: Folder[] | null;
+	effectiveLabelId: number | null;
+	isAllMail: boolean;
+	refetchMessages: () => void;
+	refetchLabels: () => void;
+	refetchAllMailCount: () => void;
+}) {
+	const {
+		messages,
+		messageListIndex,
+		selectedMessageId,
+		setSelectedMessageId,
+		setAllMessages,
+		labels,
+		folders,
+		effectiveLabelId,
+		isAllMail,
+		refetchMessages,
+		refetchLabels,
+		refetchAllMailCount,
+	} = opts;
+
+	const [pendingDelete, setPendingDelete] = useState<number | null>(null);
+
+	const focusedMessage = messages[messageListIndex] ?? null;
+
+	// Optimistic flag update — immediately updates local message list state
+	const optimisticFlagUpdate = useCallback(
+		(messageId: number, flagsUpdate: { add?: string[]; remove?: string[] }) => {
+			setAllMessages((prev) =>
+				prev.map((m) => {
+					if (m.id !== messageId) return m;
+					let flags = m.flags ?? "";
+					for (const flag of flagsUpdate.add ?? []) {
+						if (!flags.includes(flag)) {
+							flags = flags ? `${flags} ${flag}` : flag;
+						}
+					}
+					for (const flag of flagsUpdate.remove ?? []) {
+						flags = flags
+							.split(" ")
+							.filter((f) => f !== flag)
+							.join(" ");
+					}
+					return { ...m, flags };
+				}),
+			);
+		},
+		[setAllMessages],
+	);
+
+	const star = useCallback(async () => {
+		const msg = messages[messageListIndex];
+		if (!msg) return;
+		const flagged = msg.flags?.includes("\\Flagged") ?? false;
+		const flagsUpdate = flagged ? { remove: ["\\Flagged"] } : { add: ["\\Flagged"] };
+		optimisticFlagUpdate(msg.id, flagsUpdate);
+		toast(flagged ? "Removed star" : "Starred", "success");
+		try {
+			await api.messages.updateFlags(msg.id, flagsUpdate);
+		} catch (err) {
+			refetchMessages(); // Revert on failure
+			toast(`Failed to star: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
+		}
+	}, [messages, messageListIndex, optimisticFlagUpdate, refetchMessages]);
+
+	const toggleRead = useCallback(async () => {
+		const msg = messages[messageListIndex];
+		if (!msg) return;
+		const unread = !msg.flags?.includes("\\Seen");
+		const flagsUpdate = unread ? { add: ["\\Seen"] } : { remove: ["\\Seen"] };
+		optimisticFlagUpdate(msg.id, flagsUpdate);
+		toast(unread ? "Marked as read" : "Marked as unread", "success");
+		try {
+			await api.messages.updateFlags(msg.id, flagsUpdate);
+		} catch (err) {
+			refetchMessages(); // Revert on failure
+			toast(`Failed to update: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
+		}
+	}, [messages, messageListIndex, optimisticFlagUpdate, refetchMessages]);
+
+	const archive = useCallback(async () => {
+		const msg = messages[messageListIndex];
+		if (!msg) return;
+
+		// Label-based archive: if viewing a specific label, remove that label from the message.
+		// The message remains accessible in "All Mail". This mirrors the Gmail archive workflow.
+		const currentLabel = labels?.find((l) => l.id === effectiveLabelId);
+		if (currentLabel && !isAllMail) {
+			// Optimistic: remove from list
+			setAllMessages((prev) => prev.filter((m) => m.id !== msg.id));
+			if (selectedMessageId === msg.id) setSelectedMessageId(null);
+			toast("Archived");
+			try {
+				await api.messages.removeLabel(msg.id, currentLabel.id);
+				refetchLabels();
+				refetchAllMailCount();
+			} catch (err) {
+				refetchMessages(); // Revert on failure
+				toast(
+					`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`,
+					"error",
+				);
+			}
+			return;
+		}
+
+		// Fallback: folder-based archive (for "All Mail" view or when no label context)
+		const archiveFolder = folders?.find((f) => {
+			const name = f.name.toLowerCase();
+			const special = f.special_use?.toLowerCase() ?? "";
+			return (
+				name === "archive" || name === "all mail" || special === "\\archive" || special === "\\all"
+			);
+		});
+		if (!archiveFolder) {
+			toast("No archive folder found", "error");
+			return;
+		}
+		// Optimistic: remove from list
+		setAllMessages((prev) => prev.filter((m) => m.id !== msg.id));
+		if (selectedMessageId === msg.id) setSelectedMessageId(null);
+		toast("Archived");
+		try {
+			await api.messages.move(msg.id, archiveFolder.id);
+			refetchLabels();
+		} catch (err) {
+			refetchMessages(); // Revert on failure
+			toast(`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
+		}
+	}, [
+		messages,
+		messageListIndex,
+		folders,
+		labels,
+		effectiveLabelId,
+		isAllMail,
+		selectedMessageId,
+		setSelectedMessageId,
+		setAllMessages,
+		refetchMessages,
+		refetchLabels,
+		refetchAllMailCount,
+	]);
+
+	const confirmDelete = useCallback(async () => {
+		if (pendingDelete === null) return;
+		const id = pendingDelete;
+		setPendingDelete(null);
+		try {
+			await api.messages.delete(id);
+			if (selectedMessageId === id) setSelectedMessageId(null);
+			refetchMessages();
+			refetchLabels();
+			toast("Message deleted", "success");
+		} catch (err) {
+			toast(`Failed to delete: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
+		}
+	}, [pendingDelete, selectedMessageId, setSelectedMessageId, refetchMessages, refetchLabels]);
+
+	return {
+		focusedMessage,
+		pendingDelete,
+		setPendingDelete,
+		star,
+		toggleRead,
+		archive,
+		confirmDelete,
 	};
 }
 

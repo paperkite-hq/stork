@@ -10,7 +10,7 @@ import { Settings } from "./components/Settings";
 import { SetupScreen } from "./components/SetupScreen";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
 import { ALL_MAIL_LABEL_ID, Sidebar } from "./components/Sidebar";
-import { ToastContainer, toast } from "./components/Toast";
+import { ToastContainer } from "./components/Toast";
 import { UnlockScreen } from "./components/UnlockScreen";
 import { Welcome } from "./components/Welcome";
 import {
@@ -18,6 +18,7 @@ import {
 	useBulkSelection,
 	useDarkMode,
 	useKeyboardShortcuts,
+	useMessageActions,
 	useSyncPoller,
 } from "./hooks";
 import { getPageSize } from "./utils";
@@ -47,7 +48,6 @@ export function App() {
 	const [showSettings, setShowSettings] = useState(false);
 	const [messageListIndex, setMessageListIndex] = useState(0);
 	const [sidebarOpen, setSidebarOpen] = useState(false);
-	const [pendingKeyboardDelete, setPendingKeyboardDelete] = useState<number | null>(null);
 
 	// Pagination state
 	const [allMessages, setAllMessages] = useState<MessageSummary[]>([]);
@@ -259,140 +259,22 @@ export function App() {
 		[],
 	);
 
-	// Optimistic flag update — immediately updates local message list state
-	const optimisticFlagUpdate = useCallback(
-		(messageId: number, flagsUpdate: { add?: string[]; remove?: string[] }) => {
-			setAllMessages((prev) =>
-				prev.map((m) => {
-					if (m.id !== messageId) return m;
-					let flags = m.flags ?? "";
-					for (const flag of flagsUpdate.add ?? []) {
-						if (!flags.includes(flag)) {
-							flags = flags ? `${flags} ${flag}` : flag;
-						}
-					}
-					for (const flag of flagsUpdate.remove ?? []) {
-						flags = flags
-							.split(" ")
-							.filter((f) => f !== flag)
-							.join(" ");
-					}
-					return { ...m, flags };
-				}),
-			);
-		},
-		[],
-	);
-
-	// Per-message keyboard action handlers (act on the currently focused list item)
-	const focusedMessage = allMessages[messageListIndex] ?? null;
-
-	const handleKeyboardStar = useCallback(async () => {
-		const msg = allMessages[messageListIndex];
-		if (!msg) return;
-		const flagged = msg.flags?.includes("\\Flagged") ?? false;
-		const flagsUpdate = flagged ? { remove: ["\\Flagged"] } : { add: ["\\Flagged"] };
-		optimisticFlagUpdate(msg.id, flagsUpdate);
-		toast(flagged ? "Removed star" : "Starred", "success");
-		try {
-			await api.messages.updateFlags(msg.id, flagsUpdate);
-		} catch (err) {
-			refetchMessages(); // Revert on failure
-			toast(`Failed to star: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
-		}
-	}, [allMessages, messageListIndex, optimisticFlagUpdate, refetchMessages]);
-
-	const handleKeyboardMarkUnread = useCallback(async () => {
-		const msg = allMessages[messageListIndex];
-		if (!msg) return;
-		const unread = !msg.flags?.includes("\\Seen");
-		const flagsUpdate = unread ? { add: ["\\Seen"] } : { remove: ["\\Seen"] };
-		optimisticFlagUpdate(msg.id, flagsUpdate);
-		toast(unread ? "Marked as read" : "Marked as unread", "success");
-		try {
-			await api.messages.updateFlags(msg.id, flagsUpdate);
-		} catch (err) {
-			refetchMessages(); // Revert on failure
-			toast(`Failed to update: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
-		}
-	}, [allMessages, messageListIndex, optimisticFlagUpdate, refetchMessages]);
-
-	const handleKeyboardArchive = useCallback(async () => {
-		const msg = allMessages[messageListIndex];
-		if (!msg) return;
-
-		// Label-based archive: if viewing a specific label, remove that label from the message.
-		// The message remains accessible in "All Mail". This mirrors the Gmail archive workflow.
-		const currentLabel = labels?.find((l) => l.id === effectiveLabelId);
-		if (currentLabel && !isAllMail) {
-			// Optimistic: remove from list
-			setAllMessages((prev) => prev.filter((m) => m.id !== msg.id));
-			if (selectedMessageId === msg.id) setSelectedMessageId(null);
-			toast("Archived");
-			try {
-				await api.messages.removeLabel(msg.id, currentLabel.id);
-				refetchLabels();
-				refetchAllMailCount();
-			} catch (err) {
-				refetchMessages(); // Revert on failure
-				toast(
-					`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`,
-					"error",
-				);
-			}
-			return;
-		}
-
-		// Fallback: folder-based archive (for "All Mail" view or when no label context)
-		const archiveFolder = folders?.find((f) => {
-			const name = f.name.toLowerCase();
-			const special = f.special_use?.toLowerCase() ?? "";
-			return (
-				name === "archive" || name === "all mail" || special === "\\archive" || special === "\\all"
-			);
-		});
-		if (!archiveFolder) {
-			toast("No archive folder found", "error");
-			return;
-		}
-		// Optimistic: remove from list
-		setAllMessages((prev) => prev.filter((m) => m.id !== msg.id));
-		if (selectedMessageId === msg.id) setSelectedMessageId(null);
-		toast("Archived");
-		try {
-			await api.messages.move(msg.id, archiveFolder.id);
-			refetchLabels();
-		} catch (err) {
-			refetchMessages(); // Revert on failure
-			toast(`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
-		}
-	}, [
-		allMessages,
+	// Per-message keyboard action handlers (star, mark read/unread, archive, delete)
+	const msgActions = useMessageActions({
+		messages: allMessages,
 		messageListIndex,
-		folders,
-		labels,
+		selectedMessageId,
+		setSelectedMessageId,
+		setAllMessages,
+		labels: labels ?? null,
+		folders: folders ?? null,
 		effectiveLabelId,
 		isAllMail,
-		selectedMessageId,
 		refetchMessages,
 		refetchLabels,
 		refetchAllMailCount,
-	]);
-
-	const handleKeyboardDeleteConfirmed = useCallback(async () => {
-		if (pendingKeyboardDelete === null) return;
-		const id = pendingKeyboardDelete;
-		setPendingKeyboardDelete(null);
-		try {
-			await api.messages.delete(id);
-			if (selectedMessageId === id) setSelectedMessageId(null);
-			refetchMessages();
-			refetchLabels();
-			toast("Message deleted", "success");
-		} catch (err) {
-			toast(`Failed to delete: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
-		}
-	}, [pendingKeyboardDelete, selectedMessageId, refetchMessages, refetchLabels]);
+	});
+	const { focusedMessage } = msgActions;
 
 	// Keyboard shortcuts
 	const navigateDown = useCallback(() => {
@@ -458,22 +340,22 @@ export function App() {
 			},
 			s: () => {
 				if (focusedMessage && !composeMode && !showSearch) {
-					handleKeyboardStar();
+					msgActions.star();
 				}
 			},
 			u: () => {
 				if (focusedMessage && !composeMode && !showSearch) {
-					handleKeyboardMarkUnread();
+					msgActions.toggleRead();
 				}
 			},
 			d: () => {
 				if (focusedMessage && !composeMode && !showSearch) {
-					setPendingKeyboardDelete(focusedMessage.id);
+					msgActions.setPendingDelete(focusedMessage.id);
 				}
 			},
 			e: () => {
 				if (focusedMessage && !composeMode && !showSearch) {
-					handleKeyboardArchive();
+					msgActions.archive();
 				}
 			},
 			x: () => {
@@ -498,9 +380,7 @@ export function App() {
 			handleReply,
 			handleReplyAll,
 			handleForward,
-			handleKeyboardStar,
-			handleKeyboardMarkUnread,
-			handleKeyboardArchive,
+			msgActions,
 			bulk,
 		],
 	);
@@ -711,14 +591,14 @@ export function App() {
 			)}
 			{showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
 			{showSettings && <Settings onClose={() => setShowSettings(false)} />}
-			{pendingKeyboardDelete !== null && (
+			{msgActions.pendingDelete !== null && (
 				<ConfirmDialog
 					title="Delete message"
 					message="This will permanently delete this message. This action cannot be undone."
 					confirmLabel="Delete"
 					variant="danger"
-					onConfirm={handleKeyboardDeleteConfirmed}
-					onCancel={() => setPendingKeyboardDelete(null)}
+					onConfirm={msgActions.confirmDelete}
+					onCancel={() => msgActions.setPendingDelete(null)}
 				/>
 			)}
 			<ToastContainer />
