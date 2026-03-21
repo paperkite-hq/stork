@@ -83,7 +83,14 @@ export class ConnectionPool {
 
 		// Create new connection
 		const sync = new ImapSync(config, this.db, accountId);
-		await sync.connect();
+		try {
+			await sync.connect();
+		} catch (err) {
+			// Force-close the failed client to release the underlying TCP socket
+			// and prevent async teardown events from leaking after the error.
+			sync.forceClose();
+			throw err;
+		}
 
 		const pooled: PooledConnection = {
 			sync,
