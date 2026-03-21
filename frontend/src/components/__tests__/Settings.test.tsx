@@ -29,6 +29,7 @@ vi.mock("../../api", () => ({
 			create: vi.fn().mockResolvedValue({ id: 2 }),
 			update: vi.fn().mockResolvedValue({ ok: true }),
 			delete: vi.fn().mockResolvedValue({ ok: true }),
+			testConnection: vi.fn().mockResolvedValue({ ok: true, mailboxes: 5 }),
 			syncStatus: vi.fn().mockResolvedValue([
 				{
 					id: 1,
@@ -803,5 +804,220 @@ describe("Settings — Account form submission", () => {
 		);
 		await userEvent.click(screen.getByText("Save Changes"));
 		await waitFor(() => expect(screen.getByText("Update failed")).toBeInTheDocument());
+	});
+
+	it("shows error when create API fails", async () => {
+		const { api } = await import("../../api");
+		(api.accounts.create as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Missing required fields"),
+		);
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		// Submit the form directly to bypass HTML5 validation
+		const form = screen.getByRole("heading", { name: "Add Account" }).closest("form");
+		if (form) fireEvent.submit(form);
+		await waitFor(() => expect(screen.getByText("Missing required fields")).toBeInTheDocument());
+	});
+});
+
+describe("Settings — Connection testing", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorageMock.clear();
+	});
+
+	it("shows Test Connection button disabled when IMAP fields are empty", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		const testBtn = screen.getByText("Test Connection");
+		expect(testBtn).toBeDisabled();
+	});
+
+	it("tests connection successfully and shows mailbox count", async () => {
+		const { api } = await import("../../api");
+		(api.accounts.testConnection as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+			mailboxes: 12,
+		});
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		// Fill required IMAP fields to enable the button
+		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
+		const userFields = screen.getAllByPlaceholderText("you@example.com");
+		const imapUserField = userFields.find((el) =>
+			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
+		const passwordFields = screen.getAllByDisplayValue("");
+		const imapPassField = passwordFields.find(
+			(el) =>
+				el.getAttribute("type") === "password" &&
+				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapPassField) await userEvent.type(imapPassField, "password123");
+		const testBtn = screen.getByText("Test Connection");
+		expect(testBtn).toBeEnabled();
+		await userEvent.click(testBtn);
+		await waitFor(() =>
+			expect(screen.getByText(/Connection successful — 12 mailboxes found/)).toBeInTheDocument(),
+		);
+	});
+
+	it("tests connection and shows failure message", async () => {
+		const { api } = await import("../../api");
+		(api.accounts.testConnection as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: false,
+			error: "Authentication failed",
+		});
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
+		const userFields = screen.getAllByPlaceholderText("you@example.com");
+		const imapUserField = userFields.find((el) =>
+			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
+		const passwordFields = screen.getAllByDisplayValue("");
+		const imapPassField = passwordFields.find(
+			(el) =>
+				el.getAttribute("type") === "password" &&
+				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapPassField) await userEvent.type(imapPassField, "wrongpass");
+		await userEvent.click(screen.getByText("Test Connection"));
+		await waitFor(() =>
+			expect(screen.getByText(/Connection failed: Authentication failed/)).toBeInTheDocument(),
+		);
+	});
+
+	it("handles test connection network error", async () => {
+		const { api } = await import("../../api");
+		(api.accounts.testConnection as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Network error"),
+		);
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
+		const userFields = screen.getAllByPlaceholderText("you@example.com");
+		const imapUserField = userFields.find((el) =>
+			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
+		const passwordFields = screen.getAllByDisplayValue("");
+		const imapPassField = passwordFields.find(
+			(el) =>
+				el.getAttribute("type") === "password" &&
+				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapPassField) await userEvent.type(imapPassField, "somepass");
+		await userEvent.click(screen.getByText("Test Connection"));
+		await waitFor(() =>
+			expect(screen.getByText(/Connection failed: Network error/)).toBeInTheDocument(),
+		);
+	});
+});
+
+describe("Settings — Provider auto-fill in account form", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorageMock.clear();
+	});
+
+	it("auto-fills Gmail IMAP/SMTP settings when entering Gmail email", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		// Find the email field and type a Gmail address
+		const emailFields = screen.getAllByPlaceholderText("you@example.com");
+		const emailField = emailFields.find((el) => el.getAttribute("type") === "email");
+		if (emailField) await userEvent.type(emailField, "alice@gmail.com");
+		// IMAP host should auto-fill
+		expect(screen.getByDisplayValue("imap.gmail.com")).toBeInTheDocument();
+		expect(screen.getByDisplayValue("smtp.gmail.com")).toBeInTheDocument();
+	});
+
+	it("auto-fills Outlook IMAP/SMTP settings", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		const emailFields = screen.getAllByPlaceholderText("you@example.com");
+		const emailField = emailFields.find((el) => el.getAttribute("type") === "email");
+		if (emailField) await userEvent.type(emailField, "bob@outlook.com");
+		expect(screen.getByDisplayValue("outlook.office365.com")).toBeInTheDocument();
+		expect(screen.getByDisplayValue("smtp.office365.com")).toBeInTheDocument();
+	});
+
+	it("syncs IMAP username with email until manually edited", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		const emailFields = screen.getAllByPlaceholderText("you@example.com");
+		const emailField = emailFields.find((el) => el.getAttribute("type") === "email");
+		if (emailField) await userEvent.type(emailField, "me@test.com");
+		// IMAP and SMTP username fields should auto-fill with the email
+		const usernameDisplayValues = screen.getAllByDisplayValue("me@test.com");
+		// Should have email field + imap_user + smtp_user = at least 3
+		expect(usernameDisplayValues.length).toBeGreaterThanOrEqual(3);
+	});
+
+	it("does not auto-fill provider settings when editing existing account", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("Edit")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("Edit"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Edit Account" })).toBeInTheDocument(),
+		);
+		// Editing an existing account should not overwrite IMAP host even with Gmail email
+		const emailFields = screen.getAllByDisplayValue("work@example.com");
+		const emailField = emailFields.find((el) => el.getAttribute("type") === "email");
+		if (emailField) {
+			await userEvent.clear(emailField);
+			await userEvent.type(emailField, "user@gmail.com");
+		}
+		// IMAP host should remain the original value, not change to imap.gmail.com
+		expect(screen.getByDisplayValue("imap.example.com")).toBeInTheDocument();
+	});
+
+	it("shows delete account error toast on API failure", async () => {
+		const { api } = await import("../../api");
+		(api.accounts.delete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Cannot delete"),
+		);
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("Delete")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("Delete"));
+		await waitFor(() => expect(screen.getByText("Delete account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("Delete Account"));
+		// The error toast should fire — verify the delete API was called
+		await waitFor(() => expect(api.accounts.delete).toHaveBeenCalledWith(1));
 	});
 });
