@@ -230,4 +230,57 @@ describe("MessageList", () => {
 		expect(title).toContain("2026");
 		expect(title).toContain("15");
 	});
+
+	it("shows keyboard focus indicator on focused message", () => {
+		const messages = [
+			makeMessage({ id: 1, subject: "First" }),
+			makeMessage({ id: 2, subject: "Focused one" }),
+		];
+		const { container } = render(
+			<MessageList {...defaultProps} messages={messages} focusedId={2} />,
+		);
+		// The focused message row should have a left border indicator
+		const rows = container.querySelectorAll('[role="option"]');
+		expect(rows.length).toBe(2);
+		expect(rows[1]?.className).toContain("border-l-stork");
+		// Non-focused row should not have the indicator
+		expect(rows[0]?.className).not.toContain("border-l-stork");
+	});
+
+	it("has ARIA listbox role on message list container", () => {
+		const messages = [makeMessage({ id: 1, subject: "Test" })];
+		render(<MessageList {...defaultProps} messages={messages} />);
+		const listbox = screen.getByRole("listbox");
+		expect(listbox).toBeInTheDocument();
+		expect(listbox).toHaveAttribute("aria-label", "Inbox messages");
+	});
+
+	it("has ARIA option role on message rows with aria-selected", () => {
+		const messages = [
+			makeMessage({ id: 1, subject: "Selected" }),
+			makeMessage({ id: 2, subject: "Not selected" }),
+		];
+		const { container } = render(
+			<MessageList {...defaultProps} messages={messages} selectedId={1} />,
+		);
+		const options = container.querySelectorAll('[role="option"]');
+		expect(options.length).toBe(2);
+		expect(options[0]?.getAttribute("aria-selected")).toBe("true");
+		expect(options[1]?.getAttribute("aria-selected")).toBe("false");
+	});
+
+	it("shows relative time for very recent messages", () => {
+		const twoMinutesAgo = new Date(Date.now() - 2 * 60000).toISOString();
+		const messages = [makeMessage({ id: 1, date: twoMinutesAgo, subject: "Recent" })];
+		const { container } = render(<MessageList {...defaultProps} messages={messages} />);
+		// Should show "2m ago" for a message from 2 minutes ago
+		expect(container.textContent).toContain("2m ago");
+	});
+
+	it("shows 'now' for just-received messages", () => {
+		const justNow = new Date().toISOString();
+		const messages = [makeMessage({ id: 1, date: justNow, subject: "Brand new" })];
+		const { container } = render(<MessageList {...defaultProps} messages={messages} />);
+		expect(container.textContent).toContain("now");
+	});
 });

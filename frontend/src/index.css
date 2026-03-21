@@ -52,7 +52,7 @@
 	}
 }
 
-/* Scrollbar styling */
+/* Scrollbar styling — webkit (Chrome, Safari, Edge) */
 ::-webkit-scrollbar {
 	width: 6px;
 }
@@ -61,4 +61,13 @@
 }
 ::-webkit-scrollbar-thumb {
 	@apply bg-gray-300 dark:bg-gray-700 rounded-full;
+}
+
+/* Scrollbar styling — Firefox */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: #d1d5db transparent;
+}
+.dark * {
+	scrollbar-color: #374151 transparent;
 }

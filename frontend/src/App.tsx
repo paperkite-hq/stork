@@ -443,6 +443,13 @@ export function App() {
 
 	return (
 		<div className="h-screen flex overflow-hidden">
+			{/* Skip to content link — visible on Tab for keyboard users */}
+			<a
+				href="#message-list"
+				className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-stork-600 focus:text-white focus:rounded-md focus:text-sm"
+			>
+				Skip to messages
+			</a>
 			{/* Mobile sidebar overlay */}
 			{sidebarOpen && (
 				<button
@@ -510,6 +517,7 @@ export function App() {
 
 				{/* Message list panel — hidden on mobile when viewing a message */}
 				<div
+					id="message-list"
 					className={`w-full md:w-80 xl:w-96 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col ${
 						selectedMessageId !== null ? "hidden md:flex" : "flex"
 					}`}
@@ -517,6 +525,7 @@ export function App() {
 					<MessageList
 						messages={allMessages}
 						selectedId={selectedMessageId}
+						focusedId={focusedMessage?.id ?? null}
 						onSelect={handleSelectMessage}
 						loading={messagesLoading}
 						error={messagesError}

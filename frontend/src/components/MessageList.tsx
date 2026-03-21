@@ -8,7 +8,14 @@ function formatDate(dateStr: string): string {
 	const d = new Date(dateStr);
 	const now = new Date();
 	const diffMs = now.getTime() - d.getTime();
+	const diffMins = Math.floor(diffMs / 60000);
+	const diffHours = Math.floor(diffMs / 3600000);
 	const diffDays = Math.floor(diffMs / 86400000);
+
+	// Very recent — show relative time
+	if (diffMins < 1) return "now";
+	if (diffMins < 60) return `${diffMins}m ago`;
+	if (diffDays === 0 && diffHours < 12) return `${diffHours}h ago`;
 
 	if (diffDays === 0) {
 		return d.toLocaleTimeString(undefined, {
@@ -51,6 +58,7 @@ function MessageSkeleton() {
 interface MessageListProps {
 	messages: MessageSummary[];
 	selectedId: number | null;
+	focusedId?: number | null;
 	onSelect: (id: number) => void;
 	loading: boolean;
 	error?: string | null;
@@ -77,6 +85,7 @@ interface MessageListProps {
 export function MessageList({
 	messages,
 	selectedId,
+	focusedId,
 	onSelect,
 	loading,
 	error,
@@ -201,7 +210,8 @@ export function MessageList({
 				)}
 
 			{/* Message list */}
-			<div className="flex-1 overflow-y-auto">
+			{/* biome-ignore lint/a11y/useFocusableInteractive: keyboard navigation handled by app-level j/k shortcuts, not native focus */}
+			<div className="flex-1 overflow-y-auto" role="listbox" aria-label={`${folderName} messages`}>
 				{messages.length === 0 && (
 					<div className="p-8 text-center text-gray-400">
 						<InboxEmptyIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
@@ -212,11 +222,17 @@ export function MessageList({
 					const unread = isUnread(msg.flags);
 					const starred = isFlagged(msg.flags);
 					const active = msg.id === selectedId;
+					const focused = msg.id === focusedId;
 					const bulkSelected = selectedIds?.has(msg.id) ?? false;
 					return (
+						// biome-ignore lint/a11y/useFocusableInteractive: keyboard navigation handled by app-level j/k shortcuts
 						<div
 							key={msg.id}
+							role="option"
+							aria-selected={active}
 							className={`group relative border-b border-gray-100 dark:border-gray-800 transition-colors ${
+								focused ? "border-l-2 border-l-stork-500 dark:border-l-stork-400" : ""
+							} ${
 								bulkSelected
 									? "bg-stork-50 dark:bg-stork-950"
 									: active
