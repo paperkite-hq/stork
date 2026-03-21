@@ -19,7 +19,7 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 			.replace(/[/\\]/g, "_")
 			.replace(/["\r\n]/g, "")
 			.replace(/[^\x20-\x7E]/g, "_");
-		return new Response(attachment.data, {
+		return new Response(attachment.data ? new Uint8Array(attachment.data) : null, {
 			headers: {
 				"Content-Type": contentType,
 				"Content-Disposition": `attachment; filename="${safeName}"`,

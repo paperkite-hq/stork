@@ -12,7 +12,7 @@ import { createTestDb } from "./helpers/test-db.js";
 describe("IMAP sync edge cases", () => {
 	let server: MockImapServer;
 	let port: number;
-	let db: Database;
+	let db: Database.Database;
 	let accountId: number;
 
 	function makeMailboxes(overrides?: Partial<MockMailbox>[]): MockMailbox[] {

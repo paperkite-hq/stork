@@ -4,7 +4,7 @@ import { MessageSearch } from "../src/search/search.js";
 import { MIGRATIONS } from "../src/storage/schema.js";
 
 describe("MessageSearch", () => {
-	let db: Database;
+	let db: Database.Database;
 	let search: MessageSearch;
 
 	beforeAll(() => {

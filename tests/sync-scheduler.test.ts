@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { MIGRATIONS } from "../src/storage/schema.js";
 import { SyncScheduler } from "../src/sync/sync-scheduler.js";
 
-function createTestDb(): Database {
+function createTestDb(): Database.Database {
 	const db = new Database(":memory:");
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
@@ -13,7 +13,7 @@ function createTestDb(): Database {
 	return db;
 }
 
-function createAccount(db: Database, name = "Test"): number {
+function createAccount(db: Database.Database, name = "Test"): number {
 	db.prepare(`
 		INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
 		VALUES (?, 'test@example.com', 'imap.example.com', 993, 1, 'test', 'pass')
@@ -22,7 +22,7 @@ function createAccount(db: Database, name = "Test"): number {
 }
 
 describe("SyncScheduler", () => {
-	let db: Database;
+	let db: Database.Database;
 	let scheduler: SyncScheduler;
 
 	beforeEach(() => {

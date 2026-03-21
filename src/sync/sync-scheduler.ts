@@ -61,13 +61,13 @@ const MAX_BACKOFF_MS = 30 * 60 * 1000;
 export class SyncScheduler {
 	private accounts: Map<number, ScheduledAccount> = new Map();
 	private pool: ConnectionPool;
-	private db: Database;
+	private db: Database.Database;
 	private defaultIntervalMs: number;
 	private onSyncComplete?: (accountId: number, result: SyncAllResult) => void;
 	private onSyncError?: (accountId: number, error: Error) => void;
 	private started = false;
 
-	constructor(db: Database, options: SyncSchedulerOptions = {}) {
+	constructor(db: Database.Database, options: SyncSchedulerOptions = {}) {
 		this.db = db;
 		this.defaultIntervalMs = options.defaultIntervalMs ?? DEFAULT_INTERVAL_MS;
 		this.pool = new ConnectionPool(db, options.poolOptions);
@@ -327,7 +327,7 @@ export class SyncScheduler {
 		};
 
 		const promise = doSync();
-		scheduled.syncPromise = promise.catch(() => {}); // Track without propagating rejection
+		scheduled.syncPromise = promise.then(() => {}).catch(() => {}); // Track without propagating rejection
 		return promise;
 	}
 }

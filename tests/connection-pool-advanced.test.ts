@@ -5,7 +5,7 @@ import { ConnectionPool } from "../src/sync/connection-pool.js";
 import type { PooledConnection } from "../src/sync/connection-pool.js";
 import type { ImapSync } from "../src/sync/imap-sync.js";
 
-function createTestDb(): Database {
+function createTestDb(): Database.Database {
 	const db = new Database(":memory:");
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
@@ -27,7 +27,7 @@ function createMockSync(): ImapSync {
 
 // Patch ConnectionPool to use mock connections
 function createTestPool(
-	db: Database,
+	db: Database.Database,
 	options: { maxPerAccount?: number; maxTotal?: number; idleTimeoutMs?: number } = {},
 ): ConnectionPool {
 	const pool = new ConnectionPool(db, options);
@@ -89,7 +89,7 @@ function createTestPool(
 }
 
 describe("ConnectionPool — acquire/release lifecycle", () => {
-	let db: Database;
+	let db: Database.Database;
 	let pool: ConnectionPool;
 
 	beforeEach(() => {
@@ -216,7 +216,7 @@ describe("ConnectionPool — idle eviction (evictIdle)", () => {
 		evictIdle: () => void;
 	};
 
-	let db: Database;
+	let db: Database.Database;
 	let pool: ConnectionPool;
 
 	beforeEach(() => {
@@ -328,7 +328,7 @@ describe("ConnectionPool — real acquire() limit checks", () => {
 		connections: Map<number, PooledConnection[]>;
 	};
 
-	let db: Database;
+	let db: Database.Database;
 
 	beforeEach(() => {
 		db = new Database(":memory:");
@@ -397,12 +397,13 @@ describe("ConnectionPool — real acquire() limit checks", () => {
 
 // Direct unit tests for evictOldestIdle() — covers the branches in lines 181-206
 describe("ConnectionPool — evictOldestIdle() direct tests", () => {
-	type InternalPool = {
+	interface InternalPool {
 		connections: Map<number, PooledConnection[]>;
 		evictOldestIdle: () => boolean;
-	};
+		shutdown: () => Promise<void>;
+	}
 
-	let db: Database;
+	let db: Database.Database;
 
 	beforeEach(() => {
 		db = new Database(":memory:");
@@ -417,8 +418,8 @@ describe("ConnectionPool — evictOldestIdle() direct tests", () => {
 		db.close();
 	});
 
-	function makePool(): ConnectionPool & InternalPool {
-		return new ConnectionPool(db, { maxTotal: 10 }) as ConnectionPool & InternalPool;
+	function makePool(): InternalPool {
+		return new ConnectionPool(db, { maxTotal: 10 }) as unknown as InternalPool;
 	}
 
 	function mockSync(): ImapSync {

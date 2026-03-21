@@ -8,7 +8,7 @@ import { MIGRATIONS } from "../src/storage/schema.js";
 // requires a live IMAP connection. Integration tests with a mock IMAP server
 // belong in a separate suite.
 
-function createTestDb(): Database {
+function createTestDb(): Database.Database {
 	const db = new Database(":memory:");
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
@@ -18,7 +18,7 @@ function createTestDb(): Database {
 	return db;
 }
 
-function createAccount(db: Database): number {
+function createAccount(db: Database.Database): number {
 	db.prepare(`
 		INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
 		VALUES ('Test', 'test@example.com', 'imap.example.com', 993, 1, 'test', 'pass')
@@ -26,7 +26,7 @@ function createAccount(db: Database): number {
 	return (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
 }
 
-function createFolder(db: Database, accountId: number, path: string): number {
+function createFolder(db: Database.Database, accountId: number, path: string): number {
 	db.prepare(`
 		INSERT INTO folders (account_id, path, name, delimiter, flags)
 		VALUES (?, ?, ?, '/', '[]')
@@ -205,7 +205,7 @@ describe("schema migrations", () => {
 });
 
 describe("database operations", () => {
-	let db: Database;
+	let db: Database.Database;
 	let accountId: number;
 
 	beforeEach(() => {

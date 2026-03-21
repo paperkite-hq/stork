@@ -68,14 +68,14 @@ const DEFAULT_SUB_BATCH_LABEL_SIZE = 500;
  */
 export class ImapSync {
 	private client: ImapFlow;
-	private db: Database;
+	private db: Database.Database;
 	private accountId: number;
 	private config: ImapConfig;
 	private subBatchLabelSize: number;
 
 	constructor(
 		config: ImapConfig,
-		db: Database,
+		db: Database.Database,
 		accountId: number,
 		subBatchLabelSize = DEFAULT_SUB_BATCH_LABEL_SIZE,
 	) {
@@ -296,7 +296,7 @@ export class ImapSync {
 			}
 
 			// Check UIDVALIDITY — if it changed, the folder was recreated; full resync needed
-			if (folder.uid_validity && folder.uid_validity !== mailboxStatus.uidValidity) {
+			if (folder.uid_validity && BigInt(folder.uid_validity) !== mailboxStatus.uidValidity) {
 				this.db.prepare("DELETE FROM messages WHERE folder_id = ?").run(folder.id);
 				this.db
 					.prepare("DELETE FROM sync_state WHERE account_id = ? AND folder_id = ?")
@@ -385,6 +385,10 @@ export class ImapSync {
 				const parsed = await simpleParser(source);
 
 				const envelope = message.envelope;
+				if (!envelope) {
+					result.errors.push(`UID ${message.uid}: no envelope available`);
+					continue;
+				}
 				const fromAddr = envelope.from?.[0];
 				const toAddrs = envelope.to?.map((a) => a.address).filter(Boolean);
 				const ccAddrs = envelope.cc?.map((a) => a.address).filter(Boolean);
@@ -411,7 +415,7 @@ export class ImapSync {
 					envelope.date?.toISOString() ?? null,
 					parsed.text ?? null,
 					typeof parsed.html === "string" ? parsed.html : null,
-					JSON.stringify(Array.from(message.flags)),
+					JSON.stringify(Array.from(message.flags ?? new Set())),
 					message.size ?? null,
 					parsed.attachments.length > 0 ? 1 : 0,
 					formatHeaders(parsed),
@@ -500,7 +504,7 @@ export class ImapSync {
 					uid: true,
 					flags: true,
 				})) {
-					const newFlags = JSON.stringify(Array.from(msg.flags));
+					const newFlags = JSON.stringify(Array.from(msg.flags ?? new Set()));
 					const oldFlags = localFlagMap.get(msg.uid);
 					if (oldFlags !== newFlags) {
 						updateFlags.run(newFlags, folderId, msg.uid);

@@ -29,13 +29,13 @@ const DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
  */
 export class ConnectionPool {
 	private connections: Map<number, PooledConnection[]> = new Map();
-	private db: Database;
+	private db: Database.Database;
 	private maxPerAccount: number;
 	private maxTotal: number;
 	private idleTimeoutMs: number;
 	private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
-	constructor(db: Database, options: ConnectionPoolOptions = {}) {
+	constructor(db: Database.Database, options: ConnectionPoolOptions = {}) {
 		this.db = db;
 		this.maxPerAccount = options.maxPerAccount ?? DEFAULT_MAX_PER_ACCOUNT;
 		this.maxTotal = options.maxTotal ?? DEFAULT_MAX_TOTAL;

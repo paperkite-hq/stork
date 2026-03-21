@@ -22,9 +22,9 @@ export interface SearchOptions {
  * Full-text search across synced messages using SQLite FTS5.
  */
 export class MessageSearch {
-	private db: Database;
+	private db: Database.Database;
 
-	constructor(db: Database) {
+	constructor(db: Database.Database) {
 		this.db = db;
 	}
 
