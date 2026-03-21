@@ -13,9 +13,14 @@ import { Sidebar } from "./components/Sidebar";
 import { ToastContainer, toast } from "./components/Toast";
 import { UnlockScreen } from "./components/UnlockScreen";
 import { Welcome } from "./components/Welcome";
-import { useAsync, useDarkMode, useKeyboardShortcuts, useSyncPoller } from "./hooks";
-
-const PAGE_SIZE = 50;
+import {
+	useAsync,
+	useBulkSelection,
+	useDarkMode,
+	useKeyboardShortcuts,
+	useSyncPoller,
+} from "./hooks";
+import { getPageSize } from "./utils";
 
 export function App() {
 	const [dark, toggleDark] = useDarkMode();
@@ -34,9 +39,6 @@ export function App() {
 	const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 	const [selectedLabelId, setSelectedLabelId] = useState<number | null>(null);
 	const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
-
-	// Bulk selection state
-	const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<number>>(new Set());
 
 	// UI state
 	const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
@@ -95,9 +97,9 @@ export function App() {
 			setHasMore(false);
 			return Promise.resolve([]);
 		}
-		return api.labels.messages(effectiveLabelId, { limit: PAGE_SIZE }).then((msgs) => {
+		return api.labels.messages(effectiveLabelId, { limit: getPageSize() }).then((msgs) => {
 			setAllMessages(msgs);
-			setHasMore(msgs.length >= PAGE_SIZE);
+			setHasMore(msgs.length >= getPageSize());
 			return msgs;
 		});
 	}, [effectiveLabelId]);
@@ -107,12 +109,12 @@ export function App() {
 		setLoadingMore(true);
 		api.labels
 			.messages(effectiveLabelId, {
-				limit: PAGE_SIZE,
+				limit: getPageSize(),
 				offset: allMessages.length,
 			})
 			.then((more) => {
 				setAllMessages((prev) => [...prev, ...more]);
-				setHasMore(more.length >= PAGE_SIZE);
+				setHasMore(more.length >= getPageSize());
 			})
 			.finally(() => setLoadingMore(false));
 	}, [effectiveLabelId, allMessages.length, loadingMore]);
@@ -180,7 +182,7 @@ export function App() {
 		setSelectedMessageId(null);
 		setMessageListIndex(0);
 		setSidebarOpen(false);
-		setBulkSelectedIds(new Set());
+		bulk.clear();
 	}, []);
 
 	const handleSelectAccount = useCallback((id: number) => {
@@ -200,88 +202,14 @@ export function App() {
 		}
 	}, [effectiveAccountId]);
 
-	// Bulk selection handlers
-	const handleToggleBulkSelect = useCallback((id: number) => {
-		setBulkSelectedIds((prev) => {
-			const next = new Set(prev);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			return next;
-		});
-	}, []);
-
-	const handleBulkSelectAll = useCallback(() => {
-		setBulkSelectedIds(new Set(allMessages.map((m) => m.id)));
-	}, [allMessages]);
-
-	const handleBulkClearSelection = useCallback(() => {
-		setBulkSelectedIds(new Set());
-	}, []);
-
-	const handleBulkDelete = useCallback(async () => {
-		const ids = [...bulkSelectedIds];
-		if (ids.length === 0) return;
-		try {
-			await api.messages.bulk(ids, "delete");
-			setBulkSelectedIds(new Set());
-			if (ids.includes(selectedMessageId ?? -1)) setSelectedMessageId(null);
-			refetchMessages();
-			refetchLabels();
-			toast(`Deleted ${ids.length} message${ids.length !== 1 ? "s" : ""}`, "success");
-		} catch (err) {
-			toast(`Failed to delete: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
-		}
-	}, [bulkSelectedIds, selectedMessageId, refetchMessages, refetchLabels]);
-
-	const handleBulkMarkRead = useCallback(async () => {
-		const ids = [...bulkSelectedIds];
-		if (ids.length === 0) return;
-		try {
-			await api.messages.bulk(ids, "flag", { add: ["\\Seen"] });
-			setBulkSelectedIds(new Set());
-			refetchMessages();
-			toast(`Marked ${ids.length} message${ids.length !== 1 ? "s" : ""} as read`, "success");
-		} catch (err) {
-			toast(
-				`Failed to mark read: ${err instanceof Error ? err.message : "Unknown error"}`,
-				"error",
-			);
-		}
-	}, [bulkSelectedIds, refetchMessages]);
-
-	const handleBulkMarkUnread = useCallback(async () => {
-		const ids = [...bulkSelectedIds];
-		if (ids.length === 0) return;
-		try {
-			await api.messages.bulk(ids, "flag", { remove: ["\\Seen"] });
-			setBulkSelectedIds(new Set());
-			refetchMessages();
-			toast(`Marked ${ids.length} message${ids.length !== 1 ? "s" : ""} as unread`, "success");
-		} catch (err) {
-			toast(
-				`Failed to mark unread: ${err instanceof Error ? err.message : "Unknown error"}`,
-				"error",
-			);
-		}
-	}, [bulkSelectedIds, refetchMessages]);
-
-	const handleBulkMove = useCallback(
-		async (folderId: number) => {
-			const ids = [...bulkSelectedIds];
-			if (ids.length === 0) return;
-			try {
-				await api.messages.bulk(ids, "move", { folder_id: folderId });
-				setBulkSelectedIds(new Set());
-				if (ids.includes(selectedMessageId ?? -1)) setSelectedMessageId(null);
-				refetchMessages();
-				refetchLabels();
-				toast(`Moved ${ids.length} message${ids.length !== 1 ? "s" : ""}`, "success");
-			} catch (err) {
-				toast(`Failed to move: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
-			}
-		},
-		[bulkSelectedIds, selectedMessageId, refetchMessages, refetchLabels],
-	);
+	// Bulk selection (state + action handlers extracted to hook)
+	const bulk = useBulkSelection({
+		messages: allMessages,
+		selectedMessageId,
+		setSelectedMessageId,
+		refetchMessages,
+		refetchLabels,
+	});
 
 	// Compose handlers
 	const handleCompose = useCallback(() => {
@@ -599,14 +527,14 @@ export function App() {
 						hasMore={hasMore}
 						onLoadMore={handleLoadMore}
 						loadingMore={loadingMore}
-						selectedIds={bulkSelectedIds}
-						onToggleSelect={handleToggleBulkSelect}
-						onSelectAll={handleBulkSelectAll}
-						onClearSelection={handleBulkClearSelection}
-						onBulkDelete={handleBulkDelete}
-						onBulkMarkRead={handleBulkMarkRead}
-						onBulkMarkUnread={handleBulkMarkUnread}
-						onBulkMove={handleBulkMove}
+						selectedIds={bulk.selectedIds}
+						onToggleSelect={bulk.toggle}
+						onSelectAll={bulk.selectAll}
+						onClearSelection={bulk.clear}
+						onBulkDelete={bulk.bulkDelete}
+						onBulkMarkRead={bulk.markRead}
+						onBulkMarkUnread={bulk.markUnread}
+						onBulkMove={bulk.move}
 						folders={folders ?? []}
 					/>
 				</div>

@@ -57,10 +57,12 @@ function ToastItem({
 				: "bg-stork-600 dark:bg-stork-700";
 
 	return (
-		<div
-			className={`${bg} text-white text-sm px-4 py-2.5 rounded-lg shadow-lg pointer-events-auto animate-slideUp max-w-xs`}
+		<button
+			type="button"
+			onClick={() => onDismiss(t.id)}
+			className={`${bg} text-white text-sm px-4 py-2.5 rounded-lg shadow-lg pointer-events-auto animate-slideUp max-w-xs cursor-pointer text-left`}
 		>
 			{t.text}
-		</div>
+		</button>
 	);
 }
