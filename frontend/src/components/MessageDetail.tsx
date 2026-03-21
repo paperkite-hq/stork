@@ -2,7 +2,7 @@ import DOMPurify from "dompurify";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type Attachment, type Folder, type Message, api } from "../api";
 import { useAsync } from "../hooks";
-import { isFlagged, isUnread } from "../utils";
+import { formatAddressList, isFlagged, isUnread } from "../utils";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
 	ChevronDownIcon,
@@ -50,10 +50,8 @@ function formatFullDate(dateStr: string): string {
 	});
 }
 
-function parseAddresses(raw: string | null): string {
-	if (!raw) return "";
-	return raw;
-}
+// Alias the shared utility for backward compat with internal references
+const parseAddresses = formatAddressList;
 
 function formatFileSize(bytes: number | null): string {
 	if (bytes === null || bytes === 0) return "";

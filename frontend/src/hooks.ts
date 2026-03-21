@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { GlobalSyncStatus } from "./api";
+import type { GlobalSyncStatus, MessageSummary } from "./api";
 import { api } from "./api";
+import { toast } from "./components/Toast";
 
 /** Simple data-fetching hook with loading/error states */
 export function useAsync<T>(
@@ -167,4 +168,114 @@ export function useKeyboardShortcuts(shortcuts: Record<string, (e: KeyboardEvent
 		window.addEventListener("keydown", handler);
 		return () => window.removeEventListener("keydown", handler);
 	}, []);
+}
+
+/**
+ * Manages bulk message selection state and actions (delete, mark read/unread, move).
+ * Extracted from App.tsx to reduce component complexity.
+ */
+export function useBulkSelection(opts: {
+	messages: MessageSummary[];
+	selectedMessageId: number | null;
+	setSelectedMessageId: (id: number | null) => void;
+	refetchMessages: () => void;
+	refetchLabels: () => void;
+}) {
+	const { messages, selectedMessageId, setSelectedMessageId, refetchMessages, refetchLabels } =
+		opts;
+	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+	const toggle = useCallback((id: number) => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	}, []);
+
+	const selectAll = useCallback(() => {
+		setSelectedIds(new Set(messages.map((m) => m.id)));
+	}, [messages]);
+
+	const clear = useCallback(() => {
+		setSelectedIds(new Set());
+	}, []);
+
+	const bulkDelete = useCallback(async () => {
+		const ids = [...selectedIds];
+		if (ids.length === 0) return;
+		try {
+			await api.messages.bulk(ids, "delete");
+			setSelectedIds(new Set());
+			if (ids.includes(selectedMessageId ?? -1)) setSelectedMessageId(null);
+			refetchMessages();
+			refetchLabels();
+			toast(`Deleted ${ids.length} message${ids.length !== 1 ? "s" : ""}`, "success");
+		} catch (err) {
+			toast(`Failed to delete: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
+		}
+	}, [selectedIds, selectedMessageId, setSelectedMessageId, refetchMessages, refetchLabels]);
+
+	const markRead = useCallback(async () => {
+		const ids = [...selectedIds];
+		if (ids.length === 0) return;
+		try {
+			await api.messages.bulk(ids, "flag", { add: ["\\Seen"] });
+			setSelectedIds(new Set());
+			refetchMessages();
+			toast(`Marked ${ids.length} message${ids.length !== 1 ? "s" : ""} as read`, "success");
+		} catch (err) {
+			toast(
+				`Failed to mark read: ${err instanceof Error ? err.message : "Unknown error"}`,
+				"error",
+			);
+		}
+	}, [selectedIds, refetchMessages]);
+
+	const markUnread = useCallback(async () => {
+		const ids = [...selectedIds];
+		if (ids.length === 0) return;
+		try {
+			await api.messages.bulk(ids, "flag", { remove: ["\\Seen"] });
+			setSelectedIds(new Set());
+			refetchMessages();
+			toast(`Marked ${ids.length} message${ids.length !== 1 ? "s" : ""} as unread`, "success");
+		} catch (err) {
+			toast(
+				`Failed to mark unread: ${err instanceof Error ? err.message : "Unknown error"}`,
+				"error",
+			);
+		}
+	}, [selectedIds, refetchMessages]);
+
+	const move = useCallback(
+		async (folderId: number) => {
+			const ids = [...selectedIds];
+			if (ids.length === 0) return;
+			try {
+				await api.messages.bulk(ids, "move", { folder_id: folderId });
+				setSelectedIds(new Set());
+				if (ids.includes(selectedMessageId ?? -1)) setSelectedMessageId(null);
+				refetchMessages();
+				refetchLabels();
+				toast(`Moved ${ids.length} message${ids.length !== 1 ? "s" : ""}`, "success");
+			} catch (err) {
+				toast(`Failed to move: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
+			}
+		},
+		[selectedIds, selectedMessageId, setSelectedMessageId, refetchMessages, refetchLabels],
+	);
+
+	return {
+		selectedIds,
+		setSelectedIds,
+		toggle,
+		selectAll,
+		clear,
+		bulkDelete,
+		markRead,
+		markUnread,
+		move,
+	};
 }
