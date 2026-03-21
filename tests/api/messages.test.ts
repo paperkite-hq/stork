@@ -535,6 +535,51 @@ describe("Messages API", () => {
 			});
 		});
 
+		describe("action: remove_label", () => {
+			test("removes label from multiple messages", async () => {
+				// Create a label and link it to messages
+				db.prepare("INSERT INTO labels (account_id, name, source) VALUES (?, 'Inbox', 'imap')").run(
+					accountId,
+				);
+				const labelId = (
+					db
+						.prepare("SELECT id FROM labels WHERE account_id = ? AND name = 'Inbox'")
+						.get(accountId) as { id: number }
+				).id;
+				db.prepare("INSERT INTO message_labels (message_id, label_id) VALUES (?, ?)").run(
+					msg1,
+					labelId,
+				);
+				db.prepare("INSERT INTO message_labels (message_id, label_id) VALUES (?, ?)").run(
+					msg2,
+					labelId,
+				);
+
+				const { status, body } = await bulkPost({
+					ids: [msg1, msg2],
+					action: "remove_label",
+					label_id: labelId,
+				});
+				expect(status).toBe(200);
+				expect(body.ok).toBe(true);
+				expect(body.count).toBe(2);
+
+				const remaining = db
+					.prepare("SELECT message_id FROM message_labels WHERE label_id = ?")
+					.all(labelId);
+				expect(remaining).toHaveLength(0);
+			});
+
+			test("missing label_id returns 400", async () => {
+				const { status, body } = await bulkPost({
+					ids: [msg1],
+					action: "remove_label",
+				});
+				expect(status).toBe(400);
+				expect(body.error).toMatch(/label_id/i);
+			});
+		});
+
 		describe("action: move", () => {
 			test("moves messages to another folder", async () => {
 				const targetFolder = createTestFolder(db, accountId, "Archive");

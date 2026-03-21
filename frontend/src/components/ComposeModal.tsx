@@ -14,6 +14,7 @@ const DRAFT_PREFIX = "stork-compose-draft";
 interface Draft {
 	to: string;
 	cc: string;
+	bcc: string;
 	subject: string;
 	body: string;
 }
@@ -59,6 +60,7 @@ interface ComposeModalProps {
 		accountId?: number;
 		to: string;
 		cc: string;
+		bcc: string;
 		subject: string;
 		body: string;
 	}) => void;
@@ -152,6 +154,11 @@ export function ComposeModal({
 		if (mode.type === "reply-all") return buildReplyAllCc(mode.original);
 		return "";
 	});
+	const [bcc, setBcc] = useState(() => {
+		const saved = loadDraft(currentDraftKey);
+		if (saved) return saved.bcc;
+		return "";
+	});
 	const [subject, setSubject] = useState(() => {
 		const saved = loadDraft(currentDraftKey);
 		if (saved) return saved.subject;
@@ -175,6 +182,10 @@ export function ComposeModal({
 		if (saved) return !!saved.cc;
 		if (mode.type === "reply-all") return buildReplyAllCc(mode.original).length > 0;
 		return false;
+	});
+	const [showBcc, setShowBcc] = useState(() => {
+		const saved = loadDraft(currentDraftKey);
+		return !!saved?.bcc;
 	});
 	const [sending, setSending] = useState(false);
 	const [validationError, setValidationError] = useState<string | null>(null);
@@ -200,8 +211,8 @@ export function ComposeModal({
 
 	// Auto-save draft for all compose modes
 	useEffect(() => {
-		saveDraft(currentDraftKey, { to, cc, subject, body });
-	}, [currentDraftKey, to, cc, subject, body]);
+		saveDraft(currentDraftKey, { to, cc, bcc, subject, body });
+	}, [currentDraftKey, to, cc, bcc, subject, body]);
 
 	const handleSend = useCallback(() => {
 		const toErr = validateEmails(to);
@@ -216,11 +227,25 @@ export function ComposeModal({
 				return;
 			}
 		}
+		if (bcc.trim()) {
+			const bccErr = validateEmails(bcc);
+			if (bccErr) {
+				setValidationError(bccErr);
+				return;
+			}
+		}
 		setValidationError(null);
 		setSending(true);
 		clearDraft(currentDraftKey);
-		onSend({ accountId: fromAccountId, to: to.trim(), cc: cc.trim(), subject, body });
-	}, [to, cc, subject, body, fromAccountId, onSend, currentDraftKey]);
+		onSend({
+			accountId: fromAccountId,
+			to: to.trim(),
+			cc: cc.trim(),
+			bcc: bcc.trim(),
+			subject,
+			body,
+		});
+	}, [to, cc, bcc, subject, body, fromAccountId, onSend, currentDraftKey]);
 
 	const handleDiscard = useCallback(() => {
 		clearDraft(currentDraftKey);
@@ -314,15 +339,26 @@ export function ComposeModal({
 							className="flex-1 bg-transparent text-sm outline-none"
 							placeholder="recipient@example.com"
 						/>
-						{!showCc && (
-							<button
-								type="button"
-								onClick={() => setShowCc(true)}
-								className="text-xs text-gray-400 hover:text-gray-600"
-							>
-								Cc
-							</button>
-						)}
+						<div className="flex items-center gap-1">
+							{!showCc && (
+								<button
+									type="button"
+									onClick={() => setShowCc(true)}
+									className="text-xs text-gray-400 hover:text-gray-600"
+								>
+									Cc
+								</button>
+							)}
+							{!showBcc && (
+								<button
+									type="button"
+									onClick={() => setShowBcc(true)}
+									className="text-xs text-gray-400 hover:text-gray-600"
+								>
+									Bcc
+								</button>
+							)}
+						</div>
 					</div>
 					{showCc && (
 						<div className="flex items-center gap-2">
@@ -339,6 +375,24 @@ export function ComposeModal({
 								}}
 								className="flex-1 bg-transparent text-sm outline-none"
 								placeholder="cc@example.com"
+							/>
+						</div>
+					)}
+					{showBcc && (
+						<div className="flex items-center gap-2">
+							<label htmlFor="compose-bcc" className="text-sm text-gray-500 w-10">
+								Bcc
+							</label>
+							<input
+								id="compose-bcc"
+								type="text"
+								value={bcc}
+								onChange={(e) => {
+									setBcc(e.target.value);
+									if (validationError) setValidationError(null);
+								}}
+								className="flex-1 bg-transparent text-sm outline-none"
+								placeholder="bcc@example.com"
 							/>
 						</div>
 					)}

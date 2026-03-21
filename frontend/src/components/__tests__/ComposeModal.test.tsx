@@ -133,6 +133,7 @@ describe("ComposeModal", () => {
 			accountId: 7,
 			to: "bob@test.com",
 			cc: "",
+			bcc: "",
 			subject: "Hello",
 			body: "Hi Bob!",
 		});
@@ -298,15 +299,19 @@ describe("ComposeModal", () => {
 	});
 
 	it("clears draft from localStorage when message is sent", async () => {
-		localStorage.setItem(
-			"stork-compose-draft",
-			JSON.stringify({ to: "", cc: "", subject: "", body: "" }),
+		// Use a mock onSend that unmounts the component (simulating real App behavior)
+		const onSend = vi.fn();
+		const onClose = vi.fn();
+		const { unmount } = render(
+			<ComposeModal mode={{ type: "new" }} onClose={onClose} onSend={onSend} />,
 		);
-		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
 
 		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "bob@test.com");
 		await userEvent.click(screen.getByText("Send"));
 
+		expect(onSend).toHaveBeenCalled();
+		// Unmount to prevent auto-save from re-writing the draft
+		unmount();
 		expect(localStorage.getItem("stork-compose-draft")).toBeNull();
 	});
 
@@ -497,5 +502,53 @@ describe("ComposeModal", () => {
 		const ccInput = screen.getByPlaceholderText("cc@example.com") as HTMLInputElement;
 		expect(ccInput.value).toContain("bob@test.com");
 		expect(ccInput.value).toContain("carol@test.com");
+	});
+
+	it("shows Bcc field when Bcc button is clicked", async () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		expect(screen.queryByPlaceholderText("bcc@example.com")).not.toBeInTheDocument();
+		await userEvent.click(screen.getByText("Bcc"));
+		expect(screen.getByPlaceholderText("bcc@example.com")).toBeInTheDocument();
+	});
+
+	it("includes bcc in onSend data", async () => {
+		const onSend = vi.fn();
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={onSend} />);
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "to@test.com");
+		await userEvent.click(screen.getByText("Bcc"));
+		await userEvent.type(screen.getByPlaceholderText("bcc@example.com"), "hidden@test.com");
+		await userEvent.click(screen.getByText("Send"));
+
+		expect(onSend).toHaveBeenCalledWith(expect.objectContaining({ bcc: "hidden@test.com" }));
+	});
+
+	it("validates Bcc email addresses on send", async () => {
+		const onSend = vi.fn();
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={onSend} />);
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "valid@test.com");
+		await userEvent.click(screen.getByText("Bcc"));
+		await userEvent.type(screen.getByPlaceholderText("bcc@example.com"), "bad-bcc");
+		await userEvent.click(screen.getByText("Send"));
+
+		expect(screen.getByText(/Invalid email address/)).toBeInTheDocument();
+		expect(onSend).not.toHaveBeenCalled();
+	});
+
+	it("saves and restores bcc in draft", async () => {
+		const { unmount } = render(
+			<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		await userEvent.click(screen.getByText("Bcc"));
+		await userEvent.type(screen.getByPlaceholderText("bcc@example.com"), "secret@test.com");
+		unmount();
+
+		const draft = JSON.parse(localStorage.getItem("stork-compose-draft") ?? "{}");
+		expect(draft.bcc).toBe("secret@test.com");
+
+		// Restore — Bcc field should auto-show when draft has bcc
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		expect(screen.getByPlaceholderText("bcc@example.com")).toHaveValue("secret@test.com");
 	});
 });

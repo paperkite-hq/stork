@@ -119,18 +119,19 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 	api.post("/bulk", async (c) => {
 		const db = getDb();
 		const body = await c.req.json();
-		const { ids, action, add, remove, folder_id } = body as {
+		const { ids, action, add, remove, folder_id, label_id } = body as {
 			ids: number[];
-			action: "delete" | "flag" | "move";
+			action: "delete" | "flag" | "move" | "remove_label";
 			add?: string[];
 			remove?: string[];
 			folder_id?: number;
+			label_id?: number;
 		};
 
 		if (!Array.isArray(ids) || ids.length === 0)
 			return c.json({ error: "ids must be a non-empty array" }, 400);
-		if (!["delete", "flag", "move"].includes(action))
-			return c.json({ error: "action must be delete, flag, or move" }, 400);
+		if (!["delete", "flag", "move", "remove_label"].includes(action))
+			return c.json({ error: "action must be delete, flag, move, or remove_label" }, 400);
 
 		const placeholders = ids.map(() => "?").join(",");
 
@@ -165,6 +166,16 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 			});
 			const count = updateFlag();
 			return c.json({ ok: true, count });
+		}
+
+		if (action === "remove_label") {
+			if (!label_id) return c.json({ error: "label_id is required for remove_label" }, 400);
+			const result = db
+				.prepare(
+					`DELETE FROM message_labels WHERE label_id = ? AND message_id IN (${placeholders})`,
+				)
+				.run(label_id, ...ids);
+			return c.json({ ok: true, count: result.changes });
 		}
 
 		// action === "move"

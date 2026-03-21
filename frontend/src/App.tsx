@@ -222,6 +222,9 @@ export function App() {
 		setSelectedMessageId,
 		refetchMessages,
 		refetchLabels,
+		effectiveLabelId,
+		isAllMail,
+		refetchAllMailCount,
 	});
 
 	// Compose handlers
@@ -242,7 +245,14 @@ export function App() {
 	}, []);
 
 	const handleSend = useCallback(
-		(_data: { accountId?: number; to: string; cc: string; subject: string; body: string }) => {
+		(_data: {
+			accountId?: number;
+			to: string;
+			cc: string;
+			bcc: string;
+			subject: string;
+			body: string;
+		}) => {
 			// TODO: Integrate with SMTP sending API when #491 is done
 			setComposeMode(null);
 		},
@@ -529,6 +539,7 @@ export function App() {
 						onBulkMarkRead={bulk.markRead}
 						onBulkMarkUnread={bulk.markUnread}
 						onBulkMove={bulk.move}
+						onBulkArchive={!isAllMail ? bulk.archive : undefined}
 						folders={folders ?? []}
 					/>
 				</div>
