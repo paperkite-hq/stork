@@ -2,7 +2,7 @@ import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 import type { Folder, GlobalSyncStatus, Label, MessageSummary } from "./api";
 import { api } from "./api";
 import { toast } from "./components/Toast";
-import { getPageSize, isFlagged, isUnread } from "./utils";
+import { getPageSize, isFlagged, isUnread, parseFlags } from "./utils";
 
 /** Simple data-fetching hook with loading/error states.
  *  Cancels in-flight requests via AbortController when deps change,
@@ -372,14 +372,13 @@ export function useMessageActions(opts: {
 	const focusedMessage = messages[messageListIndex] ?? null;
 
 	// Optimistic flag update — immediately updates local message list state.
-	// Flags are stored comma-separated by the backend (e.g. "\\Seen,\\Flagged"),
-	// so we split/join on comma to stay consistent.
+	// Uses parseFlags() for consistent comma-separated flag manipulation.
 	const optimisticFlagUpdate = useCallback(
 		(messageId: number, flagsUpdate: { add?: string[]; remove?: string[] }) => {
 			setAllMessages((prev) =>
 				prev.map((m) => {
 					if (m.id !== messageId) return m;
-					const flagSet = new Set((m.flags ?? "").split(",").filter(Boolean));
+					const flagSet = parseFlags(m.flags);
 					for (const flag of flagsUpdate.add ?? []) flagSet.add(flag);
 					for (const flag of flagsUpdate.remove ?? []) flagSet.delete(flag);
 					return { ...m, flags: [...flagSet].join(",") };
