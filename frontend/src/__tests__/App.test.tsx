@@ -45,6 +45,10 @@ vi.mock("../api", () => ({
 			addLabels: vi.fn().mockResolvedValue({ ok: true }),
 			removeLabel: vi.fn().mockResolvedValue({ ok: true }),
 		},
+		allMessages: {
+			list: vi.fn().mockResolvedValue([]),
+			count: vi.fn().mockResolvedValue({ total: 0, unread: 0 }),
+		},
 		sync: {
 			status: vi.fn().mockResolvedValue({}),
 			trigger: vi.fn().mockResolvedValue({}),
@@ -901,28 +905,19 @@ describe("App — Per-message keyboard shortcuts", () => {
 		);
 	});
 
-	it("e shortcut calls api.messages.move to archive folder", async () => {
+	it("e shortcut removes current label (label-based archive)", async () => {
+		const label = makeLabel({ id: 7 });
 		const messages = [makeMessageSummary({ id: 50, subject: "Archive me" })];
 		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
-		mockApi.labels.list.mockResolvedValue([makeLabel()]);
+		mockApi.labels.list.mockResolvedValue([label]);
 		mockApi.labels.messages.mockResolvedValue(messages);
-		mockApi.folders.list.mockResolvedValue([
-			{
-				id: 10,
-				path: "Archive",
-				name: "Archive",
-				special_use: "\\Archive",
-				message_count: 5,
-				unread_count: 0,
-				last_synced_at: null,
-			},
-		]);
+		mockApi.folders.list.mockResolvedValue([]);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Archive me")).toBeInTheDocument());
 		fireEvent.keyDown(window, { key: "e" });
 		await waitFor(() => {
-			expect((api.messages.move as ReturnType<typeof vi.fn>).mock.calls).toEqual(
-				expect.arrayContaining([[50, 10]]),
+			expect((api.messages.removeLabel as ReturnType<typeof vi.fn>).mock.calls).toEqual(
+				expect.arrayContaining([[50, 7]]),
 			);
 		});
 	});

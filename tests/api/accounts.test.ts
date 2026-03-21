@@ -3,10 +3,12 @@ import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../src/api/server.js";
 import {
+	addMessageLabel,
 	createTestAccount,
 	createTestContext,
 	createTestDb,
 	createTestFolder,
+	createTestLabel,
 	createTestMessage,
 } from "../helpers/test-db.js";
 
@@ -331,6 +333,75 @@ describe("Accounts API", () => {
 			const body = (await res.json()) as { ok: boolean; error?: string };
 			expect(body.ok).toBe(false);
 			expect(body.error).toBeTruthy();
+		});
+	});
+
+	// ─── All Messages ──────────────────────────────────────
+	describe("All Messages", () => {
+		test("GET /api/accounts/:id/all-messages returns all messages regardless of labels", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			const labelId = createTestLabel(db, accountId, "Inbox");
+
+			const msg1 = createTestMessage(db, accountId, folderId, 1, { subject: "Labeled" });
+			createTestMessage(db, accountId, folderId, 2, { subject: "Unlabeled" });
+			addMessageLabel(db, msg1, labelId);
+
+			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/all-messages`);
+			expect(status).toBe(200);
+			expect(body).toHaveLength(2);
+		});
+
+		test("GET /api/accounts/:id/all-messages respects limit and offset", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			for (let i = 1; i <= 5; i++) {
+				createTestMessage(db, accountId, folderId, i, {
+					date: new Date(2026, 0, i).toISOString(),
+				});
+			}
+
+			const { body: page1 } = await jsonRequest(
+				`/api/accounts/${accountId}/all-messages?limit=2&offset=0`,
+			);
+			expect(page1).toHaveLength(2);
+
+			const { body: page2 } = await jsonRequest(
+				`/api/accounts/${accountId}/all-messages?limit=2&offset=2`,
+			);
+			expect(page2).toHaveLength(2);
+
+			// No overlap between pages
+			const ids1 = page1.map((m: { id: number }) => m.id);
+			const ids2 = page2.map((m: { id: number }) => m.id);
+			expect(ids1.filter((id: number) => ids2.includes(id))).toHaveLength(0);
+		});
+
+		test("GET /api/accounts/:id/all-messages returns empty for no messages", async () => {
+			const accountId = createTestAccount(db);
+			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/all-messages`);
+			expect(status).toBe(200);
+			expect(body).toEqual([]);
+		});
+
+		test("GET /api/accounts/:id/all-messages/count returns total and unread", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			createTestMessage(db, accountId, folderId, 1, { flags: '["Seen"]' });
+			createTestMessage(db, accountId, folderId, 2, { flags: "[]" });
+			createTestMessage(db, accountId, folderId, 3, { flags: "[]" });
+
+			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/all-messages/count`);
+			expect(status).toBe(200);
+			expect(body.total).toBe(3);
+			expect(body.unread).toBe(2);
+		});
+
+		test("GET /api/accounts/:id/all-messages/count returns zeros when empty", async () => {
+			const accountId = createTestAccount(db);
+			const { body } = await jsonRequest(`/api/accounts/${accountId}/all-messages/count`);
+			expect(body.total).toBe(0);
+			expect(body.unread).toBe(0);
 		});
 	});
 });
