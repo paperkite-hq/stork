@@ -48,6 +48,9 @@ function labelIcon(label: Label): ReactNode {
 	);
 }
 
+/** Sentinel label ID for the "All Mail" virtual view */
+export const ALL_MAIL_LABEL_ID = -1;
+
 interface SidebarProps {
 	accounts: Account[];
 	labels: Label[];
@@ -64,6 +67,7 @@ interface SidebarProps {
 	syncing?: boolean;
 	syncStatus?: GlobalSyncStatus | null;
 	onLabelsChanged?: () => void;
+	allMailCount?: { total: number; unread: number } | null;
 }
 
 /** Formats a duration in ms as "Xm Ys" or "Xs" */
@@ -182,6 +186,7 @@ export function Sidebar({
 	syncing,
 	syncStatus,
 	onLabelsChanged,
+	allMailCount,
 }: SidebarProps) {
 	const [contextMenu, setContextMenu] = useState<{
 		label: Label;
@@ -318,6 +323,31 @@ export function Sidebar({
 						</button>
 					);
 				})}
+
+				{/* All Mail virtual entry — shows all messages regardless of labels */}
+				{labels.length > 0 && (
+					<>
+						<div className="my-2 mx-3 border-t border-gray-200 dark:border-gray-700" />
+						<button
+							type="button"
+							onClick={() => onSelectLabel(ALL_MAIL_LABEL_ID)}
+							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+								selectedLabelId === ALL_MAIL_LABEL_ID
+									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
+									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+							}`}
+						>
+							<ArchiveIcon className="w-4 h-4 flex-shrink-0" />
+							<span className="truncate">All Mail</span>
+							{allMailCount && allMailCount.unread > 0 && (
+								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
+									{allMailCount.unread}
+								</span>
+							)}
+						</button>
+					</>
+				)}
+
 				{labels.length === 0 && (
 					<p className="text-xs text-gray-400 px-3 py-2">
 						{syncing ? "Waiting for initial sync…" : "No labels yet"}

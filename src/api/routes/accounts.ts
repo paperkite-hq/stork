@@ -223,6 +223,44 @@ export function accountRoutes(
 		}
 	});
 
+	// All messages for an account (regardless of labels) — used by "All Mail" view
+	api.get("/:accountId/all-messages", (c) => {
+		const accountId = Number(c.req.param("accountId"));
+		const limit = Number(c.req.query("limit") ?? 50);
+		const offset = Number(c.req.query("offset") ?? 0);
+		const db = getDb();
+
+		const messages = db
+			.prepare(`
+				SELECT id, uid, message_id, subject, from_address, from_name,
+					to_addresses, date, flags, size, has_attachments,
+					SUBSTR(text_body, 1, 200) as preview
+				FROM messages
+				WHERE account_id = ?
+				ORDER BY date DESC
+				LIMIT ? OFFSET ?
+			`)
+			.all(accountId, limit, offset);
+
+		return c.json(messages);
+	});
+
+	// Total message count for an account (for "All Mail" badge)
+	api.get("/:accountId/all-messages/count", (c) => {
+		const accountId = Number(c.req.param("accountId"));
+		const db = getDb();
+
+		const row = db
+			.prepare(`
+				SELECT COUNT(*) as total,
+					(SELECT COUNT(*) FROM messages WHERE account_id = ? AND flags NOT LIKE '%Seen%') as unread
+				FROM messages WHERE account_id = ?
+			`)
+			.get(accountId, accountId) as { total: number; unread: number };
+
+		return c.json(row);
+	});
+
 	api.post("/:accountId/sync", async (c) => {
 		const accountId = Number(c.req.param("accountId"));
 		try {
