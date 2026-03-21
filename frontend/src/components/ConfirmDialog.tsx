@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { useFocusTrap } from "../hooks";
 
 interface ConfirmDialogProps {
 	title: string;
@@ -20,6 +21,8 @@ export function ConfirmDialog({
 	onCancel,
 }: ConfirmDialogProps) {
 	const cancelRef = useRef<HTMLButtonElement>(null);
+	const dialogRef = useRef<HTMLDivElement>(null);
+	useFocusTrap(dialogRef);
 
 	useEffect(() => {
 		cancelRef.current?.focus();
@@ -39,6 +42,7 @@ export function ConfirmDialog({
 
 	return (
 		<div
+			ref={dialogRef}
 			className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40"
 			role="dialog"
 			aria-modal="true"

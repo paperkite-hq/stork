@@ -1,6 +1,7 @@
 import DOMPurify from "dompurify";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type SearchResult, api } from "../api";
+import { useFocusTrap } from "../hooks";
 import { SearchIcon, XIcon } from "./Icons";
 import { toast } from "./Toast";
 
@@ -18,6 +19,8 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 	const [focusedIndex, setFocusedIndex] = useState(-1);
 	const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 	const resultRefs = useRef<(HTMLButtonElement | null)[]>([]);
+	const dialogRef = useRef<HTMLDivElement>(null);
+	useFocusTrap(dialogRef);
 
 	const doSearch = useCallback(
 		(q: string) => {
@@ -94,6 +97,7 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 
 	return (
 		<div
+			ref={dialogRef}
 			className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] bg-black/30"
 			role="dialog"
 			aria-modal="true"
