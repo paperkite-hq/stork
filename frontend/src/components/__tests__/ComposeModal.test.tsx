@@ -220,7 +220,7 @@ describe("ComposeModal", () => {
 		expect(screen.getByLabelText("Subj")).toHaveValue("Saved draft");
 	});
 
-	it("does not restore draft for reply mode", () => {
+	it("does not restore new-message draft for reply mode", () => {
 		localStorage.setItem(
 			"stork-compose-draft",
 			JSON.stringify({
@@ -237,8 +237,80 @@ describe("ComposeModal", () => {
 				onSend={vi.fn()}
 			/>,
 		);
-		// Reply pre-fills with original sender, not draft
+		// Reply pre-fills with original sender, not the new-message draft
 		expect(screen.getByPlaceholderText("recipient@example.com")).toHaveValue("sender@test.com");
+	});
+
+	it("saves and restores draft for reply mode with mode-specific key", async () => {
+		const msg = makeMessage({ id: 42 });
+		const draftKey = "stork-compose-draft:reply:42";
+
+		// First render: type some text → auto-saved
+		const { unmount } = render(
+			<ComposeModal
+				mode={{ type: "reply", original: msg }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		const textarea = screen.getByPlaceholderText("Write your message…") as HTMLTextAreaElement;
+		await userEvent.type(textarea, "My reply");
+		unmount();
+
+		// Draft should be saved under the reply-specific key
+		const saved = JSON.parse(localStorage.getItem(draftKey) ?? "{}");
+		expect(saved.body).toContain("My reply");
+
+		// Second render: draft should be restored
+		render(
+			<ComposeModal
+				mode={{ type: "reply", original: msg }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		const restoredTextarea = screen.getByPlaceholderText(
+			"Write your message…",
+		) as HTMLTextAreaElement;
+		expect(restoredTextarea.value).toContain("My reply");
+	});
+
+	it("saves and restores draft for forward mode with mode-specific key", async () => {
+		const msg = makeMessage({ id: 99, subject: "Original" });
+		const draftKey = "stork-compose-draft:forward:99";
+
+		const { unmount } = render(
+			<ComposeModal
+				mode={{ type: "forward", original: msg }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		// Type into the To field
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "fwd@test.com");
+		unmount();
+
+		const saved = JSON.parse(localStorage.getItem(draftKey) ?? "{}");
+		expect(saved.to).toBe("fwd@test.com");
+	});
+
+	it("clears mode-specific draft on discard", async () => {
+		const msg = makeMessage({ id: 55 });
+		const draftKey = "stork-compose-draft:reply:55";
+		localStorage.setItem(
+			draftKey,
+			JSON.stringify({ to: "x@test.com", cc: "", subject: "Re: Test", body: "draft" }),
+		);
+
+		render(
+			<ComposeModal
+				mode={{ type: "reply", original: msg }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		await userEvent.click(screen.getByText("Discard"));
+		expect(localStorage.getItem(draftKey)).toBeNull();
 	});
 
 	it("clears draft from localStorage when message is sent", async () => {

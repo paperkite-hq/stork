@@ -294,6 +294,33 @@ export function App() {
 		}
 	}, [allMessages, messageListIndex, optimisticFlagUpdate, refetchMessages]);
 
+	const handleKeyboardArchive = useCallback(async () => {
+		const msg = allMessages[messageListIndex];
+		if (!msg) return;
+		const archiveFolder = folders?.find((f) => {
+			const name = f.name.toLowerCase();
+			const special = f.special_use?.toLowerCase() ?? "";
+			return (
+				name === "archive" || name === "all mail" || special === "\\archive" || special === "\\all"
+			);
+		});
+		if (!archiveFolder) {
+			toast("No archive folder found", "error");
+			return;
+		}
+		// Optimistic: remove from list
+		setAllMessages((prev) => prev.filter((m) => m.id !== msg.id));
+		if (selectedMessageId === msg.id) setSelectedMessageId(null);
+		toast("Archived");
+		try {
+			await api.messages.move(msg.id, archiveFolder.id);
+			refetchLabels();
+		} catch (err) {
+			refetchMessages(); // Revert on failure
+			toast(`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
+		}
+	}, [allMessages, messageListIndex, folders, selectedMessageId, refetchMessages, refetchLabels]);
+
 	const handleKeyboardDeleteConfirmed = useCallback(async () => {
 		if (pendingKeyboardDelete === null) return;
 		const id = pendingKeyboardDelete;
@@ -394,6 +421,11 @@ export function App() {
 					setPendingKeyboardDelete(focusedMessage.id);
 				}
 			},
+			e: () => {
+				if (focusedMessage && !composeMode && !showSearch) {
+					handleKeyboardArchive();
+				}
+			},
 		}),
 		[
 			allMessages,
@@ -411,6 +443,7 @@ export function App() {
 			handleForward,
 			handleKeyboardStar,
 			handleKeyboardMarkUnread,
+			handleKeyboardArchive,
 		],
 	);
 
