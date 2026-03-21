@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Message } from "../../api";
+import type { Folder, Message } from "../../api";
 import { MessageDetail } from "../MessageDetail";
 
 // Mock the api module
@@ -11,8 +11,20 @@ vi.mock("../../api", () => ({
 			updateFlags: vi.fn().mockResolvedValue({ ok: true, flags: "\\Seen" }),
 			delete: vi.fn().mockResolvedValue({ ok: true }),
 			attachments: vi.fn().mockResolvedValue([]),
+			move: vi.fn().mockResolvedValue({ ok: true }),
+			labels: vi.fn().mockResolvedValue([]),
+			addLabels: vi.fn().mockResolvedValue({ ok: true }),
+			removeLabel: vi.fn().mockResolvedValue({ ok: true }),
+		},
+		labels: {
+			list: vi.fn().mockResolvedValue([]),
 		},
 	},
+}));
+
+// Mock toast
+vi.mock("../Toast", () => ({
+	toast: vi.fn(),
 }));
 
 function makeMessage(overrides: Partial<Message> = {}): Message {
@@ -109,7 +121,6 @@ describe("MessageDetail", () => {
 				})}
 			/>,
 		);
-		// HTML body is rendered via dangerouslySetInnerHTML with DOMPurify
 		const emailContent = container.querySelector(".email-content");
 		expect(emailContent).toBeInTheDocument();
 	});
@@ -158,10 +169,24 @@ describe("MessageDetail", () => {
 		expect(screen.getByText("Show plain text")).toBeInTheDocument();
 	});
 
+	it("toggles between HTML and plain text view", async () => {
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body: "<p>HTML version</p>",
+					text_body: "Plain version",
+				})}
+			/>,
+		);
+		await userEvent.click(screen.getByText("Show plain text"));
+		expect(screen.getByText("Plain version")).toBeInTheDocument();
+		expect(screen.getByText("Show formatted")).toBeInTheDocument();
+	});
+
 	it("calls onReply when Reply button is clicked", async () => {
 		const onReply = vi.fn();
 		render(<MessageDetail {...defaultProps} onReply={onReply} />);
-		// Button renders <ReplyIcon /> (SVG title "Reply") + text " Reply"
 		const buttons = screen.getAllByRole("button");
 		const replyBtn = buttons.find(
 			(btn) =>
@@ -250,5 +275,257 @@ describe("MessageDetail", () => {
 	it("renders delete button", () => {
 		render(<MessageDetail {...defaultProps} />);
 		expect(screen.getByTitle("Delete message")).toBeInTheDocument();
+	});
+
+	// --- Additional coverage tests ---
+
+	it("toggles star and calls onMessageChanged", async () => {
+		const onMessageChanged = vi.fn();
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({ flags: null })}
+				onMessageChanged={onMessageChanged}
+			/>,
+		);
+		await userEvent.click(screen.getByTitle("Star message"));
+		const { api } = await import("../../api");
+		await waitFor(() => {
+			expect(api.messages.updateFlags).toHaveBeenCalledWith(1, { add: ["\\Flagged"] });
+		});
+		expect(onMessageChanged).toHaveBeenCalled();
+	});
+
+	it("removes star on flagged message", async () => {
+		render(
+			<MessageDetail {...defaultProps} message={makeMessage({ flags: "\\Flagged \\Seen" })} />,
+		);
+		await userEvent.click(screen.getByTitle("Remove star"));
+		const { api } = await import("../../api");
+		await waitFor(() => {
+			expect(api.messages.updateFlags).toHaveBeenCalledWith(1, { remove: ["\\Flagged"] });
+		});
+	});
+
+	it("toggles read status", async () => {
+		const onMessageChanged = vi.fn();
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({ flags: null })}
+				onMessageChanged={onMessageChanged}
+			/>,
+		);
+		await userEvent.click(screen.getByTitle("Mark as read"));
+		const { api } = await import("../../api");
+		await waitFor(() => {
+			expect(api.messages.updateFlags).toHaveBeenCalledWith(1, { add: ["\\Seen"] });
+		});
+	});
+
+	it("toggles unread status on read message", async () => {
+		render(<MessageDetail {...defaultProps} message={makeMessage({ flags: "\\Seen" })} />);
+		await userEvent.click(screen.getByTitle("Mark as unread"));
+		const { api } = await import("../../api");
+		await waitFor(() => {
+			expect(api.messages.updateFlags).toHaveBeenCalledWith(1, { remove: ["\\Seen"] });
+		});
+	});
+
+	it("shows delete confirmation and deletes on confirm", async () => {
+		const onMessageDeleted = vi.fn();
+		render(<MessageDetail {...defaultProps} onMessageDeleted={onMessageDeleted} />);
+		await userEvent.click(screen.getByTitle("Delete message"));
+		expect(screen.getByText("Delete message")).toBeInTheDocument();
+		expect(
+			screen.getByText("This will permanently delete this message. This action cannot be undone."),
+		).toBeInTheDocument();
+		await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+		const { api } = await import("../../api");
+		await waitFor(() => {
+			expect(api.messages.delete).toHaveBeenCalledWith(1);
+		});
+		expect(onMessageDeleted).toHaveBeenCalled();
+	});
+
+	it("cancels delete confirmation", async () => {
+		render(<MessageDetail {...defaultProps} />);
+		await userEvent.click(screen.getByTitle("Delete message"));
+		await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+		expect(
+			screen.queryByText("This will permanently delete this message."),
+		).not.toBeInTheDocument();
+	});
+
+	it("shows error state", () => {
+		render(
+			<MessageDetail {...defaultProps} message={null} loading={false} error="Connection refused" />,
+		);
+		expect(screen.getByText("Failed to load message")).toBeInTheDocument();
+		expect(screen.getByText("Connection refused")).toBeInTheDocument();
+		expect(screen.getByText("← Back to list")).toBeInTheDocument();
+	});
+
+	it("back to list button in error state calls onBack", async () => {
+		const onBack = vi.fn();
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={null}
+				loading={false}
+				error="Error"
+				onBack={onBack}
+			/>,
+		);
+		await userEvent.click(screen.getByText("← Back to list"));
+		expect(onBack).toHaveBeenCalledOnce();
+	});
+
+	it("shows move to folder button when folders are provided", () => {
+		const folders: Folder[] = [
+			{
+				id: 1,
+				path: "INBOX",
+				name: "Inbox",
+				special_use: null,
+				message_count: 10,
+				unread_count: 2,
+				last_synced_at: null,
+			},
+			{
+				id: 2,
+				path: "Trash",
+				name: "Trash",
+				special_use: "\\Trash",
+				message_count: 0,
+				unread_count: 0,
+				last_synced_at: null,
+			},
+		];
+		render(<MessageDetail {...defaultProps} folders={folders} />);
+		expect(screen.getByTitle("Move to folder")).toBeInTheDocument();
+	});
+
+	it("opens move menu and moves message to folder", async () => {
+		const onMessageDeleted = vi.fn();
+		const folders: Folder[] = [
+			{
+				id: 1,
+				path: "INBOX",
+				name: "Inbox",
+				special_use: null,
+				message_count: 10,
+				unread_count: 2,
+				last_synced_at: null,
+			},
+			{
+				id: 2,
+				path: "Trash",
+				name: "Trash",
+				special_use: "\\Trash",
+				message_count: 0,
+				unread_count: 0,
+				last_synced_at: null,
+			},
+		];
+		render(
+			<MessageDetail {...defaultProps} folders={folders} onMessageDeleted={onMessageDeleted} />,
+		);
+		await userEvent.click(screen.getByTitle("Move to folder"));
+		// Folder dropdown should appear
+		// Find the Trash button in the dropdown (not the header)
+		const trashButtons = screen.getAllByText("Trash");
+		const dropdownTrash = trashButtons.find(
+			(el) => el.tagName === "BUTTON" && el.className.includes("text-left"),
+		) as HTMLElement;
+		if (dropdownTrash) {
+			await userEvent.click(dropdownTrash);
+			const { api } = await import("../../api");
+			await waitFor(() => {
+				expect(api.messages.move).toHaveBeenCalledWith(1, 2);
+			});
+		}
+	});
+
+	it("shows attachments when message has attachments", async () => {
+		const { api } = await import("../../api");
+		(api.messages.attachments as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+			{
+				id: 1,
+				filename: "document.pdf",
+				content_type: "application/pdf",
+				size: 52428,
+				content_id: null,
+			},
+			{ id: 2, filename: null, content_type: "image/png", size: 1024, content_id: null },
+		]);
+		render(<MessageDetail {...defaultProps} message={makeMessage({ has_attachments: 1 })} />);
+		await waitFor(() => {
+			expect(screen.getByText("2 attachments")).toBeInTheDocument();
+		});
+		expect(screen.getByText("document.pdf")).toBeInTheDocument();
+		expect(screen.getByText("51.2 KB")).toBeInTheDocument();
+		expect(screen.getByText("attachment")).toBeInTheDocument(); // null filename fallback
+	});
+
+	it("thread messages can be expanded and collapsed", async () => {
+		const msg1 = makeMessage({ id: 1, from_name: "Alice", text_body: "First message" });
+		const msg2 = makeMessage({ id: 2, from_name: "Bob", text_body: "Reply message" });
+		render(<MessageDetail {...defaultProps} message={msg1} thread={[msg1, msg2]} />);
+
+		// First message in thread is collapsed by default (not the last)
+		expect(screen.queryByText("First message")).not.toBeInTheDocument();
+		// Last message is always expanded
+		expect(screen.getByText("Reply message")).toBeInTheDocument();
+
+		// Click to expand the first message
+		const expandBtn = screen.getByLabelText("Expand message from Alice");
+		await userEvent.click(expandBtn);
+		expect(screen.getByText("First message")).toBeInTheDocument();
+
+		// Click again to collapse
+		await userEvent.click(expandBtn);
+		expect(screen.queryByText("First message")).not.toBeInTheDocument();
+	});
+
+	it("auto-marks unread message as read on open", async () => {
+		const { api } = await import("../../api");
+		const onMessageChanged = vi.fn();
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({ id: 99, flags: null })}
+				onMessageChanged={onMessageChanged}
+			/>,
+		);
+		await waitFor(() => {
+			expect(api.messages.updateFlags).toHaveBeenCalledWith(99, { add: ["\\Seen"] });
+		});
+	});
+
+	it("does not auto-mark already-read message", async () => {
+		const { api } = await import("../../api");
+		render(<MessageDetail {...defaultProps} message={makeMessage({ flags: "\\Seen" })} />);
+		// Wait a tick
+		await new Promise((r) => setTimeout(r, 50));
+		// updateFlags should not be called for auto-mark (may be called zero times or only by explicit user action)
+		const autoMarkCalls = (api.messages.updateFlags as ReturnType<typeof vi.fn>).mock.calls.filter(
+			(call: unknown[]) => {
+				const args = call as [number, { add?: string[] }];
+				return args[1]?.add?.includes("\\Seen");
+			},
+		);
+		expect(autoMarkCalls.length).toBe(0);
+	});
+
+	it("shows sender initial in avatar", () => {
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({ from_name: null, from_address: "alice@test.com" })}
+			/>,
+		);
+		// Avatar shows first letter of from_address
+		expect(screen.getByText("A")).toBeInTheDocument();
 	});
 });

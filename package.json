@@ -9,7 +9,7 @@
 		"start": "node dist/index.js",
 		"test": "vitest run && cd frontend && npm test",
 		"test:backend": "vitest run",
-		"test:coverage": "STORK_FAST_KDF=1 vitest run --coverage",
+		"test:coverage": "STORK_FAST_KDF=1 vitest run --coverage && cd frontend && npx vitest run --coverage",
 		"test:frontend": "cd frontend && npm test",
 		"test:e2e": "vitest run tests/e2e-container.test.ts",
 		"test:e2e-ui": "npx playwright test",

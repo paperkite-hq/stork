@@ -223,6 +223,237 @@ describe("api client", () => {
 		});
 	});
 
+	describe("labels", () => {
+		it("list fetches /api/accounts/:id/labels", async () => {
+			const labels = [{ id: 1, name: "Inbox" }];
+			mockFetch.mockResolvedValue(mockJsonResponse(labels));
+
+			const result = await api.labels.list(1);
+			expect(result).toEqual(labels);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/accounts/1/labels",
+				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+			);
+		});
+
+		it("create POSTs to /api/accounts/:id/labels", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ id: 5 }));
+
+			const result = await api.labels.create(1, { name: "Important", color: "#ff0000" });
+			expect(result).toEqual({ id: 5 });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/accounts/1/labels",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ name: "Important", color: "#ff0000" }),
+				}),
+			);
+		});
+
+		it("update PUTs to /api/labels/:id", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.labels.update(5, { name: "Updated" });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/labels/5",
+				expect.objectContaining({
+					method: "PUT",
+					body: JSON.stringify({ name: "Updated" }),
+				}),
+			);
+		});
+
+		it("delete DELETEs /api/labels/:id", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.labels.delete(5);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/labels/5",
+				expect.objectContaining({ method: "DELETE" }),
+			);
+		});
+
+		it("messages fetches /api/labels/:id/messages", async () => {
+			const messages = [{ id: 1, subject: "Hello" }];
+			mockFetch.mockResolvedValue(mockJsonResponse(messages));
+
+			const result = await api.labels.messages(3);
+			expect(result).toEqual(messages);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/labels/3/messages?",
+				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+			);
+		});
+
+		it("messages passes limit and offset params", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse([]));
+
+			await api.labels.messages(3, { limit: 25, offset: 50 });
+			const url = mockFetch.mock.calls[0]?.[0] as string;
+			expect(url).toContain("limit=25");
+			expect(url).toContain("offset=50");
+		});
+	});
+
+	describe("messages — extended", () => {
+		it("move POSTs to /api/messages/:id/move", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.messages.move(1, 5);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/messages/1/move",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ folder_id: 5 }),
+				}),
+			);
+		});
+
+		it("labels fetches /api/messages/:id/labels", async () => {
+			const labels = [{ id: 1, name: "Inbox" }];
+			mockFetch.mockResolvedValue(mockJsonResponse(labels));
+
+			const result = await api.messages.labels(1);
+			expect(result).toEqual(labels);
+		});
+
+		it("addLabels POSTs to /api/messages/:id/labels", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.messages.addLabels(1, [2, 3]);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/messages/1/labels",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ label_ids: [2, 3] }),
+				}),
+			);
+		});
+
+		it("removeLabel DELETEs /api/messages/:id/labels/:labelId", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.messages.removeLabel(1, 5);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/messages/1/labels/5",
+				expect.objectContaining({ method: "DELETE" }),
+			);
+		});
+
+		it("bulk POSTs to /api/messages/bulk", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, count: 3 }));
+
+			const result = await api.messages.bulk([1, 2, 3], "delete");
+			expect(result).toEqual({ ok: true, count: 3 });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/messages/bulk",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ ids: [1, 2, 3], action: "delete" }),
+				}),
+			);
+		});
+
+		it("bulk with flag action passes opts", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, count: 2 }));
+
+			await api.messages.bulk([1, 2], "flag", { add: ["\\Seen"] });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/messages/bulk",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ ids: [1, 2], action: "flag", add: ["\\Seen"] }),
+				}),
+			);
+		});
+
+		it("bulk with move action passes folder_id", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, count: 1 }));
+
+			await api.messages.bulk([5], "move", { folder_id: 10 });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/messages/bulk",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ ids: [5], action: "move", folder_id: 10 }),
+				}),
+			);
+		});
+	});
+
+	describe("encryption", () => {
+		it("setup POSTs to /api/setup", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ recoveryMnemonic: "word1 word2" }));
+
+			const result = await api.encryption.setup("password123");
+			expect(result).toEqual({ recoveryMnemonic: "word1 word2" });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/setup",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ password: "password123" }),
+				}),
+			);
+		});
+
+		it("unlock POSTs to /api/unlock with password", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.encryption.unlock({ password: "secret" });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/unlock",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ password: "secret" }),
+				}),
+			);
+		});
+
+		it("unlock POSTs to /api/unlock with recovery mnemonic", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.encryption.unlock({
+				recoveryMnemonic: "word1 word2 word3",
+				newPassword: "newpass",
+			});
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/unlock",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({
+						recoveryMnemonic: "word1 word2 word3",
+						newPassword: "newpass",
+					}),
+				}),
+			);
+		});
+	});
+
+	describe("status", () => {
+		it("fetches /api/status", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ state: "unlocked" }));
+
+			const result = await api.status();
+			expect(result).toEqual({ state: "unlocked" });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/status",
+				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+			);
+		});
+	});
+
+	describe("sync — extended", () => {
+		it("trigger POSTs to /api/accounts/:id/sync", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({}));
+
+			await api.sync.trigger(1);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/accounts/1/sync",
+				expect.objectContaining({ method: "POST" }),
+			);
+		});
+	});
+
 	describe("error handling", () => {
 		it("throws on non-ok response with error message", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ error: "Not found" }, 404));
