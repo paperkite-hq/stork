@@ -527,6 +527,7 @@ export function App() {
 						hasMore={hasMore}
 						onLoadMore={handleLoadMore}
 						loadingMore={loadingMore}
+						totalCount={labels?.find((l) => l.id === effectiveLabelId)?.message_count}
 						selectedIds={bulk.selectedIds}
 						onToggleSelect={bulk.toggle}
 						onSelectAll={bulk.selectAll}

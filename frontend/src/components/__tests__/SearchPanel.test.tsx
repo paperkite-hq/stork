@@ -44,7 +44,7 @@ describe("SearchPanel", () => {
 
 	it("shows search tip", () => {
 		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
-		expect(screen.getByText(/Use AND, OR, NOT/)).toBeInTheDocument();
+		expect(screen.getByText(/AND, OR, NOT/)).toBeInTheDocument();
 	});
 
 	it("shows no results message after search", async () => {
@@ -109,6 +109,102 @@ describe("SearchPanel", () => {
 		await waitFor(() => {
 			expect(mockSearch).toHaveBeenCalledWith("test", { accountId: 5, limit: 30 });
 		});
+	});
+
+	it("navigates results with arrow keys and selects with Enter", async () => {
+		mockSearch.mockResolvedValue([
+			{
+				id: 10,
+				subject: "First Result",
+				from_address: "a@test.com",
+				from_name: "Alice",
+				date: "2026-01-15T10:00:00Z",
+				snippet: "",
+			},
+			{
+				id: 20,
+				subject: "Second Result",
+				from_address: "b@test.com",
+				from_name: "Bob",
+				date: "2026-01-15T11:00:00Z",
+				snippet: "",
+			},
+			{
+				id: 30,
+				subject: "Third Result",
+				from_address: "c@test.com",
+				from_name: "Carol",
+				date: "2026-01-15T12:00:00Z",
+				snippet: "",
+			},
+		]);
+		const onSelectMessage = vi.fn();
+		const onClose = vi.fn();
+		render(<SearchPanel onClose={onClose} onSelectMessage={onSelectMessage} accountId={null} />);
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "test");
+		await waitFor(() => {
+			expect(screen.getByText("First Result")).toBeInTheDocument();
+		});
+		// First result should be auto-focused (aria-selected)
+		const firstBtn = screen.getByText("First Result").closest("button");
+		expect(firstBtn).toHaveAttribute("aria-selected", "true");
+		// Arrow down to second result
+		await userEvent.keyboard("{ArrowDown}");
+		const secondBtn = screen.getByText("Second Result").closest("button");
+		expect(secondBtn).toHaveAttribute("aria-selected", "true");
+		expect(firstBtn).toHaveAttribute("aria-selected", "false");
+		// Arrow down to third
+		await userEvent.keyboard("{ArrowDown}");
+		const thirdBtn = screen.getByText("Third Result").closest("button");
+		expect(thirdBtn).toHaveAttribute("aria-selected", "true");
+		// Arrow down at bottom should stay on last
+		await userEvent.keyboard("{ArrowDown}");
+		expect(thirdBtn).toHaveAttribute("aria-selected", "true");
+		// Arrow up to second
+		await userEvent.keyboard("{ArrowUp}");
+		expect(secondBtn).toHaveAttribute("aria-selected", "true");
+		// Enter selects the focused result
+		await userEvent.keyboard("{Enter}");
+		expect(onSelectMessage).toHaveBeenCalledWith(20);
+		expect(onClose).toHaveBeenCalledOnce();
+	});
+
+	it("highlights result on mouse hover", async () => {
+		mockSearch.mockResolvedValue([
+			{
+				id: 10,
+				subject: "Hoverable",
+				from_address: "a@test.com",
+				from_name: "Alice",
+				date: "2026-01-15T10:00:00Z",
+				snippet: "",
+			},
+			{
+				id: 20,
+				subject: "Another",
+				from_address: "b@test.com",
+				from_name: "Bob",
+				date: "2026-01-15T11:00:00Z",
+				snippet: "",
+			},
+		]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "test");
+		await waitFor(() => {
+			expect(screen.getByText("Hoverable")).toBeInTheDocument();
+		});
+		// Hover over second result
+		const secondBtn = screen.getByText("Another").closest("button");
+		expect(secondBtn).toBeTruthy();
+		await userEvent.hover(secondBtn as HTMLElement);
+		expect(secondBtn).toHaveAttribute("aria-selected", "true");
+	});
+
+	it("shows keyboard navigation hint", () => {
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		expect(screen.getByText(/to navigate/)).toBeInTheDocument();
 	});
 
 	it("shows (no subject) for messages without subject", async () => {

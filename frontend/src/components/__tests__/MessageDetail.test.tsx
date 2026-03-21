@@ -70,9 +70,11 @@ describe("MessageDetail", () => {
 		vi.clearAllMocks();
 	});
 
-	it("shows loading state", () => {
-		render(<MessageDetail {...defaultProps} message={null} loading={true} />);
-		expect(screen.getByText("Loading message…")).toBeInTheDocument();
+	it("shows loading skeleton", () => {
+		const { container } = render(<MessageDetail {...defaultProps} message={null} loading={true} />);
+		// Loading state renders animated skeleton placeholders
+		const pulsingElements = container.querySelectorAll(".animate-pulse");
+		expect(pulsingElements.length).toBeGreaterThan(0);
 	});
 
 	it("shows empty state when no message selected", () => {

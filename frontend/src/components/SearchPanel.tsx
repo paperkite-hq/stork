@@ -15,7 +15,9 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 	const [results, setResults] = useState<SearchResult[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [searched, setSearched] = useState(false);
+	const [focusedIndex, setFocusedIndex] = useState(-1);
 	const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+	const resultRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
 	const doSearch = useCallback(
 		(q: string) => {
@@ -30,9 +32,11 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 				.then((r) => {
 					setResults(r);
 					setSearched(true);
+					setFocusedIndex(r.length > 0 ? 0 : -1);
 				})
 				.catch(() => {
 					setResults([]);
+					setFocusedIndex(-1);
 					toast("Search failed", "error");
 				})
 				.finally(() => setLoading(false));
@@ -56,6 +60,38 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 		[doSearch],
 	);
 
+	// Scroll focused result into view
+	useEffect(() => {
+		if (focusedIndex >= 0) {
+			resultRefs.current[focusedIndex]?.scrollIntoView({ block: "nearest" });
+		}
+	}, [focusedIndex]);
+
+	const handleKeyDown = useCallback(
+		(e: React.KeyboardEvent) => {
+			if (e.key === "Escape") {
+				onClose();
+				return;
+			}
+			if (e.key === "ArrowDown") {
+				e.preventDefault();
+				setFocusedIndex((prev) => (prev < results.length - 1 ? prev + 1 : prev));
+				return;
+			}
+			if (e.key === "ArrowUp") {
+				e.preventDefault();
+				setFocusedIndex((prev) => (prev > 0 ? prev - 1 : prev));
+				return;
+			}
+			if (e.key === "Enter" && focusedIndex >= 0 && results[focusedIndex]) {
+				e.preventDefault();
+				onSelectMessage(results[focusedIndex].id);
+				onClose();
+			}
+		},
+		[results, focusedIndex, onSelectMessage, onClose],
+	);
+
 	return (
 		<div
 			className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] bg-black/30"
@@ -71,9 +107,7 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 						type="text"
 						value={query}
 						onChange={(e) => handleChange(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Escape") onClose();
-						}}
+						onKeyDown={handleKeyDown}
 						className="flex-1 bg-transparent text-sm outline-none"
 						placeholder="Search messages…"
 						autoFocus
@@ -93,16 +127,25 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 					{searched && results.length === 0 && (
 						<div className="p-6 text-center text-gray-400 text-sm">No results for "{query}"</div>
 					)}
-					{results.map((r) => (
+					{results.map((r, idx) => (
 						<button
 							key={r.id}
+							ref={(el) => {
+								resultRefs.current[idx] = el;
+							}}
 							type="button"
 							onClick={() => {
 								onSelectMessage(r.id);
 								onClose();
 							}}
+							onMouseEnter={() => setFocusedIndex(idx)}
 							aria-label={`${r.subject || "No subject"} from ${r.from_name || r.from_address}`}
-							className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800 transition-colors"
+							aria-selected={idx === focusedIndex}
+							className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-800 transition-colors ${
+								idx === focusedIndex
+									? "bg-stork-50 dark:bg-stork-950"
+									: "hover:bg-gray-50 dark:hover:bg-gray-800"
+							}`}
 						>
 							<div className="flex items-baseline gap-2">
 								<span className="text-sm font-medium truncate">
@@ -131,7 +174,10 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 
 				{/* Hint */}
 				<div className="px-4 py-2 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-400">
-					Tip: Use AND, OR, NOT, "phrases" for advanced search
+					Tip: Use <kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">↑</kbd>/
+					<kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">↓</kbd> to navigate,{" "}
+					<kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">Enter</kbd> to select. AND, OR,
+					NOT, "phrases" for advanced search
 				</div>
 			</div>
 		</div>
