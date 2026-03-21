@@ -10,7 +10,7 @@ import { Settings } from "./components/Settings";
 import { SetupScreen } from "./components/SetupScreen";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
 import { ALL_MAIL_LABEL_ID, Sidebar } from "./components/Sidebar";
-import { ToastContainer } from "./components/Toast";
+import { ToastContainer, toast } from "./components/Toast";
 import { UnlockScreen } from "./components/UnlockScreen";
 import { Welcome } from "./components/Welcome";
 import {
@@ -134,6 +134,9 @@ export function App() {
 			.then((more) => {
 				setAllMessages((prev) => [...prev, ...more]);
 				setHasMore(more.length >= getPageSize());
+			})
+			.catch(() => {
+				toast("Failed to load more messages", "error");
 			})
 			.finally(() => setLoadingMore(false));
 	}, [effectiveLabelId, isAllMail, effectiveAccountId, allMessages.length, loadingMore]);
