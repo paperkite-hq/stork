@@ -116,4 +116,58 @@ describe("BulkActionsBar", () => {
 		render(<BulkActionsBar {...defaultProps({ folders: [] })} />);
 		expect(screen.queryByTitle("Move to folder")).not.toBeInTheDocument();
 	});
+
+	it("calls onMove with folder id when a folder in the dropdown is clicked", () => {
+		const onMove = vi.fn();
+		const singleFolder: Folder[] = [
+			{
+				id: 5,
+				path: "Custom",
+				name: "CustomFolder",
+				special_use: null,
+				message_count: 0,
+				unread_count: 0,
+				last_synced_at: null,
+			},
+		];
+		render(<BulkActionsBar {...defaultProps({ onMove, folders: singleFolder })} />);
+		fireEvent.click(screen.getByText("CustomFolder"));
+		expect(onMove).toHaveBeenCalledWith(5);
+	});
+
+	it("does not call onMove when archive clicked but no archive folder exists", () => {
+		const onMove = vi.fn();
+		const noArchiveFolders: Folder[] = [
+			{
+				id: 1,
+				path: "INBOX",
+				name: "Inbox",
+				special_use: null,
+				message_count: 5,
+				unread_count: 2,
+				last_synced_at: null,
+			},
+		];
+		render(<BulkActionsBar {...defaultProps({ onMove, folders: noArchiveFolders })} />);
+		fireEvent.click(screen.getByTitle("Archive selected"));
+		expect(onMove).not.toHaveBeenCalled();
+	});
+
+	it("finds archive by name when special_use is not set", () => {
+		const onMove = vi.fn();
+		const folders: Folder[] = [
+			{
+				id: 10,
+				path: "All Mail",
+				name: "All Mail",
+				special_use: null,
+				message_count: 100,
+				unread_count: 0,
+				last_synced_at: null,
+			},
+		];
+		render(<BulkActionsBar {...defaultProps({ onMove, folders })} />);
+		fireEvent.click(screen.getByTitle("Archive selected"));
+		expect(onMove).toHaveBeenCalledWith(10);
+	});
 });
