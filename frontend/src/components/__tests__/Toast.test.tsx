@@ -157,6 +157,43 @@ describe("ToastContainer", () => {
 		expect(screen.getAllByText("Archived")).toHaveLength(2);
 	});
 
+	it("renders error toasts in assertive aria-live region", () => {
+		const { container } = render(<ToastContainer />);
+		act(() => {
+			toast("Something broke", "error");
+		});
+		const alertRegion = container.querySelector('[role="alert"][aria-live="assertive"]');
+		expect(alertRegion).toBeInTheDocument();
+		expect(alertRegion?.textContent).toContain("Something broke");
+	});
+
+	it("renders success toasts in polite aria-live region", () => {
+		const { container } = render(<ToastContainer />);
+		act(() => {
+			toast("Done!", "success");
+		});
+		const statusRegion = container.querySelector('[role="status"][aria-live="polite"]');
+		expect(statusRegion).toBeInTheDocument();
+		expect(statusRegion?.textContent).toContain("Done!");
+		// Should NOT be in the assertive region
+		const alertRegion = container.querySelector('[role="alert"][aria-live="assertive"]');
+		expect(alertRegion?.textContent).not.toContain("Done!");
+	});
+
+	it("separates mixed error and success toasts into correct regions", () => {
+		const { container } = render(<ToastContainer />);
+		act(() => {
+			toast("Saved successfully", "success");
+			toast("Network error", "error");
+		});
+		const politeRegion = container.querySelector('[role="status"][aria-live="polite"]');
+		const assertiveRegion = container.querySelector('[role="alert"][aria-live="assertive"]');
+		expect(politeRegion?.textContent).toContain("Saved successfully");
+		expect(politeRegion?.textContent).not.toContain("Network error");
+		expect(assertiveRegion?.textContent).toContain("Network error");
+		expect(assertiveRegion?.textContent).not.toContain("Saved successfully");
+	});
+
 	it("dismisses toasts independently", () => {
 		render(<ToastContainer />);
 		act(() => {

@@ -22,7 +22,7 @@ import {
 	useMessagePagination,
 	useSyncPoller,
 } from "./hooks";
-import { isFlagged } from "./utils";
+import { isFlagged, parseFlags } from "./utils";
 
 export function App() {
 	const [dark, toggleDark] = useDarkMode();
@@ -189,18 +189,18 @@ export function App() {
 		}
 	}, [effectiveAccountId]);
 
-	// Inline star toggle from message list
+	// Inline star toggle from message list — uses parseFlags for consistent flag manipulation
 	const handleToggleStar = useCallback(
 		async (messageId: number) => {
 			const msg = allMessages.find((m) => m.id === messageId);
 			if (!msg) return;
 			const flagged = isFlagged(msg.flags);
 			const flagsUpdate = flagged ? { remove: ["\\Flagged"] } : { add: ["\\Flagged"] };
-			// Optimistic update
+			// Optimistic update using parseFlags (same pattern as useMessageActions)
 			setAllMessages((prev) =>
 				prev.map((m) => {
 					if (m.id !== messageId) return m;
-					const flagSet = new Set((m.flags ?? "").split(",").filter(Boolean));
+					const flagSet = parseFlags(m.flags);
 					if (flagged) flagSet.delete("\\Flagged");
 					else flagSet.add("\\Flagged");
 					return { ...m, flags: [...flagSet].join(",") };

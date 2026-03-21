@@ -57,17 +57,34 @@ export function ToastContainer() {
 		setToasts((prev) => prev.filter((t) => t.id !== id));
 	}, []);
 
+	const politeToasts = toasts.filter((t) => t.type !== "error");
+	const assertiveToasts = toasts.filter((t) => t.type === "error");
+
 	return (
-		<div
-			className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none"
-			role="status"
-			aria-live="polite"
-			aria-atomic="false"
-		>
-			{toasts.map((t) => (
-				<ToastItem key={t.id} toast={t} onDismiss={dismiss} />
-			))}
-		</div>
+		<>
+			{/* Non-error toasts: polite announcements */}
+			<div
+				className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none"
+				role="status"
+				aria-live="polite"
+				aria-atomic="false"
+			>
+				{politeToasts.map((t) => (
+					<ToastItem key={t.id} toast={t} onDismiss={dismiss} />
+				))}
+			</div>
+			{/* Error toasts: assertive announcements for screen readers */}
+			<div
+				className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none"
+				role="alert"
+				aria-live="assertive"
+				aria-atomic="false"
+			>
+				{assertiveToasts.map((t) => (
+					<ToastItem key={t.id} toast={t} onDismiss={dismiss} />
+				))}
+			</div>
+		</>
 	);
 }
 
