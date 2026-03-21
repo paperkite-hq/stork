@@ -563,7 +563,7 @@ describe("MessageDetail", () => {
 		expect(imgs?.length ?? 0).toBe(0);
 	});
 
-	it("removes images with tracking-style URLs", () => {
+	it("blocks all remote images by default", () => {
 		const { container } = render(
 			<MessageDetail
 				{...defaultProps}
@@ -576,9 +576,79 @@ describe("MessageDetail", () => {
 		);
 		const emailContent = container.querySelector(".email-content");
 		const imgs = emailContent?.querySelectorAll("img");
-		// Only the legit logo should remain
+		// All remote images blocked by default (tracking + legitimate)
+		expect(imgs?.length ?? 0).toBe(0);
+	});
+
+	it("shows 'Show images' banner when HTML has remote images", () => {
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body:
+						'<p>Newsletter</p><img src="https://cdn.example.com/banner.jpg" width="600" height="200">',
+					text_body: "Newsletter",
+				})}
+			/>,
+		);
+		expect(screen.getByText("Images are hidden to protect your privacy.")).toBeInTheDocument();
+		expect(screen.getByText("Show images")).toBeInTheDocument();
+	});
+
+	it("loads remote images when user clicks 'Show images'", async () => {
+		const user = userEvent.setup();
+		const { container } = render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body:
+						'<p>Newsletter</p><img src="https://cdn.example.com/banner.jpg" width="600" height="200">',
+					text_body: "Newsletter",
+				})}
+			/>,
+		);
+		// Initially blocked
+		let imgs = container.querySelector(".email-content")?.querySelectorAll("img");
+		expect(imgs?.length ?? 0).toBe(0);
+
+		// Click "Show images"
+		await user.click(screen.getByText("Show images"));
+
+		// Now images should be visible
+		imgs = container.querySelector(".email-content")?.querySelectorAll("img");
 		expect(imgs?.length ?? 0).toBe(1);
-		expect(imgs?.[0]?.getAttribute("src")).toContain("logo.png");
+		expect(imgs?.[0]?.getAttribute("src")).toContain("banner.jpg");
+	});
+
+	it("does not show banner when HTML has no remote images", () => {
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body: "<p>Plain text email with no images</p>",
+					text_body: "Plain text email with no images",
+				})}
+			/>,
+		);
+		expect(
+			screen.queryByText("Images are hidden to protect your privacy."),
+		).not.toBeInTheDocument();
+	});
+
+	it("does not show banner for data: URI images", () => {
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body:
+						'<p>Inline</p><img src="data:image/png;base64,iVBORw0KGgo=" width="100" height="100">',
+					text_body: "Inline",
+				})}
+			/>,
+		);
+		expect(
+			screen.queryByText("Images are hidden to protect your privacy."),
+		).not.toBeInTheDocument();
 	});
 
 	it("strips iframe tags from HTML email", () => {

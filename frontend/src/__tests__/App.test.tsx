@@ -954,6 +954,44 @@ describe("App — Per-message keyboard shortcuts", () => {
 		await new Promise((r) => setTimeout(r, 50));
 		expect((api.messages.move as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore);
 	});
+
+	it("x shortcut toggles bulk selection for focused message", async () => {
+		const messages = [
+			makeMessageSummary({ id: 60, subject: "Select me" }),
+			makeMessageSummary({ id: 61, subject: "Second message" }),
+		];
+		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		render(<App />);
+		await waitFor(() => expect(screen.getByText("Select me")).toBeInTheDocument());
+
+		// Press x to select the focused message
+		fireEvent.keyDown(window, { key: "x" });
+		// The bulk actions bar should appear showing "1 selected"
+		await waitFor(() => {
+			expect(screen.getByText(/1 selected/)).toBeInTheDocument();
+		});
+
+		// Press x again to deselect
+		fireEvent.keyDown(window, { key: "x" });
+		await waitFor(() => {
+			expect(screen.queryByText(/1 selected/)).not.toBeInTheDocument();
+		});
+	});
+
+	it("x shortcut is ignored when compose is open", async () => {
+		const messages = [makeMessageSummary({ id: 62, subject: "No select" })];
+		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		render(<App />);
+		await waitForAppLayout();
+		fireEvent.keyDown(window, { key: "c" });
+		await waitFor(() =>
+			expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument(),
+		);
+		fireEvent.keyDown(window, { key: "x" });
+		await new Promise((r) => setTimeout(r, 50));
+		// No bulk actions bar should appear
+		expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+	});
 });
 
 // ------------------------------------------------------------------

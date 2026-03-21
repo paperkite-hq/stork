@@ -19,6 +19,7 @@ const shortcuts = [
 	{ key: "u", desc: "Toggle read / unread" },
 	{ key: "d", desc: "Delete message" },
 	{ key: "e", desc: "Archive message" },
+	{ key: "x", desc: "Select / deselect message" },
 	{ key: "/", desc: "Search" },
 	{ key: "?", desc: "Show shortcuts" },
 	{ key: "⌘+Enter", desc: "Send message" },
