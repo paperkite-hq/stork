@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { MoonIcon, SunIcon } from "./Icons";
+
+// Matches the server-side delay progression
+const UNLOCK_DELAYS_SEC = [0, 1, 2, 4, 8, 16, 30];
 
 interface UnlockScreenProps {
 	onUnlocked: () => void;
@@ -16,6 +19,17 @@ export function UnlockScreen({ onUnlocked, dark, onToggleDark }: UnlockScreenPro
 	const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [countdown, setCountdown] = useState(0);
+	const failedAttempts = useRef(0);
+
+	// Countdown timer
+	useEffect(() => {
+		if (countdown <= 0) return;
+		const timer = setInterval(() => {
+			setCountdown((c) => Math.max(0, c - 1));
+		}, 1000);
+		return () => clearInterval(timer);
+	}, [countdown]);
 
 	const handleUnlock = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -37,8 +51,15 @@ export function UnlockScreen({ onUnlocked, dark, onToggleDark }: UnlockScreenPro
 			} else {
 				await api.encryption.unlock({ password });
 			}
+			failedAttempts.current = 0;
 			onUnlocked();
 		} catch (err) {
+			failedAttempts.current++;
+			const nextDelay =
+				UNLOCK_DELAYS_SEC[Math.min(failedAttempts.current, UNLOCK_DELAYS_SEC.length - 1)];
+			if (nextDelay > 0) {
+				setCountdown(nextDelay);
+			}
 			setError(recoveryMode ? "Invalid recovery phrase or password." : "Incorrect password.");
 		} finally {
 			setLoading(false);
@@ -87,6 +108,15 @@ export function UnlockScreen({ onUnlocked, dark, onToggleDark }: UnlockScreenPro
 					{error && (
 						<div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-md">
 							{error}
+						</div>
+					)}
+
+					{countdown > 0 && (
+						<div
+							className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-md"
+							data-testid="rate-limit-countdown"
+						>
+							Too many attempts. Try again in {countdown}s.
 						</div>
 					)}
 
@@ -152,10 +182,16 @@ export function UnlockScreen({ onUnlocked, dark, onToggleDark }: UnlockScreenPro
 
 					<button
 						type="submit"
-						disabled={loading}
+						disabled={loading || countdown > 0}
 						className="w-full px-5 py-2 bg-stork-600 hover:bg-stork-700 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-colors"
 					>
-						{loading ? "Unlocking…" : recoveryMode ? "Recover & Unlock" : "Unlock"}
+						{loading
+							? "Unlocking…"
+							: countdown > 0
+								? `Wait ${countdown}s…`
+								: recoveryMode
+									? "Recover & Unlock"
+									: "Unlock"}
 					</button>
 
 					<div className="text-center">

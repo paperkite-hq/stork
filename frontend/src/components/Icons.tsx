@@ -444,6 +444,23 @@ export function MailIcon({ className = "w-4 h-4" }: IconProps) {
 	);
 }
 
+export function ShieldIcon({ className = "w-4 h-4" }: IconProps) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		>
+			<title>Security</title>
+			<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+		</svg>
+	);
+}
+
 export function AlertCircleIcon({ className = "w-4 h-4" }: IconProps) {
 	return (
 		<svg
