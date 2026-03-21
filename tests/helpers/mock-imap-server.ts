@@ -98,6 +98,9 @@ export class MockImapServer {
 			this.connections = this.connections.filter((s) => s !== socket);
 		});
 
+		// Suppress ECONNRESET from clients disconnecting abruptly
+		socket.on("error", () => {});
+
 		// Send greeting
 		socket.write("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] Mock IMAP server ready\r\n");
 
