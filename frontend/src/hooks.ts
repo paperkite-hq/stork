@@ -2,6 +2,7 @@ import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 import type { Folder, GlobalSyncStatus, Label, MessageSummary } from "./api";
 import { api } from "./api";
 import { toast } from "./components/Toast";
+import { isFlagged, isUnread } from "./utils";
 
 /** Simple data-fetching hook with loading/error states.
  *  Cancels in-flight requests via AbortController when deps change,
@@ -325,25 +326,18 @@ export function useMessageActions(opts: {
 
 	const focusedMessage = messages[messageListIndex] ?? null;
 
-	// Optimistic flag update — immediately updates local message list state
+	// Optimistic flag update — immediately updates local message list state.
+	// Flags are stored comma-separated by the backend (e.g. "\\Seen,\\Flagged"),
+	// so we split/join on comma to stay consistent.
 	const optimisticFlagUpdate = useCallback(
 		(messageId: number, flagsUpdate: { add?: string[]; remove?: string[] }) => {
 			setAllMessages((prev) =>
 				prev.map((m) => {
 					if (m.id !== messageId) return m;
-					let flags = m.flags ?? "";
-					for (const flag of flagsUpdate.add ?? []) {
-						if (!flags.includes(flag)) {
-							flags = flags ? `${flags} ${flag}` : flag;
-						}
-					}
-					for (const flag of flagsUpdate.remove ?? []) {
-						flags = flags
-							.split(" ")
-							.filter((f) => f !== flag)
-							.join(" ");
-					}
-					return { ...m, flags };
+					const flagSet = new Set((m.flags ?? "").split(",").filter(Boolean));
+					for (const flag of flagsUpdate.add ?? []) flagSet.add(flag);
+					for (const flag of flagsUpdate.remove ?? []) flagSet.delete(flag);
+					return { ...m, flags: [...flagSet].join(",") };
 				}),
 			);
 		},
@@ -353,7 +347,7 @@ export function useMessageActions(opts: {
 	const star = useCallback(async () => {
 		const msg = messages[messageListIndex];
 		if (!msg) return;
-		const flagged = msg.flags?.includes("\\Flagged") ?? false;
+		const flagged = isFlagged(msg.flags);
 		const flagsUpdate = flagged ? { remove: ["\\Flagged"] } : { add: ["\\Flagged"] };
 		optimisticFlagUpdate(msg.id, flagsUpdate);
 		toast(flagged ? "Removed star" : "Starred", "success");
@@ -368,7 +362,7 @@ export function useMessageActions(opts: {
 	const toggleRead = useCallback(async () => {
 		const msg = messages[messageListIndex];
 		if (!msg) return;
-		const unread = !msg.flags?.includes("\\Seen");
+		const unread = isUnread(msg.flags);
 		const flagsUpdate = unread ? { add: ["\\Seen"] } : { remove: ["\\Seen"] };
 		optimisticFlagUpdate(msg.id, flagsUpdate);
 		toast(unread ? "Marked as read" : "Marked as unread", "success");

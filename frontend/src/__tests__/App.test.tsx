@@ -805,7 +805,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 
 	it("s shortcut calls updateFlags with remove Flagged on a starred message", async () => {
 		const messages = [
-			makeMessageSummary({ id: 11, subject: "Unstar me", flags: "\\Flagged \\Seen" }),
+			makeMessageSummary({ id: 11, subject: "Unstar me", flags: "\\Flagged,\\Seen" }),
 		];
 		setupWithAccounts([makeAccount()], [makeLabel()], messages);
 		render(<App />);

@@ -16,14 +16,19 @@ export const WELL_KNOWN_PROVIDERS: Record<string, { imap_host: string; smtp_host
 	"zoho.com": { imap_host: "imap.zoho.com", smtp_host: "smtp.zoho.com" },
 };
 
+/** Parse a comma-separated flags string into a Set for reliable lookup.
+ *  Backend stores flags as comma-separated (e.g. "\\Seen,\\Flagged"). */
+export function parseFlags(flags: string | null): Set<string> {
+	if (!flags) return new Set();
+	return new Set(flags.split(",").filter(Boolean));
+}
+
 export function isUnread(flags: string | null): boolean {
-	if (!flags) return true;
-	return !flags.includes("\\Seen");
+	return !parseFlags(flags).has("\\Seen");
 }
 
 export function isFlagged(flags: string | null): boolean {
-	if (!flags) return false;
-	return flags.includes("\\Flagged");
+	return parseFlags(flags).has("\\Flagged");
 }
 
 /**

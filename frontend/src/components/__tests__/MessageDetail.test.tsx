@@ -236,7 +236,7 @@ describe("MessageDetail", () => {
 	});
 
 	it("shows star button reflecting flagged state", () => {
-		render(<MessageDetail {...defaultProps} message={makeMessage({ flags: '["\\\\Flagged"]' })} />);
+		render(<MessageDetail {...defaultProps} message={makeMessage({ flags: "\\Flagged" })} />);
 		expect(screen.getByTitle("Remove star")).toBeInTheDocument();
 	});
 
@@ -246,7 +246,7 @@ describe("MessageDetail", () => {
 	});
 
 	it("shows mark read/unread button for read message", () => {
-		render(<MessageDetail {...defaultProps} message={makeMessage({ flags: '["\\\\Seen"]' })} />);
+		render(<MessageDetail {...defaultProps} message={makeMessage({ flags: "\\Seen" })} />);
 		expect(screen.getByTitle("Mark as unread")).toBeInTheDocument();
 	});
 
@@ -300,7 +300,7 @@ describe("MessageDetail", () => {
 
 	it("removes star on flagged message", async () => {
 		render(
-			<MessageDetail {...defaultProps} message={makeMessage({ flags: "\\Flagged \\Seen" })} />,
+			<MessageDetail {...defaultProps} message={makeMessage({ flags: "\\Flagged,\\Seen" })} />,
 		);
 		await userEvent.click(screen.getByTitle("Remove star"));
 		const { api } = await import("../../api");
