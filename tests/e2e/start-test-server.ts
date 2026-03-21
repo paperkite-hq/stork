@@ -7,6 +7,7 @@ import { createApp } from "../../src/api/server.js";
 import {
 	addMessageLabel,
 	createTestAccount,
+	createTestContext,
 	createTestDb,
 	createTestFolder,
 	createTestLabel,
@@ -171,10 +172,11 @@ db.prepare("UPDATE folders SET message_count = ?, unread_count = ? WHERE id = ?"
 );
 db.prepare("UPDATE folders SET message_count = 1, unread_count = 0 WHERE id = ?").run(sentId);
 
-const { app, scheduler } = createApp(db);
+const context = createTestContext(db);
+const { app } = createApp(context);
 
 // Don't actually try to sync — we have no real IMAP server
-await scheduler.stop();
+if (context.scheduler) await context.scheduler.stop();
 
 console.log(`E2E test server starting on http://127.0.0.1:${PORT}`);
 

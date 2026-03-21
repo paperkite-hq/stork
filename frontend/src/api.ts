@@ -160,6 +160,16 @@ export const api = {
 				method: "POST",
 				body: JSON.stringify(opts),
 			}),
+		changePassword: (currentPassword: string, newPassword: string) =>
+			fetchJSON<{ ok: boolean }>("/change-password", {
+				method: "POST",
+				body: JSON.stringify({ currentPassword, newPassword }),
+			}),
+		rotateRecoveryKey: (password: string) =>
+			fetchJSON<{ recoveryMnemonic: string }>("/rotate-recovery-key", {
+				method: "POST",
+				body: JSON.stringify({ password }),
+			}),
 	},
 	accounts: {
 		list: () => fetchJSON<Account[]>("/accounts"),
