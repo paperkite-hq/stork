@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,11 +24,33 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
+      - name: Backend tests with coverage
+        run: STORK_FAST_KDF=1 npx vitest run --coverage --coverage.reporter=text --coverage.reporter=json-summary
+
+      - name: Frontend tests with coverage
+        run: cd frontend && npx vitest run --coverage --coverage.reporter=text --coverage.reporter=json-summary
 
       - name: Build
         run: npm run build
+
+      - name: Update coverage badge
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          COVERAGE=$(node -e "const c = require('./coverage/coverage-summary.json'); console.log(Math.round(c.total.lines.pct))")
+          if [ "$COVERAGE" -ge 90 ]; then COLOR="brightgreen";
+          elif [ "$COVERAGE" -ge 80 ]; then COLOR="green";
+          elif [ "$COVERAGE" -ge 70 ]; then COLOR="yellow";
+          else COLOR="red"; fi
+          mkdir -p badge
+          echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${COVERAGE}%\",\"color\":\"${COLOR}\"}" > badge/coverage.json
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan badges-tmp
+          git rm -rf . > /dev/null 2>&1 || true
+          cp badge/coverage.json coverage.json
+          git add coverage.json
+          git commit -m "Update coverage badge"
+          git push origin badges-tmp:badges --force
 
   docker:
     runs-on: ubuntu-latest
