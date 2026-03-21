@@ -4,16 +4,16 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { XIcon } from "./Icons";
 import { toast } from "./Toast";
 
-const PRESET_COLORS = [
-	"#ef4444", // red
-	"#f97316", // orange
-	"#eab308", // yellow
-	"#22c55e", // green
-	"#06b6d4", // cyan
-	"#3b82f6", // blue
-	"#8b5cf6", // violet
-	"#ec4899", // pink
-	"#6b7280", // gray
+const PRESET_COLORS: { hex: string; name: string }[] = [
+	{ hex: "#ef4444", name: "Red" },
+	{ hex: "#f97316", name: "Orange" },
+	{ hex: "#eab308", name: "Yellow" },
+	{ hex: "#22c55e", name: "Green" },
+	{ hex: "#06b6d4", name: "Cyan" },
+	{ hex: "#3b82f6", name: "Blue" },
+	{ hex: "#8b5cf6", name: "Violet" },
+	{ hex: "#ec4899", name: "Pink" },
+	{ hex: "#6b7280", name: "Gray" },
 ];
 
 interface ColorPickerProps {
@@ -23,17 +23,20 @@ interface ColorPickerProps {
 
 function ColorPicker({ value, onChange }: ColorPickerProps) {
 	return (
-		<div className="flex items-center gap-1.5">
-			{PRESET_COLORS.map((c) => (
+		<div className="flex items-center gap-1.5" role="radiogroup" aria-label="Label color">
+			{PRESET_COLORS.map(({ hex, name }) => (
 				<button
-					key={c}
+					key={hex}
 					type="button"
-					onClick={() => onChange(value === c ? null : c)}
+					role="radio"
+					aria-checked={value === hex}
+					aria-label={name}
+					onClick={() => onChange(value === hex ? null : hex)}
 					className={`w-5 h-5 rounded-full border-2 transition-all ${
-						value === c ? "border-gray-800 dark:border-white scale-110" : "border-transparent"
+						value === hex ? "border-gray-800 dark:border-white scale-110" : "border-transparent"
 					}`}
-					style={{ backgroundColor: c }}
-					title={c}
+					style={{ backgroundColor: hex }}
+					title={name}
 				/>
 			))}
 		</div>
@@ -84,6 +87,7 @@ function CreateLabelForm({ accountId, onCreated, onClose }: CreateLabelFormProps
 					value={name}
 					onChange={(e) => setName(e.target.value)}
 					placeholder="Label name"
+					aria-label="Label name"
 					className="flex-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 outline-none focus:border-stork-500"
 				/>
 				<button
@@ -155,6 +159,7 @@ function EditLabelForm({ label, onUpdated, onClose }: EditLabelFormProps) {
 					value={name}
 					onChange={(e) => setName(e.target.value)}
 					placeholder="Label name"
+					aria-label="Label name"
 					className="flex-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 outline-none focus:border-stork-500"
 				/>
 				<button

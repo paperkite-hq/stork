@@ -84,7 +84,7 @@ describe("LabelManager", () => {
 		await user.click(screen.getByText("+ Create label"));
 		await user.type(screen.getByPlaceholderText("Label name"), "Urgent");
 		// Click the red color preset
-		await user.click(screen.getByTitle("#ef4444"));
+		await user.click(screen.getByTitle("Red"));
 		await user.click(screen.getByText("Create label", { selector: "button[type='submit']" }));
 
 		await waitFor(() => {
@@ -285,8 +285,8 @@ describe("LabelManager", () => {
 		await user.click(screen.getByText("+ Create label"));
 		await user.type(screen.getByPlaceholderText("Label name"), "No Color");
 		// Click red to select, then click red again to deselect
-		await user.click(screen.getByTitle("#ef4444"));
-		await user.click(screen.getByTitle("#ef4444"));
+		await user.click(screen.getByTitle("Red"));
+		await user.click(screen.getByTitle("Red"));
 		await user.click(screen.getByText("Create label", { selector: "button[type='submit']" }));
 
 		await waitFor(() => {

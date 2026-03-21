@@ -4,6 +4,7 @@ import { useAsync } from "../hooks";
 import { WELL_KNOWN_PROVIDERS } from "../utils";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MailIcon, SettingsIcon, ShieldIcon, XIcon } from "./Icons";
+import { toast } from "./Toast";
 
 interface SettingsProps {
 	onClose: () => void;
@@ -83,6 +84,7 @@ export function Settings({ onClose }: SettingsProps) {
 					<button
 						type="button"
 						onClick={onClose}
+						aria-label="Close settings"
 						className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-0.5"
 					>
 						<XIcon className="w-5 h-5" />
@@ -241,7 +243,15 @@ function AccountsTab({
 					confirmLabel="Delete Account"
 					variant="danger"
 					onConfirm={() => {
-						api.accounts.delete(deleteTarget.id).then(onRefetch);
+						api.accounts
+							.delete(deleteTarget.id)
+							.then(() => {
+								toast("Account deleted", "success");
+								onRefetch();
+							})
+							.catch(() => {
+								toast("Failed to delete account", "error");
+							});
 						setDeleteTarget(null);
 					}}
 					onCancel={() => setDeleteTarget(null)}
