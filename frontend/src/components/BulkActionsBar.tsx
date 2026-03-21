@@ -79,7 +79,10 @@ export function BulkActionsBar({
 					>
 						<FolderIcon className="w-4 h-4" />
 					</button>
-					<div role="menu" className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px] hidden group-hover:block group-focus-within:block">
+					<div
+						role="menu"
+						className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px] hidden group-hover:block group-focus-within:block"
+					>
 						{folders.map((folder) => (
 							<button
 								key={folder.id}

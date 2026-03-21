@@ -20,7 +20,11 @@ export function _resetToastDedup() {
 export function toast(text: string, type: ToastMessage["type"] = "success") {
 	const now = Date.now();
 	// Prune expired entries
-	while (recentToasts.length > 0 && recentToasts[0] && now - recentToasts[0].time > DEDUP_WINDOW_MS) {
+	while (
+		recentToasts.length > 0 &&
+		recentToasts[0] &&
+		now - recentToasts[0].time > DEDUP_WINDOW_MS
+	) {
 		recentToasts.shift();
 	}
 	// Skip if an identical toast was shown recently
