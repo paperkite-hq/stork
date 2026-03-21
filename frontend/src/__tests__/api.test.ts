@@ -490,7 +490,6 @@ describe("api client", () => {
 		it("respects timeout even when caller provides a signal", async () => {
 			// The internal timeout should still fire when the caller provides their own signal
 			vi.useFakeTimers();
-			const callerController = new AbortController();
 			// Make fetch hang forever
 			mockFetch.mockImplementation(
 				() =>
