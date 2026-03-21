@@ -70,6 +70,7 @@ interface MessageListProps {
 	onBulkMarkRead?: () => void;
 	onBulkMarkUnread?: () => void;
 	onBulkMove?: (folderId: number) => void;
+	onBulkArchive?: () => void;
 	folders?: Folder[];
 }
 
@@ -93,6 +94,7 @@ export function MessageList({
 	onBulkMarkRead,
 	onBulkMarkUnread,
 	onBulkMove,
+	onBulkArchive,
 	folders = [],
 	totalCount,
 }: MessageListProps) {
@@ -193,6 +195,7 @@ export function MessageList({
 						onMarkRead={onBulkMarkRead}
 						onMarkUnread={onBulkMarkUnread}
 						onMove={onBulkMove}
+						onArchive={onBulkArchive}
 						folders={folders}
 					/>
 				)}

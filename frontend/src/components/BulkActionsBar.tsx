@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Folder } from "../api";
 import { ArchiveIcon, FolderIcon, MailIcon, MailOpenIcon, TrashIcon, XIcon } from "./Icons";
-import { toast } from "./Toast";
 
 interface BulkActionsBarProps {
 	count: number;
@@ -13,6 +12,7 @@ interface BulkActionsBarProps {
 	onMarkRead: () => void;
 	onMarkUnread: () => void;
 	onMove: (folderId: number) => void;
+	onArchive?: () => void;
 	folders: Folder[];
 }
 
@@ -26,6 +26,7 @@ export function BulkActionsBar({
 	onMarkRead,
 	onMarkUnread,
 	onMove,
+	onArchive,
 	folders,
 }: BulkActionsBarProps) {
 	const [showMoveMenu, setShowMoveMenu] = useState(false);
@@ -133,27 +134,17 @@ export function BulkActionsBar({
 			</button>
 
 			{/* Archive button */}
-			<button
-				type="button"
-				onClick={() => {
-					const archive = folders.find(
-						(f) =>
-							f.special_use === "\\Archive" ||
-							f.name.toLowerCase() === "archive" ||
-							f.name.toLowerCase() === "all mail",
-					);
-					if (archive) {
-						onMove(archive.id);
-					} else {
-						toast("No archive folder found", "error");
-					}
-				}}
-				title="Archive selected"
-				aria-label="Archive selected"
-				className="p-1.5 rounded text-gray-600 dark:text-gray-300 hover:bg-stork-100 dark:hover:bg-stork-900 transition-colors"
-			>
-				<ArchiveIcon className="w-4 h-4" />
-			</button>
+			{onArchive && (
+				<button
+					type="button"
+					onClick={onArchive}
+					title="Archive selected"
+					aria-label="Archive selected"
+					className="p-1.5 rounded text-gray-600 dark:text-gray-300 hover:bg-stork-100 dark:hover:bg-stork-900 transition-colors"
+				>
+					<ArchiveIcon className="w-4 h-4" />
+				</button>
+			)}
 
 			{/* Clear selection */}
 			<button

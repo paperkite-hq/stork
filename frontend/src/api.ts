@@ -283,8 +283,8 @@ export const api = {
 			}),
 		bulk: (
 			ids: number[],
-			action: "delete" | "flag" | "move",
-			opts?: { add?: string[]; remove?: string[]; folder_id?: number },
+			action: "delete" | "flag" | "move" | "remove_label",
+			opts?: { add?: string[]; remove?: string[]; folder_id?: number; label_id?: number },
 		) =>
 			fetchJSON<{ ok: boolean; count: number }>("/messages/bulk", {
 				method: "POST",

@@ -1,8 +1,7 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Folder } from "../../api";
 import { BulkActionsBar } from "../BulkActionsBar";
-import { ToastContainer, _resetToastDedup } from "../Toast";
 
 const mockFolders: Folder[] = [
 	{
@@ -101,11 +100,16 @@ describe("BulkActionsBar", () => {
 		expect(onMarkUnread).toHaveBeenCalledTimes(1);
 	});
 
-	it("calls onMove with archive folder id when archive button clicked", () => {
-		const onMove = vi.fn();
-		render(<BulkActionsBar {...defaultProps({ onMove })} />);
+	it("calls onArchive when archive button clicked", () => {
+		const onArchive = vi.fn();
+		render(<BulkActionsBar {...defaultProps({ onArchive })} />);
 		fireEvent.click(screen.getByTitle("Archive selected"));
-		expect(onMove).toHaveBeenCalledWith(2); // Archive folder id=2
+		expect(onArchive).toHaveBeenCalledTimes(1);
+	});
+
+	it("hides archive button when onArchive not provided", () => {
+		render(<BulkActionsBar {...defaultProps()} />);
+		expect(screen.queryByTitle("Archive selected")).not.toBeInTheDocument();
 	});
 
 	it("renders the bulk actions bar with testid", () => {
@@ -154,50 +158,5 @@ describe("BulkActionsBar", () => {
 		expect(screen.getByRole("menu")).toBeInTheDocument();
 		fireEvent.click(btn);
 		expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-	});
-
-	it("does not call onMove and shows error toast when archive clicked but no archive folder exists", () => {
-		const onMove = vi.fn();
-		const noArchiveFolders: Folder[] = [
-			{
-				id: 1,
-				path: "INBOX",
-				name: "Inbox",
-				special_use: null,
-				message_count: 5,
-				unread_count: 2,
-				last_synced_at: null,
-			},
-		];
-		_resetToastDedup();
-		render(
-			<>
-				<BulkActionsBar {...defaultProps({ onMove, folders: noArchiveFolders })} />
-				<ToastContainer />
-			</>,
-		);
-		act(() => {
-			fireEvent.click(screen.getByTitle("Archive selected"));
-		});
-		expect(onMove).not.toHaveBeenCalled();
-		expect(screen.getByText("No archive folder found")).toBeInTheDocument();
-	});
-
-	it("finds archive by name when special_use is not set", () => {
-		const onMove = vi.fn();
-		const folders: Folder[] = [
-			{
-				id: 10,
-				path: "All Mail",
-				name: "All Mail",
-				special_use: null,
-				message_count: 100,
-				unread_count: 0,
-				last_synced_at: null,
-			},
-		];
-		render(<BulkActionsBar {...defaultProps({ onMove, folders })} />);
-		fireEvent.click(screen.getByTitle("Archive selected"));
-		expect(onMove).toHaveBeenCalledWith(10);
 	});
 });

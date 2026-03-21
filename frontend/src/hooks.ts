@@ -188,9 +188,20 @@ export function useBulkSelection(opts: {
 	setSelectedMessageId: (id: number | null) => void;
 	refetchMessages: () => void;
 	refetchLabels: () => void;
+	effectiveLabelId?: number | null;
+	isAllMail?: boolean;
+	refetchAllMailCount?: () => void;
 }) {
-	const { messages, selectedMessageId, setSelectedMessageId, refetchMessages, refetchLabels } =
-		opts;
+	const {
+		messages,
+		selectedMessageId,
+		setSelectedMessageId,
+		refetchMessages,
+		refetchLabels,
+		effectiveLabelId,
+		isAllMail,
+		refetchAllMailCount,
+	} = opts;
 	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
 	const toggle = useCallback((id: number) => {
@@ -275,6 +286,39 @@ export function useBulkSelection(opts: {
 		[selectedIds, selectedMessageId, setSelectedMessageId, refetchMessages, refetchLabels],
 	);
 
+	const archive = useCallback(async () => {
+		const ids = [...selectedIds];
+		if (ids.length === 0) return;
+		// Label-based archive: remove the current label from selected messages
+		if (effectiveLabelId && effectiveLabelId > 0 && !isAllMail) {
+			try {
+				await api.messages.bulk(ids, "remove_label", { label_id: effectiveLabelId });
+				setSelectedIds(new Set());
+				if (ids.includes(selectedMessageId ?? -1)) setSelectedMessageId(null);
+				refetchMessages();
+				refetchLabels();
+				refetchAllMailCount?.();
+				toast(`Archived ${ids.length} message${ids.length !== 1 ? "s" : ""}`, "success");
+			} catch (err) {
+				toast(
+					`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`,
+					"error",
+				);
+			}
+			return;
+		}
+		toast("Cannot archive from All Mail view", "error");
+	}, [
+		selectedIds,
+		selectedMessageId,
+		setSelectedMessageId,
+		refetchMessages,
+		refetchLabels,
+		refetchAllMailCount,
+		effectiveLabelId,
+		isAllMail,
+	]);
+
 	return {
 		selectedIds,
 		setSelectedIds,
@@ -285,6 +329,7 @@ export function useBulkSelection(opts: {
 		markRead,
 		markUnread,
 		move,
+		archive,
 	};
 }
 
