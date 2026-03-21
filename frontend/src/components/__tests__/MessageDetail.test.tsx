@@ -679,4 +679,64 @@ describe("MessageDetail", () => {
 		expect(emailContent?.querySelectorAll("script").length).toBe(0);
 		expect(emailContent?.textContent).not.toContain("alert");
 	});
+
+	it("shows reply/forward actions on every message in a thread", async () => {
+		const msg1 = makeMessage({ id: 1, from_name: "Alice", text_body: "First message" });
+		const msg2 = makeMessage({ id: 2, from_name: "Bob", text_body: "Reply message" });
+		const onReply = vi.fn();
+		render(
+			<MessageDetail {...defaultProps} message={msg1} thread={[msg1, msg2]} onReply={onReply} />,
+		);
+
+		// Expand the first message
+		const expandBtn = screen.getByLabelText("Expand message from Alice");
+		await userEvent.click(expandBtn);
+
+		// Both messages should have Reply buttons
+		const replyBtns = screen
+			.getAllByRole("button")
+			.filter(
+				(btn) =>
+					btn.textContent?.includes("Reply") &&
+					!btn.textContent?.includes("All") &&
+					!btn.textContent?.includes("Mark"),
+			);
+		expect(replyBtns.length).toBeGreaterThanOrEqual(2);
+	});
+
+	it("expand all / collapse all toggle works in thread header", async () => {
+		const msg1 = makeMessage({ id: 1, from_name: "Alice", text_body: "First message" });
+		const msg2 = makeMessage({ id: 2, from_name: "Bob", text_body: "Second message" });
+		const msg3 = makeMessage({ id: 3, from_name: "Carol", text_body: "Third message" });
+		render(<MessageDetail {...defaultProps} message={msg1} thread={[msg1, msg2, msg3]} />);
+
+		// Initially only last message (msg3) is expanded
+		expect(screen.queryByText("First message")).not.toBeInTheDocument();
+		expect(screen.queryByText("Second message")).not.toBeInTheDocument();
+		expect(screen.getByText("Third message")).toBeInTheDocument();
+
+		// Click 'Expand all'
+		const expandAllBtn = screen.getByText("Expand all");
+		await userEvent.click(expandAllBtn);
+
+		// All messages should be visible
+		expect(screen.getByText("First message")).toBeInTheDocument();
+		expect(screen.getByText("Second message")).toBeInTheDocument();
+		expect(screen.getByText("Third message")).toBeInTheDocument();
+
+		// Button should now say 'Collapse all'
+		const collapseAllBtn = screen.getByText("Collapse all");
+		await userEvent.click(collapseAllBtn);
+
+		// First two should be collapsed again
+		expect(screen.queryByText("First message")).not.toBeInTheDocument();
+		expect(screen.queryByText("Second message")).not.toBeInTheDocument();
+		expect(screen.getByText("Third message")).toBeInTheDocument();
+	});
+
+	it("does not show expand all button for single message", () => {
+		render(<MessageDetail {...defaultProps} thread={[]} />);
+		expect(screen.queryByText("Expand all")).not.toBeInTheDocument();
+		expect(screen.queryByText("Collapse all")).not.toBeInTheDocument();
+	});
 });

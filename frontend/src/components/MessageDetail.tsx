@@ -246,9 +246,32 @@ export function MessageDetail({
 					{message.subject || "(no subject)"}
 				</h2>
 				{isThread && (
-					<span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
-						{displayThread.length} messages
-					</span>
+					<>
+						<button
+							type="button"
+							onClick={() => {
+								const allExpanded = displayThread.slice(0, -1).every((m) => expandedIds.has(m.id));
+								if (allExpanded) {
+									setExpandedIds(new Set());
+								} else {
+									setExpandedIds(new Set(displayThread.slice(0, -1).map((m) => m.id)));
+								}
+							}}
+							className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+							title={
+								displayThread.slice(0, -1).every((m) => expandedIds.has(m.id))
+									? "Collapse all"
+									: "Expand all"
+							}
+						>
+							{displayThread.slice(0, -1).every((m) => expandedIds.has(m.id))
+								? "Collapse all"
+								: "Expand all"}
+						</button>
+						<span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+							{displayThread.length} messages
+						</span>
+					</>
 				)}
 				{/* Message actions */}
 				<div className="flex items-center gap-1">
@@ -441,32 +464,30 @@ export function MessageDetail({
 									{/* Attachments */}
 									{msg.has_attachments > 0 && <AttachmentList messageId={msg.id} />}
 
-									{/* Actions */}
-									{isLast && (
-										<div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
-											<button
-												type="button"
-												onClick={() => onReply(msg)}
-												className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors flex items-center gap-1.5"
-											>
-												<ReplyIcon className="w-3.5 h-3.5" /> Reply
-											</button>
-											<button
-												type="button"
-												onClick={() => onReplyAll(msg)}
-												className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors flex items-center gap-1.5"
-											>
-												<ReplyAllIcon className="w-3.5 h-3.5" /> Reply All
-											</button>
-											<button
-												type="button"
-												onClick={() => onForward(msg)}
-												className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors flex items-center gap-1.5"
-											>
-												<ForwardIcon className="w-3.5 h-3.5" /> Forward
-											</button>
-										</div>
-									)}
+									{/* Actions — available on every thread message */}
+									<div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+										<button
+											type="button"
+											onClick={() => onReply(msg)}
+											className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors flex items-center gap-1.5"
+										>
+											<ReplyIcon className="w-3.5 h-3.5" /> Reply
+										</button>
+										<button
+											type="button"
+											onClick={() => onReplyAll(msg)}
+											className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors flex items-center gap-1.5"
+										>
+											<ReplyAllIcon className="w-3.5 h-3.5" /> Reply All
+										</button>
+										<button
+											type="button"
+											onClick={() => onForward(msg)}
+											className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors flex items-center gap-1.5"
+										>
+											<ForwardIcon className="w-3.5 h-3.5" /> Forward
+										</button>
+									</div>
 								</div>
 							)}
 						</div>

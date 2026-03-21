@@ -307,7 +307,17 @@ export function MessageList({
 											>
 												{msg.from_name || msg.from_address}
 											</span>
-											<span className="flex-shrink-0 text-xs text-gray-400 ml-auto">
+											<span
+												className="flex-shrink-0 text-xs text-gray-400 ml-auto"
+												title={new Date(msg.date).toLocaleString(undefined, {
+													weekday: "long",
+													year: "numeric",
+													month: "long",
+													day: "numeric",
+													hour: "numeric",
+													minute: "2-digit",
+												})}
+											>
 												{formatDate(msg.date)}
 											</span>
 										</div>
