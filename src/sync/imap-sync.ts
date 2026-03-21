@@ -90,9 +90,16 @@ export class ImapSync {
 	}
 
 	async connect(): Promise<void> {
-		await withRetry(() => {
+		await withRetry(async () => {
 			// ImapFlow instances cannot be reconnected once closed — create a fresh
-			// instance on each retry to avoid "Can not re-use ImapFlow instance"
+			// instance on each retry to avoid "Can not re-use ImapFlow instance".
+			// Close the previous client first to release the underlying TCP socket
+			// before creating a new one.
+			try {
+				this.client.close();
+			} catch {
+				// Ignore — client may not be connected yet on the first attempt
+			}
 			this.client = new ImapFlow({
 				...this.config,
 				logger: false,
