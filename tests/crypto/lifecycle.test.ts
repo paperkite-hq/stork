@@ -107,7 +107,7 @@ describe("shutdown — setup state (no scheduler, no db)", () => {
 	test("calls process.exit(0)", async () => {
 		const exitSpy = vi
 			.spyOn(process, "exit")
-			.mockImplementation((() => {}) as (code?: number) => never);
+			.mockImplementation((() => {}) as unknown as (code?: string | number | null | undefined) => never);
 
 		const { shutdown } = await bootContainer(dataDir, createApp);
 		await shutdown();
@@ -125,7 +125,7 @@ describe("shutdown — after unlock (scheduler and db active)", () => {
 	test("stops the scheduler before calling process.exit(0)", async () => {
 		const exitSpy = vi
 			.spyOn(process, "exit")
-			.mockImplementation((() => {}) as (code?: number) => never);
+			.mockImplementation((() => {}) as unknown as (code?: string | number | null | undefined) => never);
 
 		const shutdown = await bootAndSetup();
 		await shutdown();
@@ -138,7 +138,7 @@ describe("shutdown — after unlock (scheduler and db active)", () => {
 	test("closes the database before calling process.exit(0)", async () => {
 		const exitSpy = vi
 			.spyOn(process, "exit")
-			.mockImplementation((() => {}) as (code?: number) => never);
+			.mockImplementation((() => {}) as unknown as (code?: string | number | null | undefined) => never);
 
 		const shutdown = await bootAndSetup();
 		await shutdown();

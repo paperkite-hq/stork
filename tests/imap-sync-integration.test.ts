@@ -99,7 +99,7 @@ function makeTestMailboxes(): MockMailbox[] {
 describe("ImapSync integration with mock IMAP server", () => {
 	let server: MockImapServer;
 	let port: number;
-	let db: Database;
+	let db: Database.Database;
 	let accountId: number;
 
 	beforeEach(async () => {
@@ -370,7 +370,7 @@ describe("ImapSync integration with mock IMAP server", () => {
 describe("detectServerDeletions", () => {
 	let server: MockImapServer;
 	let port: number;
-	let db: Database;
+	let db: Database.Database;
 	let accountId: number;
 
 	beforeEach(async () => {
@@ -491,7 +491,7 @@ describe("detectServerDeletions", () => {
 describe("deleteFromServer", () => {
 	let server: MockImapServer;
 	let port: number;
-	let db: Database;
+	let db: Database.Database;
 	let accountId: number;
 
 	beforeEach(async () => {
@@ -719,7 +719,7 @@ describe("deleteFromServer", () => {
 describe("SyncScheduler abort integration with mock IMAP server", () => {
 	let server: MockImapServer;
 	let port: number;
-	let db: Database;
+	let db: Database.Database;
 
 	beforeEach(async () => {
 		server = new MockImapServer({

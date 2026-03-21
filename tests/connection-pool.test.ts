@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { MIGRATIONS } from "../src/storage/schema.js";
 import { ConnectionPool } from "../src/sync/connection-pool.js";
 
-function createTestDb(): Database {
+function createTestDb(): Database.Database {
 	const db = new Database(":memory:");
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
@@ -14,7 +14,7 @@ function createTestDb(): Database {
 }
 
 describe("ConnectionPool", () => {
-	let db: Database;
+	let db: Database.Database;
 	let pool: ConnectionPool;
 
 	beforeEach(() => {
