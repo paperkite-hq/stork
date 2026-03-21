@@ -372,4 +372,88 @@ describe("Welcome", () => {
 		await userEvent.click(screen.getByText(/Hide/));
 		expect(screen.queryByText("SMTP Server")).not.toBeInTheDocument();
 	});
+
+	it("SMTP port field is editable", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
+		const smtpPort = screen.getByDisplayValue("587") as HTMLInputElement;
+		expect(smtpPort.type).toBe("number");
+	});
+
+	it("IMAP port field is editable", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		const imapPort = screen.getByDisplayValue("993") as HTMLInputElement;
+		expect(imapPort.type).toBe("number");
+	});
+
+	it("does not overwrite manually edited IMAP username", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+
+		// First type email to auto-fill username
+		const emailInput = screen
+			.getAllByPlaceholderText("you@example.com")
+			.find((el) => (el as HTMLInputElement).type === "email") as HTMLInputElement;
+		await userEvent.type(emailInput, "user@gmail.com");
+
+		// Find the IMAP username field and manually change it
+		const usernameInputs = screen.getAllByPlaceholderText("you@example.com");
+		const imapUser = usernameInputs.find(
+			(el) => (el as HTMLInputElement).type === "text",
+		) as HTMLInputElement;
+		await userEvent.clear(imapUser);
+		await userEvent.type(imapUser, "custom-user");
+
+		// Clear and retype email — should NOT overwrite custom username
+		await userEvent.clear(emailInput);
+		await userEvent.type(emailInput, "other@gmail.com");
+		expect(imapUser.value).toBe("custom-user");
+	});
+
+	it("SMTP password field editable when expanded", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
+		const passwordFields = screen
+			.getAllByDisplayValue("")
+			.filter((el) => (el as HTMLInputElement).type === "password");
+		expect(passwordFields.length).toBeGreaterThanOrEqual(2);
+		const smtpPass = passwordFields[1] as HTMLInputElement;
+		await userEvent.type(smtpPass, "smtp-pass");
+		expect(smtpPass.value).toBe("smtp-pass");
+	});
+
+	it("does not auto-suggest name if name already set", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		const nameField = screen.getByPlaceholderText("Your Name") as HTMLInputElement;
+		await userEvent.type(nameField, "Custom Name");
+
+		const emailInput = screen
+			.getAllByPlaceholderText("you@example.com")
+			.find((el) => (el as HTMLInputElement).type === "email") as HTMLInputElement;
+		await userEvent.type(emailInput, "other.person@example.com");
+		expect(nameField.value).toBe("Custom Name");
+	});
+
+	it("auto-fills ProtonMail Bridge settings for pm.me", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		const emailInput = screen
+			.getAllByPlaceholderText("you@example.com")
+			.find((el) => (el as HTMLInputElement).type === "email") as HTMLInputElement;
+		await userEvent.type(emailInput, "user@pm.me");
+		const serverInput = screen.getByPlaceholderText("imap.example.com") as HTMLInputElement;
+		expect(serverInput.value).toBe("127.0.0.1");
+	});
+
+	it("IMAP server field is manually editable", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		const serverInput = screen.getByPlaceholderText("imap.example.com") as HTMLInputElement;
+		await userEvent.type(serverInput, "my.custom.server.com");
+		expect(serverInput.value).toBe("my.custom.server.com");
+	});
 });

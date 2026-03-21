@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Account, Message } from "../../api";
@@ -263,5 +263,134 @@ describe("ComposeModal", () => {
 
 		await userEvent.click(screen.getByText("Discard"));
 		expect(localStorage.getItem("stork-compose-draft")).toBeNull();
+	});
+
+	it("calls onClose when backdrop is clicked", async () => {
+		const onClose = vi.fn();
+		render(<ComposeModal mode={{ type: "new" }} onClose={onClose} onSend={vi.fn()} />);
+		const backdrop = screen.getByRole("dialog");
+		// Click the backdrop (the outer div), not the inner content
+		fireEvent.click(backdrop);
+		expect(onClose).toHaveBeenCalledOnce();
+	});
+
+	it("calls onClose when Escape key is pressed on backdrop", () => {
+		const onClose = vi.fn();
+		render(<ComposeModal mode={{ type: "new" }} onClose={onClose} onSend={vi.fn()} />);
+		const backdrop = screen.getByRole("dialog");
+		fireEvent.keyDown(backdrop, { key: "Escape" });
+		expect(onClose).toHaveBeenCalledOnce();
+	});
+
+	it("sends via Ctrl+Enter keyboard shortcut", async () => {
+		const onSend = vi.fn();
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={onSend} />);
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "bob@test.com");
+		const textarea = screen.getByPlaceholderText("Write your message…");
+		const container = textarea.closest("div") as HTMLElement;
+		fireEvent.keyDown(container, { key: "Enter", ctrlKey: true });
+
+		expect(onSend).toHaveBeenCalledWith(expect.objectContaining({ to: "bob@test.com" }));
+	});
+
+	it("sends via Meta+Enter keyboard shortcut", async () => {
+		const onSend = vi.fn();
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={onSend} />);
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "bob@test.com");
+		const textarea = screen.getByPlaceholderText("Write your message…");
+		const container = textarea.closest("div") as HTMLElement;
+		fireEvent.keyDown(container, { key: "Enter", metaKey: true });
+
+		expect(onSend).toHaveBeenCalledWith(expect.objectContaining({ to: "bob@test.com" }));
+	});
+
+	it("shows Cc field when Cc button is clicked", async () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		expect(screen.queryByPlaceholderText("cc@example.com")).not.toBeInTheDocument();
+		await userEvent.click(screen.getByText("Cc"));
+		expect(screen.getByPlaceholderText("cc@example.com")).toBeInTheDocument();
+	});
+
+	it("changes from account when selector is used", async () => {
+		const onSend = vi.fn();
+		const accounts = [
+			makeAccount({ id: 1, email: "alice@example.com", name: "Alice" }),
+			makeAccount({ id: 2, email: "bob@example.com", name: "Bob" }),
+		];
+		render(
+			<ComposeModal
+				mode={{ type: "new" }}
+				accounts={accounts}
+				selectedAccountId={1}
+				onClose={vi.fn()}
+				onSend={onSend}
+			/>,
+		);
+
+		await userEvent.selectOptions(screen.getByLabelText("From"), "2");
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "x@test.com");
+		await userEvent.click(screen.getByText("Send"));
+
+		expect(onSend).toHaveBeenCalledWith(expect.objectContaining({ accountId: 2 }));
+	});
+
+	it("builds reply body with quoted text", () => {
+		const msg = makeMessage({ text_body: "Hello\nWorld" });
+		render(
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		const textarea = screen.getByPlaceholderText("Write your message…") as HTMLTextAreaElement;
+		expect(textarea.value).toContain("> Hello");
+		expect(textarea.value).toContain("> World");
+	});
+
+	it("builds forward body with forwarded message header", () => {
+		const msg = makeMessage({
+			from_name: "Alice",
+			from_address: "alice@test.com",
+			subject: "Important",
+		});
+		render(
+			<ComposeModal mode={{ type: "forward", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		const textarea = screen.getByPlaceholderText("Write your message…") as HTMLTextAreaElement;
+		expect(textarea.value).toContain("Forwarded message");
+		expect(textarea.value).toContain("Alice");
+	});
+
+	it("shows Re: for reply with null subject", () => {
+		const msg = makeMessage({ subject: null as unknown as string });
+		render(
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		expect(screen.getByLabelText("Subj")).toHaveValue("Re: ");
+	});
+
+	it("shows Fwd: for forward with null subject", () => {
+		const msg = makeMessage({ subject: null as unknown as string });
+		render(
+			<ComposeModal mode={{ type: "forward", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		expect(screen.getByLabelText("Subj")).toHaveValue("Fwd: ");
+	});
+
+	it("shows Cc field pre-filled for reply-all with CC addresses", () => {
+		const msg = makeMessage({
+			from_address: "alice@test.com",
+			to_addresses: "me@test.com, bob@test.com",
+			cc_addresses: "carol@test.com",
+		});
+		render(
+			<ComposeModal
+				mode={{ type: "reply-all", original: msg }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		const ccInput = screen.getByPlaceholderText("cc@example.com") as HTMLInputElement;
+		expect(ccInput.value).toContain("bob@test.com");
+		expect(ccInput.value).toContain("carol@test.com");
 	});
 });

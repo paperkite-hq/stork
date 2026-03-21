@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -67,5 +67,21 @@ describe("ConfirmDialog", () => {
 	it("auto-focuses the cancel button", () => {
 		render(<ConfirmDialog {...defaultProps} />);
 		expect(screen.getByText("Cancel")).toHaveFocus();
+	});
+
+	it("calls onCancel when Escape key is pressed", () => {
+		const onCancel = vi.fn();
+		render(<ConfirmDialog {...defaultProps} onCancel={onCancel} />);
+		const dialog = screen.getByRole("dialog");
+		fireEvent.keyDown(dialog, { key: "Escape" });
+		expect(onCancel).toHaveBeenCalledOnce();
+	});
+
+	it("does not call onCancel for non-Escape keys", () => {
+		const onCancel = vi.fn();
+		render(<ConfirmDialog {...defaultProps} onCancel={onCancel} />);
+		const dialog = screen.getByRole("dialog");
+		fireEvent.keyDown(dialog, { key: "Enter" });
+		expect(onCancel).not.toHaveBeenCalled();
 	});
 });
