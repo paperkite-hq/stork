@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { type ContainerState, type Message, type MessageSummary, api } from "./api";
+import { type ContainerState, type Message, api } from "./api";
 import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { AlertCircleIcon } from "./components/Icons";
@@ -10,7 +10,7 @@ import { Settings } from "./components/Settings";
 import { SetupScreen } from "./components/SetupScreen";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
 import { ALL_MAIL_LABEL_ID, Sidebar } from "./components/Sidebar";
-import { ToastContainer, toast } from "./components/Toast";
+import { ToastContainer } from "./components/Toast";
 import { UnlockScreen } from "./components/UnlockScreen";
 import { Welcome } from "./components/Welcome";
 import {
@@ -19,9 +19,10 @@ import {
 	useDarkMode,
 	useKeyboardShortcuts,
 	useMessageActions,
+	useMessagePagination,
 	useSyncPoller,
 } from "./hooks";
-import { getPageSize, isFlagged } from "./utils";
+import { isFlagged } from "./utils";
 
 export function App() {
 	const [dark, toggleDark] = useDarkMode();
@@ -48,11 +49,6 @@ export function App() {
 	const [showSettings, setShowSettings] = useState(false);
 	const [messageListIndex, setMessageListIndex] = useState(0);
 	const [sidebarOpen, setSidebarOpen] = useState(false);
-
-	// Pagination state
-	const [allMessages, setAllMessages] = useState<MessageSummary[]>([]);
-	const [hasMore, setHasMore] = useState(false);
-	const [loadingMore, setLoadingMore] = useState(false);
 
 	// Fetch accounts — only when container is unlocked
 	const {
@@ -94,52 +90,17 @@ export function App() {
 		[effectiveAccountId],
 	);
 
-	// Fetch messages for selected label (or all messages for "All Mail" view)
+	// Message list fetching + pagination (extracted to hook)
 	const {
-		loading: messagesLoading,
-		error: messagesError,
-		refetch: refetchMessages,
-	} = useAsync(() => {
-		if (!effectiveLabelId || (isAllMail && !effectiveAccountId)) {
-			setAllMessages([]);
-			setHasMore(false);
-			return Promise.resolve([]);
-		}
-		const fetchFn =
-			isAllMail && effectiveAccountId
-				? api.allMessages.list(effectiveAccountId, { limit: getPageSize() })
-				: api.labels.messages(effectiveLabelId, { limit: getPageSize() });
-		return fetchFn.then((msgs) => {
-			setAllMessages(msgs);
-			setHasMore(msgs.length >= getPageSize());
-			return msgs;
-		});
-	}, [effectiveLabelId, isAllMail, effectiveAccountId]);
-
-	const handleLoadMore = useCallback(() => {
-		if (!effectiveLabelId || loadingMore) return;
-		if (isAllMail && !effectiveAccountId) return;
-		setLoadingMore(true);
-		const fetchFn =
-			isAllMail && effectiveAccountId
-				? api.allMessages.list(effectiveAccountId, {
-						limit: getPageSize(),
-						offset: allMessages.length,
-					})
-				: api.labels.messages(effectiveLabelId, {
-						limit: getPageSize(),
-						offset: allMessages.length,
-					});
-		fetchFn
-			.then((more) => {
-				setAllMessages((prev) => [...prev, ...more]);
-				setHasMore(more.length >= getPageSize());
-			})
-			.catch(() => {
-				toast("Failed to load more messages", "error");
-			})
-			.finally(() => setLoadingMore(false));
-	}, [effectiveLabelId, isAllMail, effectiveAccountId, allMessages.length, loadingMore]);
+		allMessages,
+		setAllMessages,
+		messagesLoading,
+		messagesError,
+		refetchMessages,
+		hasMore,
+		loadingMore,
+		handleLoadMore,
+	} = useMessagePagination({ effectiveLabelId, effectiveAccountId, isAllMail });
 
 	// Fetch selected message detail
 	const {
@@ -251,7 +212,7 @@ export function App() {
 				refetchMessages();
 			}
 		},
-		[allMessages, refetchMessages],
+		[allMessages, setAllMessages, refetchMessages],
 	);
 
 	// Bulk selection (state + action handlers extracted to hook)

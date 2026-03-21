@@ -2,7 +2,7 @@ import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 import type { Folder, GlobalSyncStatus, Label, MessageSummary } from "./api";
 import { api } from "./api";
 import { toast } from "./components/Toast";
-import { isFlagged, isUnread } from "./utils";
+import { getPageSize, isFlagged, isUnread } from "./utils";
 
 /** Simple data-fetching hook with loading/error states.
  *  Cancels in-flight requests via AbortController when deps change,
@@ -473,6 +473,80 @@ export function useMessageActions(opts: {
 		toggleRead,
 		archive,
 		confirmDelete,
+	};
+}
+
+/**
+ * Manages message list fetching and pagination for the active label/account.
+ * Encapsulates all messages state, loading, error, hasMore, and loadMore logic.
+ * Extracted from App.tsx to reduce component complexity.
+ */
+export function useMessagePagination(opts: {
+	effectiveLabelId: number | null;
+	effectiveAccountId: number | null;
+	isAllMail: boolean;
+}) {
+	const { effectiveLabelId, effectiveAccountId, isAllMail } = opts;
+
+	const [allMessages, setAllMessages] = useState<MessageSummary[]>([]);
+	const [hasMore, setHasMore] = useState(false);
+	const [loadingMore, setLoadingMore] = useState(false);
+
+	const {
+		loading: messagesLoading,
+		error: messagesError,
+		refetch: refetchMessages,
+	} = useAsync(() => {
+		if (!effectiveLabelId || (isAllMail && !effectiveAccountId)) {
+			setAllMessages([]);
+			setHasMore(false);
+			return Promise.resolve([]);
+		}
+		const fetchFn =
+			isAllMail && effectiveAccountId
+				? api.allMessages.list(effectiveAccountId, { limit: getPageSize() })
+				: api.labels.messages(effectiveLabelId, { limit: getPageSize() });
+		return fetchFn.then((msgs) => {
+			setAllMessages(msgs);
+			setHasMore(msgs.length >= getPageSize());
+			return msgs;
+		});
+	}, [effectiveLabelId, isAllMail, effectiveAccountId]);
+
+	const handleLoadMore = useCallback(() => {
+		if (!effectiveLabelId || loadingMore) return;
+		if (isAllMail && !effectiveAccountId) return;
+		setLoadingMore(true);
+		const fetchFn =
+			isAllMail && effectiveAccountId
+				? api.allMessages.list(effectiveAccountId, {
+						limit: getPageSize(),
+						offset: allMessages.length,
+					})
+				: api.labels.messages(effectiveLabelId, {
+						limit: getPageSize(),
+						offset: allMessages.length,
+					});
+		fetchFn
+			.then((more) => {
+				setAllMessages((prev) => [...prev, ...more]);
+				setHasMore(more.length >= getPageSize());
+			})
+			.catch(() => {
+				toast("Failed to load more messages", "error");
+			})
+			.finally(() => setLoadingMore(false));
+	}, [effectiveLabelId, isAllMail, effectiveAccountId, allMessages.length, loadingMore]);
+
+	return {
+		allMessages,
+		setAllMessages,
+		messagesLoading,
+		messagesError,
+		refetchMessages,
+		hasMore,
+		loadingMore,
+		handleLoadMore,
 	};
 }
 
