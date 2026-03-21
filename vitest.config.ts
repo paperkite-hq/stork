@@ -7,6 +7,17 @@ export default defineConfig({
 		hookTimeout: 30000,
 		include: ["tests/**/*.test.ts"],
 		exclude: ["tests/e2e/**", "tests/e2e-container.test.ts", "**/node_modules/**"],
+		coverage: {
+			provider: "v8",
+			// Only measure coverage for production source — exclude test helpers
+			include: ["src/**"],
+			thresholds: {
+				lines: 80,
+				functions: 80,
+				branches: 80,
+				statements: 80,
+			},
+		},
 	},
 	resolve: {
 		conditions: ["node", "import", "default"],
