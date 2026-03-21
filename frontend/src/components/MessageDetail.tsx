@@ -9,6 +9,7 @@ import {
 	ChevronRightIcon,
 	FolderIcon,
 	ForwardIcon,
+	ImageIcon,
 	MailOpenIcon,
 	PaperclipIcon,
 	ReplyAllIcon,
@@ -22,8 +23,14 @@ import { toast } from "./Toast";
 /**
  * Sanitize an HTML email body: strip unsafe tags/attributes, block tracking
  * pixels and event handlers, then force all links to open in a new tab.
+ *
+ * When `blockRemoteImages` is true, all `<img>` tags with remote `src`
+ * (http/https) are replaced with placeholders. This prevents senders from
+ * using tracking pixels or fingerprinting via image loads. The caller can
+ * re-render with `blockRemoteImages: false` when the user clicks "Show images".
  */
-function sanitizeEmailHtml(html: string): string {
+function sanitizeEmailHtml(html: string, opts?: { blockRemoteImages?: boolean }): string {
+	const blockImages = opts?.blockRemoteImages ?? true;
 	const clean = DOMPurify.sanitize(html, {
 		USE_PROFILES: { html: true },
 		ADD_ATTR: ["target"],
@@ -53,16 +60,17 @@ function sanitizeEmailHtml(html: string): string {
 		a.setAttribute("rel", "noopener noreferrer");
 	}
 
-	// Block tracking pixels: remove tiny images (1x1 or 0x0) and single-pixel gifs
+	// Handle images: always remove tracking pixels, optionally block all remote images
 	for (const img of div.querySelectorAll("img")) {
 		const w = img.getAttribute("width");
 		const h = img.getAttribute("height");
+		// Always strip tracking pixels (1x1 or 0x0)
 		if ((w === "1" || w === "0") && (h === "1" || h === "0")) {
 			img.remove();
 			continue;
 		}
-		// Also block images with suspicious tracking-style src patterns
 		const src = img.getAttribute("src") ?? "";
+		// Always strip known tracking patterns
 		if (
 			src.includes("/track") ||
 			src.includes("/pixel") ||
@@ -70,10 +78,40 @@ function sanitizeEmailHtml(html: string): string {
 			src.includes("beacon")
 		) {
 			img.remove();
+			continue;
+		}
+		// Block remote images when enabled (http/https URLs)
+		if (blockImages && (src.startsWith("http://") || src.startsWith("https://"))) {
+			img.remove();
 		}
 	}
 
 	return div.innerHTML;
+}
+
+/** Returns true if the HTML contains remote images (http/https src) that would be blocked */
+function hasRemoteImages(html: string): boolean {
+	const div = document.createElement("div");
+	div.innerHTML = DOMPurify.sanitize(html, {
+		USE_PROFILES: { html: true },
+		FORBID_TAGS: ["style", "script", "form"],
+	});
+	for (const img of div.querySelectorAll("img")) {
+		const src = img.getAttribute("src") ?? "";
+		const w = img.getAttribute("width");
+		const h = img.getAttribute("height");
+		// Skip tracking pixels
+		if ((w === "1" || w === "0") && (h === "1" || h === "0")) continue;
+		if (
+			src.includes("/track") ||
+			src.includes("/pixel") ||
+			src.includes("/open") ||
+			src.includes("beacon")
+		)
+			continue;
+		if (src.startsWith("http://") || src.startsWith("https://")) return true;
+	}
+	return false;
 }
 
 function formatFullDate(dateStr: string): string {
@@ -86,9 +124,6 @@ function formatFullDate(dateStr: string): string {
 		minute: "2-digit",
 	});
 }
-
-// Alias the shared utility for backward compat with internal references
-const parseAddresses = formatAddressList;
 
 function formatFileSize(bytes: number | null): string {
 	if (bytes === null || bytes === 0) return "";
@@ -133,6 +168,8 @@ export function MessageDetail({
 	const [confirmDelete, setConfirmDelete] = useState<Message | null>(null);
 	const [showMoveMenu, setShowMoveMenu] = useState(false);
 	const moveMenuRef = useRef<HTMLDivElement>(null);
+	// Per-message remote image allow-list — tracks message IDs where user clicked "Show images"
+	const [imagesAllowed, setImagesAllowed] = useState<Set<number>>(new Set());
 
 	// Close move menu on outside click
 	useEffect(() => {
@@ -446,8 +483,10 @@ export function MessageDetail({
 										</div>
 										{expanded && (
 											<div className="text-xs text-gray-500 mt-0.5">
-												To: {parseAddresses(msg.to_addresses)}
-												{msg.cc_addresses && <span> · CC: {parseAddresses(msg.cc_addresses)}</span>}
+												To: {formatAddressList(msg.to_addresses)}
+												{msg.cc_addresses && (
+													<span> · CC: {formatAddressList(msg.cc_addresses)}</span>
+												)}
 											</div>
 										)}
 									</div>
@@ -473,11 +512,31 @@ export function MessageDetail({
 										</div>
 									)}
 
+									{/* Remote images banner */}
+									{showHtml &&
+										msg.html_body &&
+										!imagesAllowed.has(msg.id) &&
+										hasRemoteImages(msg.html_body) && (
+											<div className="mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md text-sm text-amber-700 dark:text-amber-400">
+												<ImageIcon className="w-4 h-4 flex-shrink-0" />
+												<span>Images are hidden to protect your privacy.</span>
+												<button
+													type="button"
+													onClick={() => setImagesAllowed((prev) => new Set([...prev, msg.id]))}
+													className="ml-auto text-xs font-medium text-amber-600 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 whitespace-nowrap"
+												>
+													Show images
+												</button>
+											</div>
+										)}
+
 									{showHtml && msg.html_body ? (
 										<div
 											className="email-content prose prose-sm dark:prose-invert max-w-none"
 											dangerouslySetInnerHTML={{
-												__html: sanitizeEmailHtml(msg.html_body),
+												__html: sanitizeEmailHtml(msg.html_body, {
+													blockRemoteImages: !imagesAllowed.has(msg.id),
+												}),
 											}}
 										/>
 									) : (

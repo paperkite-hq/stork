@@ -418,6 +418,11 @@ export function App() {
 					handleKeyboardArchive();
 				}
 			},
+			x: () => {
+				if (focusedMessage && !composeMode && !showSearch) {
+					bulk.toggle(focusedMessage.id);
+				}
+			},
 		}),
 		[
 			navigateDown,
@@ -438,6 +443,7 @@ export function App() {
 			handleKeyboardStar,
 			handleKeyboardMarkUnread,
 			handleKeyboardArchive,
+			bulk,
 		],
 	);
 
