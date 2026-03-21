@@ -235,4 +235,35 @@ describe("Accounts API", () => {
 			expect(messages.count).toBe(0);
 		});
 	});
+
+	describe("POST /accounts/test-connection", () => {
+		test("returns 400 when required fields are missing", async () => {
+			const res = await app.request("/api/accounts/test-connection", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ imap_host: "imap.example.com" }),
+			});
+			expect(res.status).toBe(400);
+			const body = (await res.json()) as { error: string };
+			expect(body.error).toContain("Missing required fields");
+		});
+
+		test("returns ok:false with error for unreachable server", async () => {
+			const res = await app.request("/api/accounts/test-connection", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					imap_host: "localhost",
+					imap_port: 19999,
+					imap_tls: 0,
+					imap_user: "test",
+					imap_pass: "test",
+				}),
+			});
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as { ok: boolean; error?: string };
+			expect(body.ok).toBe(false);
+			expect(body.error).toBeTruthy();
+		});
+	});
 });

@@ -1,4 +1,20 @@
-/** Shared utility functions for mail flag checks */
+/** Shared utility functions for mail flag checks and provider config */
+
+/** Well-known IMAP/SMTP server configurations for common email providers. */
+export const WELL_KNOWN_PROVIDERS: Record<string, { imap_host: string; smtp_host: string }> = {
+	"gmail.com": { imap_host: "imap.gmail.com", smtp_host: "smtp.gmail.com" },
+	"googlemail.com": { imap_host: "imap.gmail.com", smtp_host: "smtp.gmail.com" },
+	"outlook.com": { imap_host: "outlook.office365.com", smtp_host: "smtp.office365.com" },
+	"hotmail.com": { imap_host: "outlook.office365.com", smtp_host: "smtp.office365.com" },
+	"live.com": { imap_host: "outlook.office365.com", smtp_host: "smtp.office365.com" },
+	"yahoo.com": { imap_host: "imap.mail.yahoo.com", smtp_host: "smtp.mail.yahoo.com" },
+	"icloud.com": { imap_host: "imap.mail.me.com", smtp_host: "smtp.mail.me.com" },
+	"me.com": { imap_host: "imap.mail.me.com", smtp_host: "smtp.mail.me.com" },
+	"fastmail.com": { imap_host: "imap.fastmail.com", smtp_host: "smtp.fastmail.com" },
+	"pm.me": { imap_host: "127.0.0.1", smtp_host: "127.0.0.1" },
+	"protonmail.com": { imap_host: "127.0.0.1", smtp_host: "127.0.0.1" },
+	"zoho.com": { imap_host: "imap.zoho.com", smtp_host: "smtp.zoho.com" },
+};
 
 export function isUnread(flags: string | null): boolean {
 	if (!flags) return true;

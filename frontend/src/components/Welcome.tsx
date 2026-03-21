@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { WELL_KNOWN_PROVIDERS } from "../utils";
 import { MoonIcon, SunIcon } from "./Icons";
 
 interface WelcomeProps {
@@ -22,21 +23,6 @@ interface AccountFormData {
 	smtp_user: string;
 	smtp_pass: string;
 }
-
-const WELL_KNOWN_PROVIDERS: Record<string, { imap_host: string; smtp_host: string }> = {
-	"gmail.com": { imap_host: "imap.gmail.com", smtp_host: "smtp.gmail.com" },
-	"googlemail.com": { imap_host: "imap.gmail.com", smtp_host: "smtp.gmail.com" },
-	"outlook.com": { imap_host: "outlook.office365.com", smtp_host: "smtp.office365.com" },
-	"hotmail.com": { imap_host: "outlook.office365.com", smtp_host: "smtp.office365.com" },
-	"live.com": { imap_host: "outlook.office365.com", smtp_host: "smtp.office365.com" },
-	"yahoo.com": { imap_host: "imap.mail.yahoo.com", smtp_host: "smtp.mail.yahoo.com" },
-	"icloud.com": { imap_host: "imap.mail.me.com", smtp_host: "smtp.mail.me.com" },
-	"me.com": { imap_host: "imap.mail.me.com", smtp_host: "smtp.mail.me.com" },
-	"fastmail.com": { imap_host: "imap.fastmail.com", smtp_host: "smtp.fastmail.com" },
-	"pm.me": { imap_host: "127.0.0.1", smtp_host: "127.0.0.1" }, // ProtonMail Bridge
-	"protonmail.com": { imap_host: "127.0.0.1", smtp_host: "127.0.0.1" },
-	"zoho.com": { imap_host: "imap.zoho.com", smtp_host: "smtp.zoho.com" },
-};
 
 export function Welcome({ onAccountCreated, dark, onToggleDark }: WelcomeProps) {
 	const [step, setStep] = useState<"intro" | "form">("intro");

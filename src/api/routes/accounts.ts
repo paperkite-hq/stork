@@ -1,5 +1,6 @@
 import type Database from "@signalapp/better-sqlite3";
 import { Hono } from "hono";
+import { ImapFlow } from "imapflow";
 import type { SyncScheduler } from "../../sync/sync-scheduler.js";
 
 export function accountRoutes(
@@ -217,6 +218,36 @@ export function accountRoutes(
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			return c.json({ error: message }, 500);
+		}
+	});
+
+	api.post("/test-connection", async (c) => {
+		const body = await c.req.json();
+		if (!body.imap_host || !body.imap_user || !body.imap_pass) {
+			return c.json({ error: "Missing required fields: imap_host, imap_user, imap_pass" }, 400);
+		}
+
+		const client = new ImapFlow({
+			host: body.imap_host,
+			port: body.imap_port ?? 993,
+			secure: (body.imap_tls ?? 1) === 1,
+			auth: { user: body.imap_user, pass: body.imap_pass },
+			logger: false,
+		});
+
+		try {
+			await client.connect();
+			const list = await client.list();
+			await client.logout();
+			return c.json({ ok: true, mailboxes: list.length });
+		} catch (err) {
+			let message: string;
+			if (err instanceof AggregateError) {
+				message = err.errors.map((e: Error) => e.message).join("; ") || "Connection failed";
+			} else {
+				message = err instanceof Error ? err.message : String(err);
+			}
+			return c.json({ ok: false, error: message || "Connection failed" }, 200);
 		}
 	});
 
