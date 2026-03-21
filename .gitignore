@@ -14,3 +14,4 @@ frontend/tsconfig.tsbuildinfo
 # Local-only hooks
 .githooks/pre-push
 .githooks/commit-msg
+test-results/
