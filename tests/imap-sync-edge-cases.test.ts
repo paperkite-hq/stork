@@ -1,7 +1,12 @@
 import type Database from "@signalapp/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { ImapSync } from "../src/sync/imap-sync.js";
-import { MockImapServer, type MockMailbox, buildRawEmail } from "./helpers/mock-imap-server.js";
+import {
+	MockImapServer,
+	type MockMailbox,
+	buildRawEmail,
+	buildRawEmailWithAttachment,
+} from "./helpers/mock-imap-server.js";
 import { createTestDb } from "./helpers/test-db.js";
 
 describe("IMAP sync edge cases", () => {
@@ -710,5 +715,67 @@ describe("IMAP sync edge cases", () => {
 
 		// No errors from sync
 		expect(result.totalErrors).toBe(0);
+	});
+
+	test("message with attachment is synced and attachment saved to DB", async () => {
+		const attachmentData = Buffer.from("Hello, attachment world!");
+		const mailboxes: MockMailbox[] = [
+			{
+				path: "INBOX",
+				name: "Inbox",
+				delimiter: "/",
+				flags: ["\\HasNoChildren"],
+				specialUse: "\\Inbox",
+				uidValidity: 1,
+				uidNext: 2,
+				messages: [
+					{
+						uid: 1,
+						flags: [],
+						internalDate: "2026-01-20T12:00:00Z",
+						source: buildRawEmailWithAttachment({
+							from: "sender@example.com",
+							to: "test@example.com",
+							subject: "Email with attachment",
+							body: "Please see attached file.",
+							messageId: "<attach1@example.com>",
+							date: "Mon, 20 Jan 2026 12:00:00 +0000",
+							attachment: {
+								filename: "document.txt",
+								contentType: "text/plain",
+								data: attachmentData,
+							},
+						}),
+					},
+				],
+			},
+		];
+
+		await setupServer(mailboxes);
+		const sync = makeSync();
+		await sync.connect();
+		const result = await sync.syncAll();
+		await sync.disconnect();
+
+		// Verify attachment was saved
+		expect(result.folders[0].attachmentsSaved).toBe(1);
+		expect(result.totalErrors).toBe(0);
+
+		const msg = db
+			.prepare("SELECT id, has_attachments FROM messages WHERE account_id = ? AND uid = 1")
+			.get(accountId) as { id: number; has_attachments: number } | undefined;
+		if (!msg) throw new Error("Expected message in DB");
+		expect(msg.has_attachments).toBe(1);
+
+		const att = db
+			.prepare("SELECT filename, content_type, size, data FROM attachments WHERE message_id = ?")
+			.get(msg.id) as
+			| { filename: string; content_type: string; size: number; data: Buffer }
+			| undefined;
+		if (!att) throw new Error("Expected attachment in DB");
+		expect(att.filename).toBe("document.txt");
+		expect(att.content_type).toBe("text/plain");
+		expect(att.size).toBeGreaterThan(0);
+		expect(Buffer.from(att.data).toString()).toBe(attachmentData.toString());
 	});
 });
