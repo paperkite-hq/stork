@@ -480,4 +480,93 @@ describe("Settings", () => {
 			expect(screen.getByText("Never")).toBeInTheDocument();
 		});
 	});
+
+	it("shows minutes-ago format for recent sync times", async () => {
+		const { api } = await import("../../api");
+		const now = new Date();
+		(api.accounts.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+			{
+				id: 1,
+				name: "Inbox",
+				path: "INBOX",
+				message_count: 10,
+				unread_count: 1,
+				last_synced_at: new Date(now.getTime() - 45 * 60000).toISOString(), // 45 minutes ago
+				last_uid: 50,
+			},
+		]);
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("Sync Status")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("Sync Status"));
+		await waitFor(() => {
+			expect(screen.getByText("45m ago")).toBeInTheDocument();
+		});
+	});
+
+	it("shows hours-ago format for sync times within the same day", async () => {
+		const { api } = await import("../../api");
+		const now = new Date();
+		(api.accounts.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+			{
+				id: 1,
+				name: "Inbox",
+				path: "INBOX",
+				message_count: 10,
+				unread_count: 1,
+				last_synced_at: new Date(now.getTime() - 3 * 3600000).toISOString(), // 3 hours ago
+				last_uid: 50,
+			},
+		]);
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("Sync Status")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("Sync Status"));
+		await waitFor(() => {
+			expect(screen.getByText("3h ago")).toBeInTheDocument();
+		});
+	});
+
+	it("shows days-ago format for sync times within the same week", async () => {
+		const { api } = await import("../../api");
+		const now = new Date();
+		(api.accounts.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+			{
+				id: 1,
+				name: "Inbox",
+				path: "INBOX",
+				message_count: 10,
+				unread_count: 1,
+				last_synced_at: new Date(now.getTime() - 5 * 86400000).toISOString(), // 5 days ago
+				last_uid: 50,
+			},
+		]);
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("Sync Status")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("Sync Status"));
+		await waitFor(() => {
+			expect(screen.getByText("5d ago")).toBeInTheDocument();
+		});
+	});
+
+	it("shows locale date string for sync times older than one week", async () => {
+		const { api } = await import("../../api");
+		const twoWeeksAgo = new Date(Date.now() - 14 * 86400000);
+		(api.accounts.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+			{
+				id: 1,
+				name: "Inbox",
+				path: "INBOX",
+				message_count: 10,
+				unread_count: 1,
+				last_synced_at: twoWeeksAgo.toISOString(),
+				last_uid: 50,
+			},
+		]);
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("Sync Status")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("Sync Status"));
+		await waitFor(() => {
+			// Should show locale date string (e.g. "3/7/2026")
+			expect(screen.getByText(twoWeeksAgo.toLocaleDateString())).toBeInTheDocument();
+		});
+	});
 });
