@@ -61,7 +61,10 @@ interface ComposeModalProps {
  *  Accepts "user@domain.tld" or "Name <user@domain.tld>" formats. */
 function validateEmails(raw: string): string | null {
 	if (!raw.trim()) return "At least one recipient is required";
-	const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+	const parts = raw
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
 	for (const part of parts) {
 		// Extract email from "Name <email>" or bare "email"
 		const match = part.match(/<([^>]+)>/) || [null, part];
@@ -312,9 +315,9 @@ export function ComposeModal({
 								type="text"
 								value={cc}
 								onChange={(e) => {
-								setCc(e.target.value);
-								if (validationError) setValidationError(null);
-							}}
+									setCc(e.target.value);
+									if (validationError) setValidationError(null);
+								}}
 								className="flex-1 bg-transparent text-sm outline-none"
 								placeholder="cc@example.com"
 							/>
