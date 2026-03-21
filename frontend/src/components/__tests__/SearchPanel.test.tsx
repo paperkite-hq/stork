@@ -207,6 +207,85 @@ describe("SearchPanel", () => {
 		expect(screen.getByText(/to navigate/)).toBeInTheDocument();
 	});
 
+	it("shows Load more button when results fill a page", async () => {
+		// Return exactly 30 results to trigger hasMore
+		const results = Array.from({ length: 30 }, (_, i) => ({
+			id: i + 1,
+			subject: `Result ${i + 1}`,
+			from_address: `user${i}@test.com`,
+			from_name: `User ${i}`,
+			date: "2026-01-15T10:00:00Z",
+			snippet: "",
+		}));
+		mockSearch.mockResolvedValueOnce(results);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "test");
+		await waitFor(() => {
+			expect(screen.getByText("Result 1")).toBeInTheDocument();
+		});
+		expect(screen.getByText(/Load more results/)).toBeInTheDocument();
+		expect(screen.getByText(/30 shown/)).toBeInTheDocument();
+	});
+
+	it("does not show Load more when results are fewer than page size", async () => {
+		mockSearch.mockResolvedValueOnce([
+			{
+				id: 1,
+				subject: "Only Result",
+				from_address: "a@test.com",
+				from_name: "Alice",
+				date: "2026-01-15T10:00:00Z",
+				snippet: "",
+			},
+		]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "test");
+		await waitFor(() => {
+			expect(screen.getByText("Only Result")).toBeInTheDocument();
+		});
+		expect(screen.queryByText(/Load more/)).not.toBeInTheDocument();
+	});
+
+	it("loads more results when Load more is clicked", async () => {
+		const firstPage = Array.from({ length: 30 }, (_, i) => ({
+			id: i + 1,
+			subject: `Result ${i + 1}`,
+			from_address: `user${i}@test.com`,
+			from_name: `User ${i}`,
+			date: "2026-01-15T10:00:00Z",
+			snippet: "",
+		}));
+		const secondPage = [
+			{
+				id: 31,
+				subject: "Extra Result",
+				from_address: "extra@test.com",
+				from_name: "Extra",
+				date: "2026-01-15T10:00:00Z",
+				snippet: "",
+			},
+		];
+		mockSearch.mockResolvedValueOnce(firstPage);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={3} />);
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "query");
+		await waitFor(() => {
+			expect(screen.getByText("Result 1")).toBeInTheDocument();
+		});
+		// Click Load more
+		mockSearch.mockResolvedValueOnce(secondPage);
+		await userEvent.click(screen.getByText(/Load more results/));
+		await waitFor(() => {
+			expect(screen.getByText("Extra Result")).toBeInTheDocument();
+		});
+		// Should have called search with offset=30
+		expect(mockSearch).toHaveBeenCalledWith("query", { accountId: 3, limit: 30, offset: 30 });
+		// Load more should be gone (secondPage < 30 results)
+		expect(screen.queryByText(/Load more/)).not.toBeInTheDocument();
+	});
+
 	it("shows (no subject) for messages without subject", async () => {
 		mockSearch.mockResolvedValue([
 			{
