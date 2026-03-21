@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Folder } from "../../api";
 import { BulkActionsBar } from "../BulkActionsBar";
+import { ToastContainer, _resetToastDedup } from "../Toast";
 
 const mockFolders: Folder[] = [
 	{
@@ -131,11 +132,31 @@ describe("BulkActionsBar", () => {
 			},
 		];
 		render(<BulkActionsBar {...defaultProps({ onMove, folders: singleFolder })} />);
+		// Open the dropdown first (now click-based, not CSS hover)
+		fireEvent.click(screen.getByTitle("Move to folder"));
 		fireEvent.click(screen.getByText("CustomFolder"));
 		expect(onMove).toHaveBeenCalledWith(5);
 	});
 
-	it("does not call onMove when archive clicked but no archive folder exists", () => {
+	it("closes move dropdown after selecting a folder", () => {
+		const onMove = vi.fn();
+		render(<BulkActionsBar {...defaultProps({ onMove })} />);
+		fireEvent.click(screen.getByTitle("Move to folder"));
+		expect(screen.getByRole("menu")).toBeInTheDocument();
+		fireEvent.click(screen.getByText("Inbox"));
+		expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+	});
+
+	it("toggles move dropdown open and closed on button click", () => {
+		render(<BulkActionsBar {...defaultProps()} />);
+		const btn = screen.getByTitle("Move to folder");
+		fireEvent.click(btn);
+		expect(screen.getByRole("menu")).toBeInTheDocument();
+		fireEvent.click(btn);
+		expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+	});
+
+	it("does not call onMove and shows error toast when archive clicked but no archive folder exists", () => {
 		const onMove = vi.fn();
 		const noArchiveFolders: Folder[] = [
 			{
@@ -148,9 +169,18 @@ describe("BulkActionsBar", () => {
 				last_synced_at: null,
 			},
 		];
-		render(<BulkActionsBar {...defaultProps({ onMove, folders: noArchiveFolders })} />);
-		fireEvent.click(screen.getByTitle("Archive selected"));
+		_resetToastDedup();
+		render(
+			<>
+				<BulkActionsBar {...defaultProps({ onMove, folders: noArchiveFolders })} />
+				<ToastContainer />
+			</>,
+		);
+		act(() => {
+			fireEvent.click(screen.getByTitle("Archive selected"));
+		});
 		expect(onMove).not.toHaveBeenCalled();
+		expect(screen.getByText("No archive folder found")).toBeInTheDocument();
 	});
 
 	it("finds archive by name when special_use is not set", () => {

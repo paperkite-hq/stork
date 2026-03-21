@@ -85,13 +85,15 @@ function sanitizeEmailHtml(html: string, opts?: { blockRemoteImages?: boolean })
 	return div.innerHTML;
 }
 
-/** Returns true if the HTML contains remote images (http/https src) that would be blocked */
+/** Returns true if the HTML contains remote images (http/https src) that would be blocked.
+ *  Uses a lightweight regex pre-check to avoid a redundant DOMPurify pass. */
 function hasRemoteImages(html: string): boolean {
+	// Quick exit: no img tags at all
+	if (!/<img\s/i.test(html)) return false;
+	// Parse just enough to check src attributes — uses already-sanitized output
+	// when called after sanitizeEmailHtml, but also works on raw HTML
 	const div = document.createElement("div");
-	div.innerHTML = DOMPurify.sanitize(html, {
-		USE_PROFILES: { html: true },
-		FORBID_TAGS: ["style", "script", "form"],
-	});
+	div.innerHTML = html;
 	for (const img of div.querySelectorAll("img")) {
 		const src = img.getAttribute("src") ?? "";
 		const w = img.getAttribute("width");

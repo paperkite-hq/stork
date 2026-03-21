@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from "react";
 import type { Folder } from "../api";
 import { ArchiveIcon, FolderIcon, MailIcon, MailOpenIcon, TrashIcon, XIcon } from "./Icons";
+import { toast } from "./Toast";
 
 interface BulkActionsBarProps {
 	count: number;
@@ -26,6 +28,21 @@ export function BulkActionsBar({
 	onMove,
 	folders,
 }: BulkActionsBarProps) {
+	const [showMoveMenu, setShowMoveMenu] = useState(false);
+	const moveMenuRef = useRef<HTMLDivElement>(null);
+
+	// Close move menu on outside click
+	useEffect(() => {
+		if (!showMoveMenu) return;
+		const handler = (e: MouseEvent) => {
+			if (moveMenuRef.current && !moveMenuRef.current.contains(e.target as Node)) {
+				setShowMoveMenu(false);
+			}
+		};
+		document.addEventListener("mousedown", handler);
+		return () => document.removeEventListener("mousedown", handler);
+	}, [showMoveMenu]);
+
 	return (
 		<div
 			className="flex items-center gap-2 px-4 py-2 bg-stork-50 dark:bg-stork-950 border-b border-stork-200 dark:border-stork-800"
@@ -67,34 +84,41 @@ export function BulkActionsBar({
 				<MailIcon className="w-4 h-4" />
 			</button>
 
-			{/* Move dropdown */}
+			{/* Move dropdown — click-based with outside-click dismiss */}
 			{folders.length > 0 && (
-				<div className="relative group">
+				<div className="relative" ref={moveMenuRef}>
 					<button
 						type="button"
+						onClick={() => setShowMoveMenu((v) => !v)}
 						title="Move to folder"
 						aria-label="Move to folder"
 						aria-haspopup="true"
+						aria-expanded={showMoveMenu}
 						className="p-1.5 rounded text-gray-600 dark:text-gray-300 hover:bg-stork-100 dark:hover:bg-stork-900 transition-colors"
 					>
 						<FolderIcon className="w-4 h-4" />
 					</button>
-					<div
-						role="menu"
-						className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px] hidden group-hover:block group-focus-within:block"
-					>
-						{folders.map((folder) => (
-							<button
-								key={folder.id}
-								type="button"
-								role="menuitem"
-								onClick={() => onMove(folder.id)}
-								className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-							>
-								{folder.name}
-							</button>
-						))}
-					</div>
+					{showMoveMenu && (
+						<div
+							role="menu"
+							className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px] max-h-64 overflow-y-auto"
+						>
+							{folders.map((folder) => (
+								<button
+									key={folder.id}
+									type="button"
+									role="menuitem"
+									onClick={() => {
+										onMove(folder.id);
+										setShowMoveMenu(false);
+									}}
+									className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+								>
+									{folder.name}
+								</button>
+							))}
+						</div>
+					)}
 				</div>
 			)}
 
@@ -118,7 +142,11 @@ export function BulkActionsBar({
 							f.name.toLowerCase() === "archive" ||
 							f.name.toLowerCase() === "all mail",
 					);
-					if (archive) onMove(archive.id);
+					if (archive) {
+						onMove(archive.id);
+					} else {
+						toast("No archive folder found", "error");
+					}
 				}}
 				title="Archive selected"
 				aria-label="Archive selected"
