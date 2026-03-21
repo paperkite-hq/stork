@@ -8,8 +8,25 @@ export interface ToastMessage {
 
 let nextId = 0;
 const listeners = new Set<(msg: ToastMessage) => void>();
+// Track recent toasts to deduplicate rapid identical messages
+const recentToasts: { text: string; type: string; time: number }[] = [];
+const DEDUP_WINDOW_MS = 2000;
+
+/** Reset dedup state — exposed for testing only */
+export function _resetToastDedup() {
+	recentToasts.length = 0;
+}
 
 export function toast(text: string, type: ToastMessage["type"] = "success") {
+	const now = Date.now();
+	// Prune expired entries
+	while (recentToasts.length > 0 && recentToasts[0] && now - recentToasts[0].time > DEDUP_WINDOW_MS) {
+		recentToasts.shift();
+	}
+	// Skip if an identical toast was shown recently
+	if (recentToasts.some((t) => t.text === text && t.type === type)) return;
+	recentToasts.push({ text, type, time: now });
+
 	const msg: ToastMessage = { id: nextId++, text, type };
 	for (const fn of listeners) fn(msg);
 }
@@ -32,7 +49,12 @@ export function ToastContainer() {
 	}, []);
 
 	return (
-		<div className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none">
+		<div
+			className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none"
+			role="status"
+			aria-live="polite"
+			aria-atomic="false"
+		>
 			{toasts.map((t) => (
 				<ToastItem key={t.id} toast={t} onDismiss={dismiss} />
 			))}

@@ -52,6 +52,7 @@ export function BulkActionsBar({
 				type="button"
 				onClick={onMarkRead}
 				title="Mark as read"
+				aria-label="Mark as read"
 				className="p-1.5 rounded text-gray-600 dark:text-gray-300 hover:bg-stork-100 dark:hover:bg-stork-900 transition-colors"
 			>
 				<MailOpenIcon className="w-4 h-4" />
@@ -60,6 +61,7 @@ export function BulkActionsBar({
 				type="button"
 				onClick={onMarkUnread}
 				title="Mark as unread"
+				aria-label="Mark as unread"
 				className="p-1.5 rounded text-gray-600 dark:text-gray-300 hover:bg-stork-100 dark:hover:bg-stork-900 transition-colors"
 			>
 				<MailIcon className="w-4 h-4" />
@@ -71,15 +73,18 @@ export function BulkActionsBar({
 					<button
 						type="button"
 						title="Move to folder"
+						aria-label="Move to folder"
+						aria-haspopup="true"
 						className="p-1.5 rounded text-gray-600 dark:text-gray-300 hover:bg-stork-100 dark:hover:bg-stork-900 transition-colors"
 					>
 						<FolderIcon className="w-4 h-4" />
 					</button>
-					<div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px] hidden group-hover:block group-focus-within:block">
+					<div role="menu" className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px] hidden group-hover:block group-focus-within:block">
 						{folders.map((folder) => (
 							<button
 								key={folder.id}
 								type="button"
+								role="menuitem"
 								onClick={() => onMove(folder.id)}
 								className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
 							>
@@ -94,6 +99,7 @@ export function BulkActionsBar({
 				type="button"
 				onClick={onDelete}
 				title="Delete selected"
+				aria-label="Delete selected"
 				className="p-1.5 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
 			>
 				<TrashIcon className="w-4 h-4" />
@@ -112,6 +118,7 @@ export function BulkActionsBar({
 					if (archive) onMove(archive.id);
 				}}
 				title="Archive selected"
+				aria-label="Archive selected"
 				className="p-1.5 rounded text-gray-600 dark:text-gray-300 hover:bg-stork-100 dark:hover:bg-stork-900 transition-colors"
 			>
 				<ArchiveIcon className="w-4 h-4" />
@@ -122,6 +129,7 @@ export function BulkActionsBar({
 				type="button"
 				onClick={onClearSelection}
 				title="Clear selection"
+				aria-label="Clear selection"
 				className="p-1.5 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ml-1"
 			>
 				<XIcon className="w-4 h-4" />

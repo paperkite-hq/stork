@@ -376,6 +376,55 @@ describe("ComposeModal", () => {
 		expect(screen.getByLabelText("Subj")).toHaveValue("Fwd: ");
 	});
 
+	it("shows validation error for invalid email in To field", async () => {
+		const onSend = vi.fn();
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={onSend} />);
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "not-an-email");
+		await userEvent.click(screen.getByText("Send"));
+
+		expect(screen.getByText(/Invalid email address/)).toBeInTheDocument();
+		expect(onSend).not.toHaveBeenCalled();
+	});
+
+	it("shows validation error for invalid email in CC field", async () => {
+		const onSend = vi.fn();
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={onSend} />);
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "valid@test.com");
+		await userEvent.click(screen.getByText("Cc"));
+		await userEvent.type(screen.getByPlaceholderText("cc@example.com"), "bad-cc");
+		await userEvent.click(screen.getByText("Send"));
+
+		expect(screen.getByText(/Invalid email address/)).toBeInTheDocument();
+		expect(onSend).not.toHaveBeenCalled();
+	});
+
+	it("clears validation error when user edits To field", async () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "bad");
+		await userEvent.click(screen.getByText("Send"));
+		expect(screen.getByText(/Invalid email address/)).toBeInTheDocument();
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "@test.com");
+		expect(screen.queryByText(/Invalid email address/)).not.toBeInTheDocument();
+	});
+
+	it("accepts RFC 2822 format emails (Name <email>)", async () => {
+		const onSend = vi.fn();
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={onSend} />);
+
+		await userEvent.type(
+			screen.getByPlaceholderText("recipient@example.com"),
+			"Alice Smith <alice@test.com>",
+		);
+		await userEvent.click(screen.getByText("Send"));
+
+		expect(screen.queryByText(/Invalid email address/)).not.toBeInTheDocument();
+		expect(onSend).toHaveBeenCalled();
+	});
+
 	it("shows Cc field pre-filled for reply-all with CC addresses", () => {
 		const msg = makeMessage({
 			from_address: "alice@test.com",

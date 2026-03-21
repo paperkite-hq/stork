@@ -3,37 +3,44 @@ import type { GlobalSyncStatus, MessageSummary } from "./api";
 import { api } from "./api";
 import { toast } from "./components/Toast";
 
-/** Simple data-fetching hook with loading/error states */
+/** Simple data-fetching hook with loading/error states.
+ *  Cancels in-flight requests via AbortController when deps change,
+ *  preventing stale responses from overwriting fresh ones. */
 export function useAsync<T>(
-	fn: () => Promise<T>,
+	fn: (signal: AbortSignal) => Promise<T>,
 	deps: unknown[] = [],
 ): { data: T | null; loading: boolean; error: string | null; refetch: () => void } {
 	const [data, setData] = useState<T | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	// Generation counter prevents stale responses from overwriting fresh ones
-	// when deps change rapidly (e.g., quickly switching between messages).
-	const genRef = useRef(0);
+	const abortRef = useRef<AbortController | null>(null);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: fn is intentionally controlled by caller-provided deps
 	const refetch = useCallback(() => {
+		// Abort any previous in-flight request
+		abortRef.current?.abort();
+		const controller = new AbortController();
+		abortRef.current = controller;
+
 		setLoading(true);
 		setError(null);
-		const gen = ++genRef.current;
-		fn()
+		fn(controller.signal)
 			.then((result) => {
-				if (genRef.current === gen) setData(result);
+				if (!controller.signal.aborted) setData(result);
 			})
 			.catch((e: Error) => {
-				if (genRef.current === gen) setError(e.message);
+				if (!controller.signal.aborted) setError(e.message);
 			})
 			.finally(() => {
-				if (genRef.current === gen) setLoading(false);
+				if (!controller.signal.aborted) setLoading(false);
 			});
 	}, deps);
 
 	useEffect(() => {
 		refetch();
+		return () => {
+			abortRef.current?.abort();
+		};
 	}, [refetch]);
 
 	return { data, loading, error, refetch };

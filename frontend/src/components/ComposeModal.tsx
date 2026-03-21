@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Account, Message } from "../api";
 import { XIcon } from "./Icons";
 
@@ -55,6 +55,22 @@ interface ComposeModalProps {
 		subject: string;
 		body: string;
 	}) => void;
+}
+
+/** Validate a comma-separated list of email addresses.
+ *  Accepts "user@domain.tld" or "Name <user@domain.tld>" formats. */
+function validateEmails(raw: string): string | null {
+	if (!raw.trim()) return "At least one recipient is required";
+	const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+	for (const part of parts) {
+		// Extract email from "Name <email>" or bare "email"
+		const match = part.match(/<([^>]+)>/) || [null, part];
+		const email = (match[1] ?? "").trim();
+		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+			return `Invalid email address: ${email || part}`;
+		}
+	}
+	return null;
 }
 
 function buildReplySubject(subject: string | null): string {
@@ -150,6 +166,15 @@ export function ComposeModal({
 		return false;
 	});
 	const [sending, setSending] = useState(false);
+	const [validationError, setValidationError] = useState<string | null>(null);
+	const toInputRef = useRef<HTMLInputElement>(null);
+
+	// Auto-focus the To field on mount
+	useEffect(() => {
+		// Timeout allows the modal animation to complete before focusing
+		const timer = setTimeout(() => toInputRef.current?.focus(), 50);
+		return () => clearTimeout(timer);
+	}, []);
 
 	// Auto-save draft (new messages only)
 	useEffect(() => {
@@ -158,7 +183,19 @@ export function ComposeModal({
 	}, [isNew, to, cc, subject, body]);
 
 	const handleSend = useCallback(() => {
-		if (!to.trim()) return;
+		const toErr = validateEmails(to);
+		if (toErr) {
+			setValidationError(toErr);
+			return;
+		}
+		if (cc.trim()) {
+			const ccErr = validateEmails(cc);
+			if (ccErr) {
+				setValidationError(ccErr);
+				return;
+			}
+		}
+		setValidationError(null);
 		setSending(true);
 		clearDraft();
 		onSend({ accountId: fromAccountId, to: to.trim(), cc: cc.trim(), subject, body });
@@ -244,10 +281,14 @@ export function ComposeModal({
 							To
 						</label>
 						<input
+							ref={toInputRef}
 							id="compose-to"
 							type="text"
 							value={to}
-							onChange={(e) => setTo(e.target.value)}
+							onChange={(e) => {
+								setTo(e.target.value);
+								if (validationError) setValidationError(null);
+							}}
 							className="flex-1 bg-transparent text-sm outline-none"
 							placeholder="recipient@example.com"
 						/>
@@ -270,7 +311,10 @@ export function ComposeModal({
 								id="compose-cc"
 								type="text"
 								value={cc}
-								onChange={(e) => setCc(e.target.value)}
+								onChange={(e) => {
+								setCc(e.target.value);
+								if (validationError) setValidationError(null);
+							}}
 								className="flex-1 bg-transparent text-sm outline-none"
 								placeholder="cc@example.com"
 							/>
@@ -297,6 +341,13 @@ export function ComposeModal({
 					className="flex-1 p-4 bg-transparent text-sm resize-none outline-none min-h-[200px]"
 					placeholder="Write your message…"
 				/>
+
+				{/* Validation error */}
+				{validationError && (
+					<div className="px-4 py-1.5 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-t border-red-200 dark:border-red-800">
+						{validationError}
+					</div>
+				)}
 
 				{/* Footer */}
 				<div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-800">
