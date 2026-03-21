@@ -165,6 +165,19 @@ describe("MessageList", () => {
 		expect(bold).toBeInTheDocument();
 	});
 
+	it("shows 'X of Y messages' when totalCount exceeds loaded messages", () => {
+		const messages = [makeMessage({ id: 1 }), makeMessage({ id: 2 }), makeMessage({ id: 3 })];
+		render(<MessageList {...defaultProps} messages={messages} totalCount={150} />);
+		expect(screen.getByText(/3 of 150/)).toBeInTheDocument();
+		expect(screen.getByText(/messages/)).toBeInTheDocument();
+	});
+
+	it("shows plain count when totalCount equals loaded messages", () => {
+		const messages = [makeMessage({ id: 1 }), makeMessage({ id: 2 })];
+		render(<MessageList {...defaultProps} messages={messages} totalCount={2} />);
+		expect(screen.getByText("2 messages")).toBeInTheDocument();
+	});
+
 	it("calls onRefresh when refresh button is clicked", async () => {
 		const onRefresh = vi.fn();
 		const messages = [makeMessage({ id: 1 })];

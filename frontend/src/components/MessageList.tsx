@@ -59,6 +59,7 @@ interface MessageListProps {
 	hasMore?: boolean;
 	onLoadMore?: () => void;
 	loadingMore?: boolean;
+	totalCount?: number;
 	// Bulk selection
 	selectedIds?: Set<number>;
 	onToggleSelect?: (id: number) => void;
@@ -91,6 +92,7 @@ export function MessageList({
 	onBulkMarkUnread,
 	onBulkMove,
 	folders = [],
+	totalCount,
 }: MessageListProps) {
 	const selectedRef = useRef<HTMLButtonElement>(null);
 	const bulkCount = selectedIds?.size ?? 0;
@@ -163,7 +165,10 @@ export function MessageList({
 						</button>
 					)}
 					<span className="text-xs text-gray-400">
-						{messages.length} message{messages.length !== 1 ? "s" : ""}
+						{totalCount != null && totalCount > messages.length
+							? `${messages.length} of ${totalCount}`
+							: `${messages.length}`}{" "}
+						message{(totalCount ?? messages.length) !== 1 ? "s" : ""}
 					</span>
 				</div>
 			</div>
