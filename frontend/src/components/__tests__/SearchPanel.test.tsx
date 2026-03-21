@@ -379,6 +379,16 @@ describe("SearchPanel", () => {
 		expect(screen.getByText("Apply")).toBeInTheDocument();
 	});
 
+	it("shows filter-specific empty state when only filters are active", async () => {
+		mockSearch.mockResolvedValue([]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		// Activate filter without typing any text
+		await userEvent.click(screen.getByText("Unread"));
+		await waitFor(() => {
+			expect(screen.getByText("No messages match the selected filters")).toBeInTheDocument();
+		});
+	});
+
 	it("clears all filters with Clear all button", async () => {
 		mockSearch.mockResolvedValue([]);
 		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);

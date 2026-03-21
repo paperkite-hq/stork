@@ -36,6 +36,12 @@ export function ShortcutsHelp({ onClose }: ShortcutsHelpProps) {
 			role="dialog"
 			aria-modal="true"
 			aria-label="Keyboard shortcuts"
+			onClick={(e) => {
+				if (e.target === e.currentTarget) onClose();
+			}}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onClose();
+			}}
 		>
 			<div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-6 max-w-sm w-full">
 				<div className="flex items-center justify-between mb-4">

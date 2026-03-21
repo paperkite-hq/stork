@@ -1,6 +1,6 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { api } from "../api";
-import { useAsync } from "../hooks";
+import { useAsync, useFocusTrap } from "../hooks";
 import { MailIcon, SettingsIcon, ShieldIcon, XIcon } from "./Icons";
 import { AccountsTab } from "./settings/AccountsTab";
 import { GeneralTab } from "./settings/GeneralTab";
@@ -18,19 +18,12 @@ export function Settings({ onClose }: SettingsProps) {
 
 	const [editingAccountId, setEditingAccountId] = useState<number | "new" | null>(null);
 	const [syncStatusAccountId, setSyncStatusAccountId] = useState<number | null>(null);
-
-	// Close on Escape (fires even when inputs inside the modal are focused,
-	// unlike the app-level useKeyboardShortcuts hook which skips inputs)
-	useEffect(() => {
-		function handler(e: KeyboardEvent) {
-			if (e.key === "Escape") onClose();
-		}
-		window.addEventListener("keydown", handler);
-		return () => window.removeEventListener("keydown", handler);
-	}, [onClose]);
+	const dialogRef = useRef<HTMLDivElement>(null);
+	useFocusTrap(dialogRef);
 
 	return (
 		<div
+			ref={dialogRef}
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
 			role="dialog"
 			aria-modal="true"
@@ -40,8 +33,9 @@ export function Settings({ onClose }: SettingsProps) {
 				if (e.target === e.currentTarget) onClose();
 			}}
 			onKeyDown={(e) => {
-				// Escape is also handled by the useEffect above; this satisfies
-				// the a11y requirement that interactive divs have keyboard handlers.
+				// useFocusTrap keeps focus inside the dialog, so this handler
+				// fires even when inputs are focused (unlike the app-level
+				// useKeyboardShortcuts which skips inputs).
 				if (e.key === "Escape") onClose();
 			}}
 		>
