@@ -559,6 +559,7 @@ export function App() {
 						onMessageChanged={() => {
 							refetchMessage();
 							refetchMessages();
+							refetchLabels();
 						}}
 						onMessageDeleted={() => {
 							setSelectedMessageId(null);

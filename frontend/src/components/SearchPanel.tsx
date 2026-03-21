@@ -368,7 +368,13 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 				{/* Results */}
 				<div className="flex-1 overflow-y-auto">
 					{searched && results.length === 0 && (
-						<div className="p-6 text-center text-gray-400 text-sm">No results for "{query}"</div>
+						<div className="p-6 text-center text-gray-400 text-sm">
+							{query.trim()
+								? `No results for \u201c${query}\u201d`
+								: activeFilters.length > 0
+									? "No messages match the selected filters"
+									: "No results"}
+						</div>
 					)}
 					{results.map((r, idx) => (
 						<button
