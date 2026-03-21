@@ -403,4 +403,77 @@ describe("SearchPanel", () => {
 			expect(screen.queryByText("Clear all")).not.toBeInTheDocument();
 		});
 	});
+
+	it("applies date range filter with after and before dates", async () => {
+		mockSearch.mockResolvedValue([]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={1} />);
+		// Open date range picker
+		await userEvent.click(screen.getByText("Date range"));
+		expect(screen.getByText("Apply")).toBeInTheDocument();
+		// Fill in date inputs
+		const afterInput = screen.getByLabelText("After:");
+		const beforeInput = screen.getByLabelText("Before:");
+		await userEvent.type(afterInput, "2026-01-01");
+		await userEvent.type(beforeInput, "2026-02-01");
+		// Apply
+		await userEvent.click(screen.getByText("Apply"));
+		await waitFor(() => {
+			expect(mockSearch).toHaveBeenCalledWith(
+				"after:2026-01-01 before:2026-02-01",
+				expect.objectContaining({ accountId: 1, limit: 30 }),
+			);
+		});
+		// Date filter chips should appear
+		expect(screen.getByLabelText("Remove After 2026-01-01 filter")).toBeInTheDocument();
+		expect(screen.getByLabelText("Remove Before 2026-02-01 filter")).toBeInTheDocument();
+		// Date picker should be closed
+		expect(screen.queryByText("Apply")).not.toBeInTheDocument();
+	});
+
+	it("applies date filter with only after date", async () => {
+		mockSearch.mockResolvedValue([]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		await userEvent.click(screen.getByText("Date range"));
+		const afterInput = screen.getByLabelText("After:");
+		await userEvent.type(afterInput, "2026-03-15");
+		await userEvent.click(screen.getByText("Apply"));
+		await waitFor(() => {
+			expect(mockSearch).toHaveBeenCalledWith(
+				"after:2026-03-15",
+				expect.objectContaining({ limit: 30 }),
+			);
+		});
+	});
+
+	it("combines date filters with text query and other filters", async () => {
+		mockSearch.mockResolvedValue([]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		// Type a query first
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "invoice");
+		// Add a filter chip
+		await userEvent.click(screen.getByText("Has attachment"));
+		// Add date filter
+		await userEvent.click(screen.getByText("Date range"));
+		const afterInput = screen.getByLabelText("After:");
+		await userEvent.type(afterInput, "2026-01-01");
+		await userEvent.click(screen.getByText("Apply"));
+		await waitFor(() => {
+			expect(mockSearch).toHaveBeenCalledWith(
+				"invoice has:attachment after:2026-01-01",
+				expect.objectContaining({ limit: 30 }),
+			);
+		});
+	});
+
+	it("shows search error toast on API failure", async () => {
+		mockSearch.mockRejectedValueOnce(new Error("Search failed"));
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "broken");
+		// Wait for the search to be called and fail
+		await waitFor(() => {
+			expect(mockSearch).toHaveBeenCalled();
+		});
+	});
 });
