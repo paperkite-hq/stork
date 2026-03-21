@@ -238,5 +238,7 @@ function getPasswordStrength(password: string): {
 		4: { label: "Strong", color: "bg-green-500", textColor: "text-green-500" },
 	};
 
-	return { score, ...levels[score] };
+	// score is always 1–4 (clamped above), so the lookup is safe
+	// biome-ignore lint/style/noNonNullAssertion: score is clamped to valid range
+	return { score, ...levels[score]! };
 }

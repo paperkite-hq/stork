@@ -56,7 +56,7 @@ export function UnlockScreen({ onUnlocked, dark, onToggleDark }: UnlockScreenPro
 		} catch (err) {
 			failedAttempts.current++;
 			const nextDelay =
-				UNLOCK_DELAYS_SEC[Math.min(failedAttempts.current, UNLOCK_DELAYS_SEC.length - 1)];
+				UNLOCK_DELAYS_SEC[Math.min(failedAttempts.current, UNLOCK_DELAYS_SEC.length - 1)] ?? 0;
 			if (nextDelay > 0) {
 				setCountdown(nextDelay);
 			}
