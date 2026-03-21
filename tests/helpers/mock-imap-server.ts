@@ -630,3 +630,44 @@ export function buildRawEmail(opts: {
 
 	return lines.join("\r\n");
 }
+
+/** Helper to create an RFC 5322 email with a file attachment */
+export function buildRawEmailWithAttachment(opts: {
+	from: string;
+	to: string;
+	subject: string;
+	body: string;
+	date?: string;
+	messageId?: string;
+	attachment: {
+		filename: string;
+		contentType: string;
+		data: Buffer;
+		contentId?: string;
+	};
+}): string {
+	const boundary = "=_TestMixed_Boundary";
+	const lines: string[] = [];
+	lines.push(`From: ${opts.from}`);
+	lines.push(`To: ${opts.to}`);
+	lines.push(`Subject: ${opts.subject}`);
+	if (opts.date) lines.push(`Date: ${opts.date}`);
+	if (opts.messageId) lines.push(`Message-ID: ${opts.messageId}`);
+	lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+	lines.push("");
+	lines.push(`--${boundary}`);
+	lines.push("Content-Type: text/plain; charset=utf-8");
+	lines.push("");
+	lines.push(opts.body);
+	lines.push(`--${boundary}`);
+	lines.push(`Content-Type: ${opts.attachment.contentType}; name="${opts.attachment.filename}"`);
+	lines.push(`Content-Disposition: attachment; filename="${opts.attachment.filename}"`);
+	if (opts.attachment.contentId) {
+		lines.push(`Content-ID: <${opts.attachment.contentId}>`);
+	}
+	lines.push("Content-Transfer-Encoding: base64");
+	lines.push("");
+	lines.push(opts.attachment.data.toString("base64"));
+	lines.push(`--${boundary}--`);
+	return lines.join("\r\n");
+}

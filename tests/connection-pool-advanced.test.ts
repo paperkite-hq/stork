@@ -394,3 +394,113 @@ describe("ConnectionPool — real acquire() limit checks", () => {
 		await pool.shutdown();
 	});
 });
+
+// Direct unit tests for evictOldestIdle() — covers the branches in lines 181-206
+describe("ConnectionPool — evictOldestIdle() direct tests", () => {
+	type InternalPool = {
+		connections: Map<number, PooledConnection[]>;
+		evictOldestIdle: () => boolean;
+	};
+
+	let db: Database;
+
+	beforeEach(() => {
+		db = new Database(":memory:");
+		db.exec("PRAGMA journal_mode = WAL");
+		db.exec("PRAGMA foreign_keys = ON");
+		for (const migration of MIGRATIONS) {
+			db.exec(migration);
+		}
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	function makePool(): ConnectionPool & InternalPool {
+		return new ConnectionPool(db, { maxTotal: 10 }) as ConnectionPool & InternalPool;
+	}
+
+	function mockSync(): ImapSync {
+		return { disconnect: vi.fn(() => Promise.resolve()) } as unknown as ImapSync;
+	}
+
+	test("evictOldestIdle evicts idle connection and removes empty account entry", async () => {
+		const pool = makePool();
+		const sync1 = mockSync();
+		pool.connections.set(1, [{ sync: sync1, accountId: 1, lastUsed: 0, busy: false }]);
+
+		const result = pool.evictOldestIdle();
+
+		expect(result).toBe(true);
+		expect(sync1.disconnect).toHaveBeenCalledTimes(1);
+		// Account entry removed when its connection list becomes empty
+		expect(pool.connections.has(1)).toBe(false);
+
+		await pool.shutdown();
+	});
+
+	test("evictOldestIdle picks the oldest idle when multiple accounts have idle connections", async () => {
+		const pool = makePool();
+		const oldSync = mockSync();
+		const newSync = mockSync();
+
+		// Account 1 has older idle connection
+		pool.connections.set(1, [{ sync: oldSync, accountId: 1, lastUsed: 100, busy: false }]);
+		// Account 2 has newer idle connection
+		pool.connections.set(2, [{ sync: newSync, accountId: 2, lastUsed: Date.now(), busy: false }]);
+
+		const result = pool.evictOldestIdle();
+
+		expect(result).toBe(true);
+		expect(oldSync.disconnect).toHaveBeenCalledTimes(1);
+		expect(newSync.disconnect).not.toHaveBeenCalled();
+		expect(pool.connections.has(1)).toBe(false); // account 1 removed
+		expect(pool.connections.has(2)).toBe(true); // account 2 still present
+
+		await pool.shutdown();
+	});
+
+	test("evictOldestIdle keeps account entry when other connections remain for that account", async () => {
+		const pool = makePool();
+		const idleSync = mockSync();
+		const busySync = mockSync();
+
+		// Account 1 has two connections: one old idle, one busy
+		pool.connections.set(1, [
+			{ sync: idleSync, accountId: 1, lastUsed: 0, busy: false },
+			{ sync: busySync, accountId: 1, lastUsed: Date.now(), busy: true },
+		]);
+
+		const result = pool.evictOldestIdle();
+
+		expect(result).toBe(true);
+		expect(idleSync.disconnect).toHaveBeenCalledTimes(1);
+		expect(busySync.disconnect).not.toHaveBeenCalled();
+		// Account entry kept — still has one connection
+		expect(pool.connections.has(1)).toBe(true);
+		expect(pool.connections.get(1)?.length).toBe(1);
+
+		await pool.shutdown();
+	});
+
+	test("evictOldestIdle returns false when all connections are busy", async () => {
+		const pool = makePool();
+		const busy = mockSync();
+		pool.connections.set(1, [{ sync: busy, accountId: 1, lastUsed: 0, busy: true }]);
+
+		const result = pool.evictOldestIdle();
+
+		expect(result).toBe(false);
+		expect(busy.disconnect).not.toHaveBeenCalled();
+
+		await pool.shutdown();
+	});
+
+	test("evictOldestIdle returns false when pool is empty", async () => {
+		const pool = makePool();
+		const result = pool.evictOldestIdle();
+		expect(result).toBe(false);
+		await pool.shutdown();
+	});
+});
