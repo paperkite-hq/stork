@@ -209,8 +209,7 @@ describe("ImapSync integration with mock IMAP server", () => {
 			.get(accountId) as { flags: string } | undefined;
 
 		if (flaggedMsg) {
-			const flags = JSON.parse(flaggedMsg.flags);
-			expect(flags).toContain("\\Flagged");
+			expect(flaggedMsg.flags).toContain("\\Flagged");
 		}
 
 		await sync.disconnect();

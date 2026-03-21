@@ -445,7 +445,7 @@ export class ImapSync {
 						envelope.date?.toISOString() ?? null,
 						parsed.text ?? null,
 						typeof parsed.html === "string" ? parsed.html : null,
-						JSON.stringify(Array.from(message.flags ?? new Set())),
+						Array.from(message.flags ?? new Set()).join(","),
 						message.size ?? null,
 						parsed.attachments.length > 0 ? 1 : 0,
 						formatHeaders(parsed),
@@ -541,7 +541,7 @@ export class ImapSync {
 					uid: true,
 					flags: true,
 				})) {
-					const newFlags = JSON.stringify(Array.from(msg.flags ?? new Set()));
+					const newFlags = Array.from(msg.flags ?? new Set()).join(",");
 					const oldFlags = localFlagMap.get(msg.uid);
 					if (oldFlags !== newFlags) {
 						updateFlags.run(newFlags, folderId, msg.uid);
