@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,11 +24,44 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
+      - name: Backend tests with coverage
+        run: STORK_FAST_KDF=1 npx vitest run --coverage --coverage.reporter=text --coverage.reporter=json-summary
+
+      - name: Frontend tests
+        run: cd frontend && npm test
 
       - name: Build
         run: npm run build
+
+      - name: Generate coverage badge
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          COVERAGE=$(node --input-type=commonjs -e "
+            const fs = require('fs');
+            const summary = JSON.parse(fs.readFileSync('./coverage/coverage-summary.json', 'utf8'));
+            const pct = summary.total.lines.pct;
+            const color = pct >= 90 ? 'brightgreen' : pct >= 80 ? 'green' : pct >= 70 ? 'yellow' : 'red';
+            console.log(JSON.stringify({
+              schemaVersion: 1,
+              label: 'coverage',
+              message: pct.toFixed(1) + '%',
+              color: color
+            }));
+          ")
+          mkdir -p badge
+          echo "$COVERAGE" > badge/coverage.json
+
+      - name: Push coverage badge
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          cd badge
+          git init
+          git checkout -b badges
+          git add coverage.json
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update coverage badge"
+          git push --force https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git badges
 
   docker:
     runs-on: ubuntu-latest
