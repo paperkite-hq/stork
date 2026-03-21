@@ -9,7 +9,7 @@ import { SearchPanel } from "./components/SearchPanel";
 import { Settings } from "./components/Settings";
 import { SetupScreen } from "./components/SetupScreen";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
-import { Sidebar } from "./components/Sidebar";
+import { ALL_MAIL_LABEL_ID, Sidebar } from "./components/Sidebar";
 import { ToastContainer, toast } from "./components/Toast";
 import { UnlockScreen } from "./components/UnlockScreen";
 import { Welcome } from "./components/Welcome";
@@ -86,38 +86,57 @@ export function App() {
 		labels?.[0]?.id ??
 		null;
 
-	// Fetch messages for selected label
+	const isAllMail = effectiveLabelId === ALL_MAIL_LABEL_ID;
+
+	// Fetch "All Mail" count for the sidebar badge
+	const { data: allMailCount, refetch: refetchAllMailCount } = useAsync(
+		() => (effectiveAccountId ? api.allMessages.count(effectiveAccountId) : Promise.resolve(null)),
+		[effectiveAccountId],
+	);
+
+	// Fetch messages for selected label (or all messages for "All Mail" view)
 	const {
 		loading: messagesLoading,
 		error: messagesError,
 		refetch: refetchMessages,
 	} = useAsync(() => {
-		if (!effectiveLabelId) {
+		if (!effectiveLabelId || (isAllMail && !effectiveAccountId)) {
 			setAllMessages([]);
 			setHasMore(false);
 			return Promise.resolve([]);
 		}
-		return api.labels.messages(effectiveLabelId, { limit: getPageSize() }).then((msgs) => {
+		const fetchFn =
+			isAllMail && effectiveAccountId
+				? api.allMessages.list(effectiveAccountId, { limit: getPageSize() })
+				: api.labels.messages(effectiveLabelId, { limit: getPageSize() });
+		return fetchFn.then((msgs) => {
 			setAllMessages(msgs);
 			setHasMore(msgs.length >= getPageSize());
 			return msgs;
 		});
-	}, [effectiveLabelId]);
+	}, [effectiveLabelId, isAllMail, effectiveAccountId]);
 
 	const handleLoadMore = useCallback(() => {
 		if (!effectiveLabelId || loadingMore) return;
+		if (isAllMail && !effectiveAccountId) return;
 		setLoadingMore(true);
-		api.labels
-			.messages(effectiveLabelId, {
-				limit: getPageSize(),
-				offset: allMessages.length,
-			})
+		const fetchFn =
+			isAllMail && effectiveAccountId
+				? api.allMessages.list(effectiveAccountId, {
+						limit: getPageSize(),
+						offset: allMessages.length,
+					})
+				: api.labels.messages(effectiveLabelId, {
+						limit: getPageSize(),
+						offset: allMessages.length,
+					});
+		fetchFn
 			.then((more) => {
 				setAllMessages((prev) => [...prev, ...more]);
 				setHasMore(more.length >= getPageSize());
 			})
 			.finally(() => setLoadingMore(false));
-	}, [effectiveLabelId, allMessages.length, loadingMore]);
+	}, [effectiveLabelId, isAllMail, effectiveAccountId, allMessages.length, loadingMore]);
 
 	// Fetch selected message detail
 	const {
@@ -144,10 +163,13 @@ export function App() {
 		useCallback(() => {
 			refetchLabels();
 			refetchMessages();
-		}, [refetchLabels, refetchMessages]),
+			refetchAllMailCount();
+		}, [refetchLabels, refetchMessages, refetchAllMailCount]),
 	);
 
-	const currentLabelName = labels?.find((l) => l.id === effectiveLabelId)?.name ?? "Inbox";
+	const currentLabelName = isAllMail
+		? "All Mail"
+		: (labels?.find((l) => l.id === effectiveLabelId)?.name ?? "Inbox");
 
 	// Update document title with total unread count
 	const totalUnread = labels?.reduce((sum, l) => sum + (l.unread_count || 0), 0) ?? 0;
@@ -160,10 +182,11 @@ export function App() {
 		const handler = () => {
 			refetchMessages();
 			refetchLabels();
+			refetchAllMailCount();
 		};
 		window.addEventListener("focus", handler);
 		return () => window.removeEventListener("focus", handler);
-	}, [refetchMessages, refetchLabels]);
+	}, [refetchMessages, refetchLabels, refetchAllMailCount]);
 
 	// Message selection
 	const handleSelectMessage = useCallback(
@@ -297,6 +320,30 @@ export function App() {
 	const handleKeyboardArchive = useCallback(async () => {
 		const msg = allMessages[messageListIndex];
 		if (!msg) return;
+
+		// Label-based archive: if viewing a specific label, remove that label from the message.
+		// The message remains accessible in "All Mail". This mirrors the Gmail archive workflow.
+		const currentLabel = labels?.find((l) => l.id === effectiveLabelId);
+		if (currentLabel && !isAllMail) {
+			// Optimistic: remove from list
+			setAllMessages((prev) => prev.filter((m) => m.id !== msg.id));
+			if (selectedMessageId === msg.id) setSelectedMessageId(null);
+			toast("Archived");
+			try {
+				await api.messages.removeLabel(msg.id, currentLabel.id);
+				refetchLabels();
+				refetchAllMailCount();
+			} catch (err) {
+				refetchMessages(); // Revert on failure
+				toast(
+					`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`,
+					"error",
+				);
+			}
+			return;
+		}
+
+		// Fallback: folder-based archive (for "All Mail" view or when no label context)
 		const archiveFolder = folders?.find((f) => {
 			const name = f.name.toLowerCase();
 			const special = f.special_use?.toLowerCase() ?? "";
@@ -319,7 +366,18 @@ export function App() {
 			refetchMessages(); // Revert on failure
 			toast(`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
 		}
-	}, [allMessages, messageListIndex, folders, selectedMessageId, refetchMessages, refetchLabels]);
+	}, [
+		allMessages,
+		messageListIndex,
+		folders,
+		labels,
+		effectiveLabelId,
+		isAllMail,
+		selectedMessageId,
+		refetchMessages,
+		refetchLabels,
+		refetchAllMailCount,
+	]);
 
 	const handleKeyboardDeleteConfirmed = useCallback(async () => {
 		if (pendingKeyboardDelete === null) return;
@@ -537,6 +595,7 @@ export function App() {
 					syncing={syncing}
 					syncStatus={syncStatus}
 					onLabelsChanged={refetchLabels}
+					allMailCount={allMailCount}
 				/>
 			</div>
 
@@ -586,7 +645,11 @@ export function App() {
 						hasMore={hasMore}
 						onLoadMore={handleLoadMore}
 						loadingMore={loadingMore}
-						totalCount={labels?.find((l) => l.id === effectiveLabelId)?.message_count}
+						totalCount={
+							isAllMail
+								? allMailCount?.total
+								: labels?.find((l) => l.id === effectiveLabelId)?.message_count
+						}
 						selectedIds={bulk.selectedIds}
 						onToggleSelect={bulk.toggle}
 						onSelectAll={bulk.selectAll}
