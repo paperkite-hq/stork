@@ -20,6 +20,7 @@ function createMockSync(): ImapSync {
 	return {
 		connect: vi.fn(() => Promise.resolve()),
 		disconnect: vi.fn(() => Promise.resolve()),
+		forceClose: vi.fn(),
 		syncFolders: vi.fn(() => Promise.resolve()),
 		syncMessages: vi.fn(() => Promise.resolve()),
 	} as unknown as ImapSync;
@@ -351,6 +352,7 @@ describe("ConnectionPool — real acquire() limit checks", () => {
 		const mockSync = {
 			connect: vi.fn(() => Promise.resolve()),
 			disconnect: vi.fn(() => Promise.resolve()),
+			forceClose: vi.fn(),
 		} as unknown as ImapSync;
 		internal.connections.set(1, [
 			{ sync: mockSync, accountId: 1, lastUsed: Date.now(), busy: true },
@@ -373,10 +375,12 @@ describe("ConnectionPool — real acquire() limit checks", () => {
 		const mockSync1 = {
 			connect: vi.fn(() => Promise.resolve()),
 			disconnect: vi.fn(() => Promise.resolve()),
+			forceClose: vi.fn(),
 		} as unknown as ImapSync;
 		const mockSync2 = {
 			connect: vi.fn(() => Promise.resolve()),
 			disconnect: vi.fn(() => Promise.resolve()),
+			forceClose: vi.fn(),
 		} as unknown as ImapSync;
 		internal.connections.set(1, [
 			{ sync: mockSync1, accountId: 1, lastUsed: Date.now(), busy: true },
@@ -423,7 +427,10 @@ describe("ConnectionPool — evictOldestIdle() direct tests", () => {
 	}
 
 	function mockSync(): ImapSync {
-		return { disconnect: vi.fn(() => Promise.resolve()) } as unknown as ImapSync;
+		return {
+			disconnect: vi.fn(() => Promise.resolve()),
+			forceClose: vi.fn(),
+		} as unknown as ImapSync;
 	}
 
 	test("evictOldestIdle evicts idle connection and removes empty account entry", async () => {

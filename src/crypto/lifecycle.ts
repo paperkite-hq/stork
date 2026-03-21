@@ -55,7 +55,7 @@ export async function bootContainer(
 		const forceTimer = setTimeout(() => {
 			console.error("Graceful shutdown timed out, forcing exit");
 			process.exit(1);
-		}, 10_000);
+		}, 3_000);
 		forceTimer.unref();
 
 		if (context.scheduler) {

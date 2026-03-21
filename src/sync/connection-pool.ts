@@ -116,6 +116,8 @@ export class ConnectionPool {
 
 	/**
 	 * Closes all connections and stops the cleanup timer.
+	 * Uses force-close to avoid hanging on LOGOUT when connections are
+	 * mid-FETCH (e.g., during process shutdown).
 	 */
 	async shutdown(): Promise<void> {
 		if (this.cleanupTimer) {
@@ -123,14 +125,12 @@ export class ConnectionPool {
 			this.cleanupTimer = null;
 		}
 
-		const disconnectPromises: Promise<void>[] = [];
 		for (const [, conns] of this.connections) {
 			for (const conn of conns) {
-				disconnectPromises.push(conn.sync.disconnect());
+				conn.sync.forceClose();
 			}
 		}
 
-		await Promise.allSettled(disconnectPromises);
 		this.connections.clear();
 	}
 

@@ -110,6 +110,20 @@ export class ImapSync {
 	}
 
 	/**
+	 * Forcefully closes the IMAP connection by destroying the underlying socket.
+	 * Unlike disconnect(), this does not send a LOGOUT command and returns
+	 * immediately. Any pending FETCH operations will throw, unblocking
+	 * async iterators that are waiting for server data.
+	 */
+	forceClose(): void {
+		try {
+			this.client.close();
+		} catch {
+			// Ignore errors — connection may already be closed
+		}
+	}
+
+	/**
 	 * Full sync: sync folders, then sync each folder's messages.
 	 * Also creates labels from IMAP folder names and applies them to messages.
 	 *
@@ -127,64 +141,75 @@ export class ImapSync {
 
 		if (signal?.aborted) return result;
 
-		onProgress?.({
-			phase: "listing-folders",
-			foldersCompleted: 0,
-			totalFolders: 0,
-			messagesNew: 0,
-		});
+		// When the abort signal fires, force-close the IMAP connection to
+		// immediately unblock any `for await` loops waiting on server data.
+		// Without this, the loop only checks `signal.aborted` between messages,
+		// so a slow FETCH (large mailbox) would hang until the next message arrives.
+		const onAbort = () => this.forceClose();
+		signal?.addEventListener("abort", onAbort, { once: true });
 
-		const folders = await this.syncFolders();
-
-		// Ensure labels exist for all synced folders
-		this.ensureLabelsForFolders();
-
-		const totalFolders = folders.length;
-		let foldersCompleted = 0;
-
-		for (const folderPath of folders) {
-			if (signal?.aborted) break;
-
+		try {
 			onProgress?.({
-				phase: "syncing-folder",
-				currentFolder: folderPath,
-				foldersCompleted,
-				totalFolders,
-				messagesNew: result.totalNew,
+				phase: "listing-folders",
+				foldersCompleted: 0,
+				totalFolders: 0,
+				messagesNew: 0,
 			});
 
-			const folderResult = await this.syncFolder(folderPath, signal);
-			result.folders.push(folderResult);
-			result.totalNew += folderResult.newMessages;
-			result.totalErrors += folderResult.errors.length;
-			foldersCompleted++;
+			const folders = await this.syncFolders();
 
-			// Apply labels immediately after each folder so messages are
-			// visible in the UI during sync, not only after all folders finish
-			if (folderResult.newMessages > 0) {
-				this.applyFolderLabelsToMessages();
+			// Ensure labels exist for all synced folders
+			this.ensureLabelsForFolders();
+
+			const totalFolders = folders.length;
+			let foldersCompleted = 0;
+
+			for (const folderPath of folders) {
+				if (signal?.aborted) break;
+
+				onProgress?.({
+					phase: "syncing-folder",
+					currentFolder: folderPath,
+					foldersCompleted,
+					totalFolders,
+					messagesNew: result.totalNew,
+				});
+
+				const folderResult = await this.syncFolder(folderPath, signal);
+				result.folders.push(folderResult);
+				result.totalNew += folderResult.newMessages;
+				result.totalErrors += folderResult.errors.length;
+				foldersCompleted++;
+
+				// Apply labels immediately after each folder so messages are
+				// visible in the UI during sync, not only after all folders finish
+				if (folderResult.newMessages > 0) {
+					this.applyFolderLabelsToMessages();
+				}
+
+				onProgress?.({
+					phase: "syncing-folder",
+					currentFolder: folderPath,
+					foldersCompleted,
+					totalFolders,
+					messagesNew: result.totalNew,
+				});
 			}
 
 			onProgress?.({
-				phase: "syncing-folder",
-				currentFolder: folderPath,
+				phase: "applying-labels",
 				foldersCompleted,
 				totalFolders,
 				messagesNew: result.totalNew,
 			});
+
+			// Final pass: catch any messages that may have been missed
+			this.applyFolderLabelsToMessages();
+
+			return result;
+		} finally {
+			signal?.removeEventListener("abort", onAbort);
 		}
-
-		onProgress?.({
-			phase: "applying-labels",
-			foldersCompleted,
-			totalFolders,
-			messagesNew: result.totalNew,
-		});
-
-		// Final pass: catch any messages that may have been missed
-		this.applyFolderLabelsToMessages();
-
-		return result;
 	}
 
 	/**
@@ -325,7 +350,11 @@ export class ImapSync {
 				result.updatedFlags = flagCount;
 			}
 		} finally {
-			lock?.release();
+			try {
+				lock?.release();
+			} catch {
+				// Lock release may fail if connection was force-closed during shutdown
+			}
 		}
 
 		return result;
@@ -363,90 +392,98 @@ export class ImapSync {
 		let maxUid = lastUid;
 		let count = 0;
 
-		for await (const message of this.client.fetch(range, {
-			uid: true,
-			envelope: true,
-			bodyStructure: true,
-			flags: true,
-			size: true,
-			source: true,
-		})) {
-			// Check abort signal between messages for graceful cancellation
-			if (signal?.aborted) break;
+		try {
+			for await (const message of this.client.fetch(range, {
+				uid: true,
+				envelope: true,
+				bodyStructure: true,
+				flags: true,
+				size: true,
+				source: true,
+			})) {
+				// Check abort signal between messages for graceful cancellation
+				if (signal?.aborted) break;
 
-			try {
-				const source = message.source;
-				if (!source) {
-					result.errors.push(`UID ${message.uid}: no source available`);
-					continue;
-				}
-
-				// Parse MIME with mailparser
-				const parsed = await simpleParser(source);
-
-				const envelope = message.envelope;
-				if (!envelope) {
-					result.errors.push(`UID ${message.uid}: no envelope available`);
-					continue;
-				}
-				const fromAddr = envelope.from?.[0];
-				const toAddrs = envelope.to?.map((a) => a.address).filter(Boolean);
-				const ccAddrs = envelope.cc?.map((a) => a.address).filter(Boolean);
-				const bccAddrs = envelope.bcc?.map((a) => a.address).filter(Boolean);
-				const refs = parsed.references
-					? Array.isArray(parsed.references)
-						? parsed.references
-						: [parsed.references]
-					: null;
-
-				const dbResult = insertMessage.run(
-					this.accountId,
-					folderId,
-					message.uid,
-					envelope.messageId ?? null,
-					envelope.inReplyTo ?? null,
-					refs ? JSON.stringify(refs) : null,
-					envelope.subject ?? null,
-					fromAddr?.address ?? null,
-					fromAddr?.name ?? null,
-					toAddrs ? JSON.stringify(toAddrs) : null,
-					ccAddrs ? JSON.stringify(ccAddrs) : null,
-					bccAddrs ? JSON.stringify(bccAddrs) : null,
-					envelope.date?.toISOString() ?? null,
-					parsed.text ?? null,
-					typeof parsed.html === "string" ? parsed.html : null,
-					JSON.stringify(Array.from(message.flags ?? new Set())),
-					message.size ?? null,
-					parsed.attachments.length > 0 ? 1 : 0,
-					formatHeaders(parsed),
-				);
-
-				// Extract and store attachments
-				if (dbResult.changes > 0 && parsed.attachments.length > 0) {
-					const messageId = dbResult.lastInsertRowid;
-					for (const att of parsed.attachments) {
-						insertAttachment.run(
-							messageId,
-							att.filename ?? null,
-							att.contentType,
-							att.size,
-							att.contentId ?? null,
-							att.content,
-						);
-						result.attachmentsSaved++;
+				try {
+					const source = message.source;
+					if (!source) {
+						result.errors.push(`UID ${message.uid}: no source available`);
+						continue;
 					}
-				}
 
-				if (message.uid > maxUid) maxUid = message.uid;
-				count++;
+					// Parse MIME with mailparser
+					const parsed = await simpleParser(source);
 
-				// Apply labels periodically within large folders so messages become
-				// queryable by label before the entire folder finishes syncing
-				if (count % this.subBatchLabelSize === 0) {
-					this.applyFolderLabelsToMessages();
+					const envelope = message.envelope;
+					if (!envelope) {
+						result.errors.push(`UID ${message.uid}: no envelope available`);
+						continue;
+					}
+					const fromAddr = envelope.from?.[0];
+					const toAddrs = envelope.to?.map((a) => a.address).filter(Boolean);
+					const ccAddrs = envelope.cc?.map((a) => a.address).filter(Boolean);
+					const bccAddrs = envelope.bcc?.map((a) => a.address).filter(Boolean);
+					const refs = parsed.references
+						? Array.isArray(parsed.references)
+							? parsed.references
+							: [parsed.references]
+						: null;
+
+					const dbResult = insertMessage.run(
+						this.accountId,
+						folderId,
+						message.uid,
+						envelope.messageId ?? null,
+						envelope.inReplyTo ?? null,
+						refs ? JSON.stringify(refs) : null,
+						envelope.subject ?? null,
+						fromAddr?.address ?? null,
+						fromAddr?.name ?? null,
+						toAddrs ? JSON.stringify(toAddrs) : null,
+						ccAddrs ? JSON.stringify(ccAddrs) : null,
+						bccAddrs ? JSON.stringify(bccAddrs) : null,
+						envelope.date?.toISOString() ?? null,
+						parsed.text ?? null,
+						typeof parsed.html === "string" ? parsed.html : null,
+						JSON.stringify(Array.from(message.flags ?? new Set())),
+						message.size ?? null,
+						parsed.attachments.length > 0 ? 1 : 0,
+						formatHeaders(parsed),
+					);
+
+					// Extract and store attachments
+					if (dbResult.changes > 0 && parsed.attachments.length > 0) {
+						const messageId = dbResult.lastInsertRowid;
+						for (const att of parsed.attachments) {
+							insertAttachment.run(
+								messageId,
+								att.filename ?? null,
+								att.contentType,
+								att.size,
+								att.contentId ?? null,
+								att.content,
+							);
+							result.attachmentsSaved++;
+						}
+					}
+
+					if (message.uid > maxUid) maxUid = message.uid;
+					count++;
+
+					// Apply labels periodically within large folders so messages become
+					// queryable by label before the entire folder finishes syncing
+					if (count % this.subBatchLabelSize === 0) {
+						this.applyFolderLabelsToMessages();
+					}
+				} catch (err) {
+					result.errors.push(`Failed to process UID ${message.uid}: ${err}`);
 				}
-			} catch (err) {
-				result.errors.push(`Failed to process UID ${message.uid}: ${err}`);
+			}
+		} catch (err) {
+			// When the connection is force-closed during shutdown, the async
+			// iterator throws a connection error. Treat this as a normal abort.
+			if (!signal?.aborted) {
+				throw err;
 			}
 		}
 
@@ -512,6 +549,8 @@ export class ImapSync {
 					}
 				}
 			} catch (err) {
+				// Connection force-closed during shutdown — treat as normal abort
+				if (signal?.aborted) break;
 				result.errors.push(`Flag sync batch error: ${err}`);
 			}
 		}
