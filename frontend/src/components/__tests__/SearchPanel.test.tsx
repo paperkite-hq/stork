@@ -42,9 +42,9 @@ describe("SearchPanel", () => {
 		expect(onClose).toHaveBeenCalledOnce();
 	});
 
-	it("shows search tip", () => {
+	it("shows search tip with operator hints", () => {
 		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
-		expect(screen.getByText(/AND, OR, NOT/)).toBeInTheDocument();
+		expect(screen.getByText(/to navigate/)).toBeInTheDocument();
 	});
 
 	it("shows no results message after search", async () => {
@@ -319,6 +319,78 @@ describe("SearchPanel", () => {
 		await userEvent.type(input, "test");
 		await waitFor(() => {
 			expect(screen.getByText("(no subject)")).toBeInTheDocument();
+		});
+	});
+
+	it("renders quick filter buttons", () => {
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		expect(screen.getByText("Unread")).toBeInTheDocument();
+		expect(screen.getByText("Starred")).toBeInTheDocument();
+		expect(screen.getByText("Has attachment")).toBeInTheDocument();
+		expect(screen.getByText("Date range")).toBeInTheDocument();
+	});
+
+	it("toggles quick filter and triggers search", async () => {
+		mockSearch.mockResolvedValue([]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={1} />);
+		// Click "Unread" filter
+		await userEvent.click(screen.getByText("Unread"));
+		await waitFor(() => {
+			expect(mockSearch).toHaveBeenCalledWith("is:unread", { accountId: 1, limit: 30 });
+		});
+	});
+
+	it("shows active filter chips and allows removal", async () => {
+		mockSearch.mockResolvedValue([]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		await userEvent.click(screen.getByText("Starred"));
+		await waitFor(() => {
+			// Should show the active filter chip
+			expect(screen.getByLabelText("Remove Starred filter")).toBeInTheDocument();
+		});
+		// Remove the filter
+		await userEvent.click(screen.getByLabelText("Remove Starred filter"));
+		await waitFor(() => {
+			expect(screen.queryByLabelText("Remove Starred filter")).not.toBeInTheDocument();
+		});
+	});
+
+	it("combines text query with filter chips", async () => {
+		mockSearch.mockResolvedValue([]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		// Click a filter first
+		await userEvent.click(screen.getByText("Has attachment"));
+		// Then type a query
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "invoice");
+		await waitFor(() => {
+			expect(mockSearch).toHaveBeenCalledWith(
+				"invoice has:attachment",
+				expect.objectContaining({ limit: 30 }),
+			);
+		});
+	});
+
+	it("shows date range picker when Date range is clicked", async () => {
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		await userEvent.click(screen.getByText("Date range"));
+		expect(screen.getByText("After:")).toBeInTheDocument();
+		expect(screen.getByText("Before:")).toBeInTheDocument();
+		expect(screen.getByText("Apply")).toBeInTheDocument();
+	});
+
+	it("clears all filters with Clear all button", async () => {
+		mockSearch.mockResolvedValue([]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		// Activate two filters
+		await userEvent.click(screen.getByText("Unread"));
+		await userEvent.click(screen.getByText("Starred"));
+		await waitFor(() => {
+			expect(screen.getByText("Clear all")).toBeInTheDocument();
+		});
+		await userEvent.click(screen.getByText("Clear all"));
+		await waitFor(() => {
+			expect(screen.queryByText("Clear all")).not.toBeInTheDocument();
 		});
 	});
 });

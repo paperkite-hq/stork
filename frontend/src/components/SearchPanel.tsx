@@ -2,7 +2,15 @@ import DOMPurify from "dompurify";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type SearchResult, api } from "../api";
 import { useFocusTrap } from "../hooks";
-import { SearchIcon, XIcon } from "./Icons";
+import {
+	CalendarIcon,
+	FilterIcon,
+	MailOpenIcon,
+	PaperclipIcon,
+	SearchIcon,
+	StarIcon,
+	XIcon,
+} from "./Icons";
 import { toast } from "./Toast";
 
 interface SearchPanelProps {
@@ -11,16 +19,60 @@ interface SearchPanelProps {
 	accountId: number | null;
 }
 
+interface ActiveFilter {
+	type: string;
+	value: string;
+	label: string;
+}
+
 const SEARCH_PAGE_SIZE = 30;
+
+const QUICK_FILTERS: { type: string; value: string; label: string; icon: React.ReactNode }[] = [
+	{
+		type: "is",
+		value: "unread",
+		label: "Unread",
+		icon: <MailOpenIcon className="w-3.5 h-3.5" />,
+	},
+	{
+		type: "is",
+		value: "starred",
+		label: "Starred",
+		icon: <StarIcon className="w-3.5 h-3.5" />,
+	},
+	{
+		type: "has",
+		value: "attachment",
+		label: "Has attachment",
+		icon: <PaperclipIcon className="w-3.5 h-3.5" />,
+	},
+];
+
+function filterKey(f: ActiveFilter): string {
+	return `${f.type}:${f.value}`;
+}
+
+function buildQueryWithFilters(text: string, filters: ActiveFilter[]): string {
+	const parts = [text.trim()];
+	for (const f of filters) {
+		const val = f.value.includes(" ") ? `"${f.value}"` : f.value;
+		parts.push(`${f.type}:${val}`);
+	}
+	return parts.filter(Boolean).join(" ");
+}
 
 export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanelProps) {
 	const [query, setQuery] = useState("");
+	const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
 	const [results, setResults] = useState<SearchResult[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [loadingMore, setLoadingMore] = useState(false);
 	const [searched, setSearched] = useState(false);
 	const [hasMore, setHasMore] = useState(false);
 	const [focusedIndex, setFocusedIndex] = useState(-1);
+	const [showDateFilter, setShowDateFilter] = useState(false);
+	const [dateAfter, setDateAfter] = useState("");
+	const [dateBefore, setDateBefore] = useState("");
 	const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 	const resultRefs = useRef<(HTMLButtonElement | null)[]>([]);
 	const dialogRef = useRef<HTMLDivElement>(null);
@@ -28,17 +80,17 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 	useFocusTrap(dialogRef);
 
 	const doSearch = useCallback(
-		(q: string) => {
-			if (!q.trim()) {
+		(fullQuery: string) => {
+			if (!fullQuery.trim()) {
 				setResults([]);
 				setSearched(false);
 				setHasMore(false);
 				return;
 			}
-			lastQueryRef.current = q;
+			lastQueryRef.current = fullQuery;
 			setLoading(true);
 			api
-				.search(q, { accountId: accountId ?? undefined, limit: SEARCH_PAGE_SIZE })
+				.search(fullQuery, { accountId: accountId ?? undefined, limit: SEARCH_PAGE_SIZE })
 				.then((r) => {
 					setResults(r);
 					setSearched(true);
@@ -54,6 +106,14 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 				.finally(() => setLoading(false));
 		},
 		[accountId],
+	);
+
+	const triggerSearch = useCallback(
+		(text: string, filters: ActiveFilter[]) => {
+			const fullQuery = buildQueryWithFilters(text, filters);
+			doSearch(fullQuery);
+		},
+		[doSearch],
 	);
 
 	const handleLoadMore = useCallback(() => {
@@ -75,7 +135,7 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 			.finally(() => setLoadingMore(false));
 	}, [accountId, results.length, loadingMore]);
 
-	// Cleanup debounce timeout on unmount to prevent setState on unmounted component
+	// Cleanup debounce timeout on unmount
 	useEffect(() => {
 		return () => {
 			if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -86,10 +146,53 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 		(value: string) => {
 			setQuery(value);
 			if (debounceRef.current) clearTimeout(debounceRef.current);
-			debounceRef.current = setTimeout(() => doSearch(value), 300);
+			debounceRef.current = setTimeout(() => triggerSearch(value, activeFilters), 300);
 		},
-		[doSearch],
+		[triggerSearch, activeFilters],
 	);
+
+	const toggleFilter = useCallback(
+		(type: string, value: string, label: string) => {
+			setActiveFilters((prev) => {
+				const key = filterKey({ type, value, label });
+				const exists = prev.some((f) => filterKey(f) === key);
+				const next = exists
+					? prev.filter((f) => filterKey(f) !== key)
+					: [...prev, { type, value, label }];
+				// Trigger search with updated filters
+				if (debounceRef.current) clearTimeout(debounceRef.current);
+				debounceRef.current = setTimeout(() => triggerSearch(query, next), 150);
+				return next;
+			});
+		},
+		[query, triggerSearch],
+	);
+
+	const removeFilter = useCallback(
+		(filter: ActiveFilter) => {
+			setActiveFilters((prev) => {
+				const next = prev.filter((f) => filterKey(f) !== filterKey(filter));
+				if (debounceRef.current) clearTimeout(debounceRef.current);
+				debounceRef.current = setTimeout(() => triggerSearch(query, next), 150);
+				return next;
+			});
+		},
+		[query, triggerSearch],
+	);
+
+	const applyDateFilter = useCallback(() => {
+		const newFilters = activeFilters.filter((f) => f.type !== "after" && f.type !== "before");
+		if (dateAfter) {
+			newFilters.push({ type: "after", value: dateAfter, label: `After ${dateAfter}` });
+		}
+		if (dateBefore) {
+			newFilters.push({ type: "before", value: dateBefore, label: `Before ${dateBefore}` });
+		}
+		setActiveFilters(newFilters);
+		setShowDateFilter(false);
+		if (debounceRef.current) clearTimeout(debounceRef.current);
+		debounceRef.current = setTimeout(() => triggerSearch(query, newFilters), 150);
+	}, [dateAfter, dateBefore, activeFilters, query, triggerSearch]);
 
 	// Scroll focused result into view
 	useEffect(() => {
@@ -123,6 +226,9 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 		},
 		[results, focusedIndex, onSelectMessage, onClose],
 	);
+
+	const isFilterActive = (type: string, value: string) =>
+		activeFilters.some((f) => f.type === type && f.value === value);
 
 	return (
 		<div
@@ -160,6 +266,104 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 						<XIcon className="w-4 h-4" />
 					</button>
 				</div>
+
+				{/* Quick filters */}
+				<div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex-wrap">
+					<FilterIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+					{QUICK_FILTERS.map((qf) => (
+						<button
+							key={`${qf.type}:${qf.value}`}
+							type="button"
+							onClick={() => toggleFilter(qf.type, qf.value, qf.label)}
+							className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+								isFilterActive(qf.type, qf.value)
+									? "bg-stork-100 text-stork-700 dark:bg-stork-900 dark:text-stork-300"
+									: "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+							}`}
+						>
+							{qf.icon}
+							{qf.label}
+						</button>
+					))}
+					<button
+						type="button"
+						onClick={() => setShowDateFilter((v) => !v)}
+						className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+							activeFilters.some((f) => f.type === "after" || f.type === "before")
+								? "bg-stork-100 text-stork-700 dark:bg-stork-900 dark:text-stork-300"
+								: "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+						}`}
+					>
+						<CalendarIcon className="w-3.5 h-3.5" />
+						Date range
+					</button>
+				</div>
+
+				{/* Date range picker */}
+				{showDateFilter && (
+					<div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 dark:border-gray-800">
+						<label className="text-xs text-gray-500">
+							After:
+							<input
+								type="date"
+								value={dateAfter}
+								onChange={(e) => setDateAfter(e.target.value)}
+								className="ml-1 bg-transparent text-xs border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5"
+							/>
+						</label>
+						<label className="text-xs text-gray-500">
+							Before:
+							<input
+								type="date"
+								value={dateBefore}
+								onChange={(e) => setDateBefore(e.target.value)}
+								className="ml-1 bg-transparent text-xs border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5"
+							/>
+						</label>
+						<button
+							type="button"
+							onClick={applyDateFilter}
+							className="text-xs px-2 py-0.5 bg-stork-600 text-white rounded hover:bg-stork-700 transition-colors"
+						>
+							Apply
+						</button>
+					</div>
+				)}
+
+				{/* Active filter chips */}
+				{activeFilters.length > 0 && (
+					<div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-gray-100 dark:border-gray-800 flex-wrap">
+						{activeFilters.map((f) => (
+							<span
+								key={filterKey(f)}
+								className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-stork-100 text-stork-700 dark:bg-stork-900 dark:text-stork-300"
+							>
+								{f.label}
+								<button
+									type="button"
+									onClick={() => removeFilter(f)}
+									className="hover:text-stork-900 dark:hover:text-stork-100"
+									aria-label={`Remove ${f.label} filter`}
+								>
+									<XIcon className="w-3 h-3" />
+								</button>
+							</span>
+						))}
+						<button
+							type="button"
+							onClick={() => {
+								setActiveFilters([]);
+								setDateAfter("");
+								setDateBefore("");
+								if (debounceRef.current) clearTimeout(debounceRef.current);
+								debounceRef.current = setTimeout(() => triggerSearch(query, []), 150);
+							}}
+							className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+						>
+							Clear all
+						</button>
+					</div>
+				)}
 
 				{/* Results */}
 				<div className="flex-1 overflow-y-auto">
@@ -225,10 +429,16 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 
 				{/* Hint */}
 				<div className="px-4 py-2 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-400">
-					Tip: Use <kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">↑</kbd>/
+					Tip: <kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">↑</kbd>/
 					<kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">↓</kbd> to navigate,{" "}
-					<kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">Enter</kbd> to select. AND, OR,
-					NOT, "phrases" for advanced search
+					<kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">Enter</kbd> to select.{" "}
+					<span className="text-gray-300 dark:text-gray-600">|</span>{" "}
+					<code className="text-gray-500">from:</code> <code className="text-gray-500">to:</code>{" "}
+					<code className="text-gray-500">subject:</code>{" "}
+					<code className="text-gray-500">has:attachment</code>{" "}
+					<code className="text-gray-500">is:unread</code>{" "}
+					<code className="text-gray-500">before:</code>{" "}
+					<code className="text-gray-500">after:</code>
 				</div>
 			</div>
 		</div>
