@@ -236,6 +236,31 @@ export function App() {
 		[],
 	);
 
+	// Optimistic flag update — immediately updates local message list state
+	const optimisticFlagUpdate = useCallback(
+		(messageId: number, flagsUpdate: { add?: string[]; remove?: string[] }) => {
+			setAllMessages((prev) =>
+				prev.map((m) => {
+					if (m.id !== messageId) return m;
+					let flags = m.flags ?? "";
+					for (const flag of flagsUpdate.add ?? []) {
+						if (!flags.includes(flag)) {
+							flags = flags ? `${flags} ${flag}` : flag;
+						}
+					}
+					for (const flag of flagsUpdate.remove ?? []) {
+						flags = flags
+							.split(" ")
+							.filter((f) => f !== flag)
+							.join(" ");
+					}
+					return { ...m, flags };
+				}),
+			);
+		},
+		[],
+	);
+
 	// Per-message keyboard action handlers (act on the currently focused list item)
 	const focusedMessage = allMessages[messageListIndex] ?? null;
 
@@ -243,30 +268,31 @@ export function App() {
 		const msg = allMessages[messageListIndex];
 		if (!msg) return;
 		const flagged = msg.flags?.includes("\\Flagged") ?? false;
+		const flagsUpdate = flagged ? { remove: ["\\Flagged"] } : { add: ["\\Flagged"] };
+		optimisticFlagUpdate(msg.id, flagsUpdate);
+		toast(flagged ? "Removed star" : "Starred", "success");
 		try {
-			await api.messages.updateFlags(
-				msg.id,
-				flagged ? { remove: ["\\Flagged"] } : { add: ["\\Flagged"] },
-			);
-			refetchMessages();
-			toast(flagged ? "Removed star" : "Starred", "success");
+			await api.messages.updateFlags(msg.id, flagsUpdate);
 		} catch (err) {
+			refetchMessages(); // Revert on failure
 			toast(`Failed to star: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
 		}
-	}, [allMessages, messageListIndex, refetchMessages]);
+	}, [allMessages, messageListIndex, optimisticFlagUpdate, refetchMessages]);
 
 	const handleKeyboardMarkUnread = useCallback(async () => {
 		const msg = allMessages[messageListIndex];
 		if (!msg) return;
 		const unread = !msg.flags?.includes("\\Seen");
+		const flagsUpdate = unread ? { add: ["\\Seen"] } : { remove: ["\\Seen"] };
+		optimisticFlagUpdate(msg.id, flagsUpdate);
+		toast(unread ? "Marked as read" : "Marked as unread", "success");
 		try {
-			await api.messages.updateFlags(msg.id, unread ? { add: ["\\Seen"] } : { remove: ["\\Seen"] });
-			refetchMessages();
-			toast(unread ? "Marked as read" : "Marked as unread", "success");
+			await api.messages.updateFlags(msg.id, flagsUpdate);
 		} catch (err) {
+			refetchMessages(); // Revert on failure
 			toast(`Failed to update: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
 		}
-	}, [allMessages, messageListIndex, refetchMessages]);
+	}, [allMessages, messageListIndex, optimisticFlagUpdate, refetchMessages]);
 
 	const handleKeyboardDeleteConfirmed = useCallback(async () => {
 		if (pendingKeyboardDelete === null) return;

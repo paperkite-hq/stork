@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { useFocusTrap } from "../hooks";
 import { XIcon } from "./Icons";
 
 interface ShortcutsHelpProps {
@@ -22,8 +24,12 @@ const shortcuts = [
 ];
 
 export function ShortcutsHelp({ onClose }: ShortcutsHelpProps) {
+	const dialogRef = useRef<HTMLDivElement>(null);
+	useFocusTrap(dialogRef);
+
 	return (
 		<div
+			ref={dialogRef}
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
 			role="dialog"
 			aria-modal="true"

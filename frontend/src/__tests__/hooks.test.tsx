@@ -1,6 +1,8 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, render, renderHook, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useDarkMode, useKeyboardShortcuts } from "../hooks";
+import { useDarkMode, useFocusTrap, useKeyboardShortcuts } from "../hooks";
 
 describe("useDarkMode", () => {
 	beforeEach(() => {
@@ -220,5 +222,65 @@ describe("useKeyboardShortcuts", () => {
 
 		expect(jHandler).toHaveBeenCalledOnce();
 		expect(kHandler).toHaveBeenCalledOnce();
+	});
+});
+
+describe("useFocusTrap", () => {
+	function TestModal({ onClose }: { onClose?: () => void }) {
+		const ref = useRef<HTMLDivElement>(null);
+		useFocusTrap(ref);
+		return (
+			<div ref={ref} data-testid="modal">
+				<button type="button">First</button>
+				<input type="text" placeholder="Middle" />
+				<button type="button" onClick={onClose}>
+					Last
+				</button>
+			</div>
+		);
+	}
+
+	it("traps Tab at the last element, cycling to first", async () => {
+		render(<TestModal />);
+		const lastBtn = screen.getByText("Last");
+		lastBtn.focus();
+		expect(document.activeElement).toBe(lastBtn);
+
+		await userEvent.tab();
+		// Should cycle to the first focusable element
+		expect(document.activeElement).toBe(screen.getByText("First"));
+	});
+
+	it("traps Shift+Tab at the first element, cycling to last", async () => {
+		render(<TestModal />);
+		const firstBtn = screen.getByText("First");
+		firstBtn.focus();
+		expect(document.activeElement).toBe(firstBtn);
+
+		await userEvent.tab({ shift: true });
+		expect(document.activeElement).toBe(screen.getByText("Last"));
+	});
+
+	it("restores focus to previously focused element on unmount", () => {
+		// Create an external button and focus it
+		const externalBtn = document.createElement("button");
+		externalBtn.textContent = "External";
+		document.body.appendChild(externalBtn);
+		externalBtn.focus();
+		expect(document.activeElement).toBe(externalBtn);
+
+		const { unmount } = render(<TestModal />);
+		// Modal should auto-focus first element
+		expect(document.activeElement).not.toBe(externalBtn);
+
+		unmount();
+		// Focus should be restored
+		expect(document.activeElement).toBe(externalBtn);
+		document.body.removeChild(externalBtn);
+	});
+
+	it("auto-focuses first focusable element on mount", () => {
+		render(<TestModal />);
+		expect(document.activeElement).toBe(screen.getByText("First"));
 	});
 });

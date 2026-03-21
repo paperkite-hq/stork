@@ -189,6 +189,73 @@ describe("Accounts API", () => {
 			expect(body.imap_pass).toBeUndefined();
 			expect(body.smtp_pass).toBeUndefined();
 		});
+
+		test("POST /api/accounts rejects invalid email format", async () => {
+			const { status, body } = await jsonRequest("/api/accounts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "Test",
+					email: "not-an-email",
+					imap_host: "imap.example.com",
+					imap_user: "user",
+					imap_pass: "pass",
+				}),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toContain("Invalid email");
+		});
+
+		test("POST /api/accounts rejects IMAP port out of range", async () => {
+			const { status, body } = await jsonRequest("/api/accounts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "Test",
+					email: "test@example.com",
+					imap_host: "imap.example.com",
+					imap_port: 99999,
+					imap_user: "user",
+					imap_pass: "pass",
+				}),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toContain("IMAP port");
+		});
+
+		test("POST /api/accounts rejects SMTP port out of range", async () => {
+			const { status, body } = await jsonRequest("/api/accounts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "Test",
+					email: "test@example.com",
+					imap_host: "imap.example.com",
+					imap_user: "user",
+					imap_pass: "pass",
+					smtp_port: 0,
+				}),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toContain("SMTP port");
+		});
+
+		test("POST /api/accounts accepts valid port numbers", async () => {
+			const { status } = await jsonRequest("/api/accounts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "Test",
+					email: "test@example.com",
+					imap_host: "imap.example.com",
+					imap_port: 993,
+					imap_user: "user",
+					imap_pass: "pass",
+					smtp_port: 465,
+				}),
+			});
+			expect(status).toBe(201);
+		});
 	});
 
 	// ─── Sync trigger ───────────────────────────────────────

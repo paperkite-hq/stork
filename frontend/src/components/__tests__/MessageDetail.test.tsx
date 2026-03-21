@@ -530,4 +530,83 @@ describe("MessageDetail", () => {
 		// Avatar shows first letter of from_address
 		expect(screen.getByText("A")).toBeInTheDocument();
 	});
+
+	// --- DOMPurify hardening tests ---
+
+	it("strips event handler attributes from HTML email body", () => {
+		const { container } = render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body: '<div onclick="alert(1)" onmouseover="steal()">Content</div>',
+					text_body: "Content",
+				})}
+			/>,
+		);
+		const emailContent = container.querySelector(".email-content div");
+		expect(emailContent?.getAttribute("onclick")).toBeNull();
+		expect(emailContent?.getAttribute("onmouseover")).toBeNull();
+	});
+
+	it("removes tracking pixel images (1x1)", () => {
+		const { container } = render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body: '<p>Hello</p><img src="https://tracker.com/pixel.gif" width="1" height="1">',
+					text_body: "Hello",
+				})}
+			/>,
+		);
+		const emailContent = container.querySelector(".email-content");
+		const imgs = emailContent?.querySelectorAll("img");
+		expect(imgs?.length ?? 0).toBe(0);
+	});
+
+	it("removes images with tracking-style URLs", () => {
+		const { container } = render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body:
+						'<p>Hello</p><img src="https://example.com/track/open?id=123"><img src="https://cdn.example.com/logo.png" width="200" height="50">',
+					text_body: "Hello",
+				})}
+			/>,
+		);
+		const emailContent = container.querySelector(".email-content");
+		const imgs = emailContent?.querySelectorAll("img");
+		// Only the legit logo should remain
+		expect(imgs?.length ?? 0).toBe(1);
+		expect(imgs?.[0]?.getAttribute("src")).toContain("logo.png");
+	});
+
+	it("strips iframe tags from HTML email", () => {
+		const { container } = render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body: '<p>Hello</p><iframe src="https://evil.com"></iframe>',
+					text_body: "Hello",
+				})}
+			/>,
+		);
+		const emailContent = container.querySelector(".email-content");
+		expect(emailContent?.querySelectorAll("iframe").length).toBe(0);
+	});
+
+	it("strips script tags from HTML email", () => {
+		const { container } = render(
+			<MessageDetail
+				{...defaultProps}
+				message={makeMessage({
+					html_body: '<p>Hello</p><script>alert("xss")</script>',
+					text_body: "Hello",
+				})}
+			/>,
+		);
+		const emailContent = container.querySelector(".email-content");
+		expect(emailContent?.querySelectorAll("script").length).toBe(0);
+		expect(emailContent?.textContent).not.toContain("alert");
+	});
 });

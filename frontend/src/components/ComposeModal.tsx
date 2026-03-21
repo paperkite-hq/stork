@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Account, Message } from "../api";
+import { useFocusTrap } from "../hooks";
 import { XIcon } from "./Icons";
 
 export type ComposeMode =
@@ -171,6 +172,8 @@ export function ComposeModal({
 	const [sending, setSending] = useState(false);
 	const [validationError, setValidationError] = useState<string | null>(null);
 	const toInputRef = useRef<HTMLInputElement>(null);
+	const dialogRef = useRef<HTMLDivElement>(null);
+	useFocusTrap(dialogRef);
 
 	// Auto-focus the To field on mount
 	useEffect(() => {
@@ -239,6 +242,7 @@ export function ComposeModal({
 
 	return (
 		<div
+			ref={dialogRef}
 			className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30"
 			role="dialog"
 			aria-modal="true"

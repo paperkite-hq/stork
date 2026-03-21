@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import type { GlobalSyncStatus, MessageSummary } from "./api";
 import { api } from "./api";
 import { toast } from "./components/Toast";
@@ -285,4 +285,66 @@ export function useBulkSelection(opts: {
 		markUnread,
 		move,
 	};
+}
+
+/**
+ * Traps keyboard focus within a container element — Tab and Shift+Tab cycle
+ * through focusable elements without escaping the modal. Also restores focus
+ * to the previously-focused element on unmount.
+ */
+export function useFocusTrap(containerRef: RefObject<HTMLElement | null>) {
+	const previousFocusRef = useRef<Element | null>(null);
+
+	useEffect(() => {
+		const container = containerRef.current;
+		if (!container) return;
+
+		// Save the currently focused element to restore on unmount
+		previousFocusRef.current = document.activeElement;
+
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.key !== "Tab") return;
+			const el = containerRef.current;
+			if (!el) return;
+
+			const focusable = el.querySelectorAll<HTMLElement>(
+				'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+			);
+			if (focusable.length === 0) return;
+
+			const first = focusable[0] as HTMLElement | undefined;
+			const last = focusable[focusable.length - 1] as HTMLElement | undefined;
+			if (!first || !last) return;
+
+			if (e.shiftKey) {
+				if (document.activeElement === first) {
+					e.preventDefault();
+					last.focus();
+				}
+			} else {
+				if (document.activeElement === last) {
+					e.preventDefault();
+					first.focus();
+				}
+			}
+		}
+
+		container.addEventListener("keydown", handleKeyDown);
+
+		// Auto-focus the first focusable element if nothing inside is focused yet
+		if (!container.contains(document.activeElement)) {
+			const first = container.querySelector<HTMLElement>(
+				'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+			);
+			first?.focus();
+		}
+
+		return () => {
+			container.removeEventListener("keydown", handleKeyDown);
+			// Restore focus to the element that was focused before the modal opened
+			if (previousFocusRef.current instanceof HTMLElement) {
+				previousFocusRef.current.focus();
+			}
+		};
+	}, [containerRef]);
 }

@@ -27,6 +27,19 @@ export function accountRoutes(
 				400,
 			);
 		}
+		// Validate email format
+		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+			return c.json({ error: "Invalid email address format" }, 400);
+		}
+		// Validate port ranges
+		const imapPort = body.imap_port ?? 993;
+		const smtpPort = body.smtp_port ?? 587;
+		if (!Number.isInteger(imapPort) || imapPort < 1 || imapPort > 65535) {
+			return c.json({ error: "IMAP port must be between 1 and 65535" }, 400);
+		}
+		if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535) {
+			return c.json({ error: "SMTP port must be between 1 and 65535" }, 400);
+		}
 		const result = db
 			.prepare(`
 			INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
