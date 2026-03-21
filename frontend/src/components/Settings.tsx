@@ -792,6 +792,7 @@ function GeneralTab() {
 					<ShortcutRow keys="s" action="Star / unstar message" />
 					<ShortcutRow keys="u" action="Toggle read / unread" />
 					<ShortcutRow keys="d" action="Delete message" />
+					<ShortcutRow keys="e" action="Archive message" />
 					<ShortcutRow keys="/" action="Search" />
 					<ShortcutRow keys="?" action="Show shortcuts help" />
 					<ShortcutRow keys="⌘+Enter" action="Send message" />

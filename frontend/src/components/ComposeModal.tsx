@@ -9,7 +9,7 @@ export type ComposeMode =
 	| { type: "reply-all"; original: Message }
 	| { type: "forward"; original: Message };
 
-const DRAFT_KEY = "stork-compose-draft";
+const DRAFT_PREFIX = "stork-compose-draft";
 
 interface Draft {
 	to: string;
@@ -18,17 +18,23 @@ interface Draft {
 	body: string;
 }
 
-function saveDraft(draft: Draft) {
+/** Build a localStorage key that is unique per compose mode + original message */
+function draftKey(mode: ComposeMode): string {
+	if (mode.type === "new") return DRAFT_PREFIX;
+	return `${DRAFT_PREFIX}:${mode.type}:${mode.original.id}`;
+}
+
+function saveDraft(key: string, draft: Draft) {
 	try {
-		localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+		localStorage.setItem(key, JSON.stringify(draft));
 	} catch {
 		// localStorage unavailable — ignore
 	}
 }
 
-function loadDraft(): Draft | null {
+function loadDraft(key: string): Draft | null {
 	try {
-		const raw = localStorage.getItem(DRAFT_KEY);
+		const raw = localStorage.getItem(key);
 		if (!raw) return null;
 		return JSON.parse(raw) as Draft;
 	} catch {
@@ -36,9 +42,9 @@ function loadDraft(): Draft | null {
 	}
 }
 
-function clearDraft() {
+function clearDraft(key: string) {
 	try {
-		localStorage.removeItem(DRAFT_KEY);
+		localStorage.removeItem(key);
 	} catch {
 		// ignore
 	}
@@ -129,44 +135,45 @@ export function ComposeModal({
 	onClose,
 	onSend,
 }: ComposeModalProps) {
-	const isNew = mode.type === "new";
+	const currentDraftKey = draftKey(mode);
 
 	const [fromAccountId, setFromAccountId] = useState<number | undefined>(
 		selectedAccountId ?? undefined,
 	);
 	const [to, setTo] = useState(() => {
+		const saved = loadDraft(currentDraftKey);
+		if (saved) return saved.to;
 		if (mode.type === "reply" || mode.type === "reply-all") return mode.original.from_address;
-		// Restore draft for new messages only
-		if (isNew) return loadDraft()?.to ?? "";
 		return "";
 	});
 	const [cc, setCc] = useState(() => {
+		const saved = loadDraft(currentDraftKey);
+		if (saved) return saved.cc;
 		if (mode.type === "reply-all") return buildReplyAllCc(mode.original);
-		if (isNew) return loadDraft()?.cc ?? "";
 		return "";
 	});
 	const [subject, setSubject] = useState(() => {
+		const saved = loadDraft(currentDraftKey);
+		if (saved) return saved.subject;
 		if (mode.type === "reply" || mode.type === "reply-all")
 			return buildReplySubject(mode.original.subject);
 		if (mode.type === "forward") return buildForwardSubject(mode.original.subject);
-		if (isNew) return loadDraft()?.subject ?? "";
 		return "";
 	});
 	const [body, setBody] = useState(() => {
+		const saved = loadDraft(currentDraftKey);
+		if (saved) return saved.body;
 		if (mode.type === "reply" || mode.type === "reply-all") return buildReplyBody(mode.original);
 		if (mode.type === "forward") {
 			const msg = mode.original;
 			return `\n\n---------- Forwarded message ----------\nFrom: ${msg.from_name || ""} <${msg.from_address}>\nDate: ${new Date(msg.date).toLocaleString()}\nSubject: ${msg.subject || ""}\nTo: ${msg.to_addresses || ""}\n\n${msg.text_body || ""}`;
 		}
-		if (isNew) return loadDraft()?.body ?? "";
 		return "";
 	});
 	const [showCc, setShowCc] = useState(() => {
+		const saved = loadDraft(currentDraftKey);
+		if (saved) return !!saved.cc;
 		if (mode.type === "reply-all") return buildReplyAllCc(mode.original).length > 0;
-		if (isNew) {
-			const d = loadDraft();
-			return !!d?.cc;
-		}
 		return false;
 	});
 	const [sending, setSending] = useState(false);
@@ -191,11 +198,10 @@ export function ComposeModal({
 		return () => clearTimeout(timer);
 	}, []);
 
-	// Auto-save draft (new messages only)
+	// Auto-save draft for all compose modes
 	useEffect(() => {
-		if (!isNew) return;
-		saveDraft({ to, cc, subject, body });
-	}, [isNew, to, cc, subject, body]);
+		saveDraft(currentDraftKey, { to, cc, subject, body });
+	}, [currentDraftKey, to, cc, subject, body]);
 
 	const handleSend = useCallback(() => {
 		const toErr = validateEmails(to);
@@ -212,14 +218,14 @@ export function ComposeModal({
 		}
 		setValidationError(null);
 		setSending(true);
-		clearDraft();
+		clearDraft(currentDraftKey);
 		onSend({ accountId: fromAccountId, to: to.trim(), cc: cc.trim(), subject, body });
-	}, [to, cc, subject, body, fromAccountId, onSend]);
+	}, [to, cc, subject, body, fromAccountId, onSend, currentDraftKey]);
 
 	const handleDiscard = useCallback(() => {
-		clearDraft();
+		clearDraft(currentDraftKey);
 		onClose();
-	}, [onClose]);
+	}, [currentDraftKey, onClose]);
 
 	const handleKeyDown = useCallback(
 		(e: React.KeyboardEvent) => {

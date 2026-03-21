@@ -900,6 +900,60 @@ describe("App — Per-message keyboard shortcuts", () => {
 			callsBefore,
 		);
 	});
+
+	it("e shortcut calls api.messages.move to archive folder", async () => {
+		const messages = [makeMessageSummary({ id: 50, subject: "Archive me" })];
+		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.labels.list.mockResolvedValue([makeLabel()]);
+		mockApi.labels.messages.mockResolvedValue(messages);
+		mockApi.folders.list.mockResolvedValue([
+			{
+				id: 10,
+				path: "Archive",
+				name: "Archive",
+				special_use: "\\Archive",
+				message_count: 5,
+				unread_count: 0,
+				last_synced_at: null,
+			},
+		]);
+		render(<App />);
+		await waitFor(() => expect(screen.getByText("Archive me")).toBeInTheDocument());
+		fireEvent.keyDown(window, { key: "e" });
+		await waitFor(() => {
+			expect((api.messages.move as ReturnType<typeof vi.fn>).mock.calls).toEqual(
+				expect.arrayContaining([[50, 10]]),
+			);
+		});
+	});
+
+	it("e shortcut is ignored when compose is open", async () => {
+		const messages = [makeMessageSummary({ id: 51, subject: "No archive" })];
+		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.labels.list.mockResolvedValue([makeLabel()]);
+		mockApi.labels.messages.mockResolvedValue(messages);
+		mockApi.folders.list.mockResolvedValue([
+			{
+				id: 10,
+				path: "Archive",
+				name: "Archive",
+				special_use: "\\Archive",
+				message_count: 0,
+				unread_count: 0,
+				last_synced_at: null,
+			},
+		]);
+		render(<App />);
+		await waitForAppLayout();
+		fireEvent.keyDown(window, { key: "c" });
+		await waitFor(() =>
+			expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument(),
+		);
+		const callsBefore = (api.messages.move as ReturnType<typeof vi.fn>).mock.calls.length;
+		fireEvent.keyDown(window, { key: "e" });
+		await new Promise((r) => setTimeout(r, 50));
+		expect((api.messages.move as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore);
+	});
 });
 
 // ------------------------------------------------------------------
