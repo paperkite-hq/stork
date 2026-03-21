@@ -1,24 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <rect width="64" height="64" rx="12" fill="#444CE7"/>
-  <!-- Stork body -->
-  <ellipse cx="30" cy="34" rx="12" ry="9" fill="white"/>
-  <!-- Neck -->
-  <path d="M38 30 Q42 20 40 14" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
-  <!-- Head -->
-  <circle cx="40" cy="13" r="4" fill="white"/>
+  <!-- Simplified stork silhouette optimized for small favicon rendering -->
+  <!-- Body -->
+  <ellipse cx="30" cy="36" rx="13" ry="9" fill="white"/>
+  <!-- Neck + head as single path for clarity at small sizes -->
+  <path d="M36 30 Q40 20 38 14" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <circle cx="38" cy="13" r="5" fill="white"/>
   <!-- Eye -->
-  <circle cx="41.5" cy="12" r="1.2" fill="#444CE7"/>
-  <!-- Beak -->
-  <path d="M43 13 L52 11.5 L43 14 Z" fill="#F97316"/>
-  <!-- Wing detail -->
-  <path d="M22 30 Q28 28 34 32" stroke="#CBD5E1" stroke-width="1.5" fill="none"/>
-  <path d="M22 33 Q28 31 34 35" stroke="#CBD5E1" stroke-width="1.5" fill="none"/>
-  <!-- Tail feathers -->
-  <path d="M18 34 L12 30 M18 35 L11 33 M18 36 L12 36" stroke="#1E293B" stroke-width="1.5" stroke-linecap="round"/>
-  <!-- Legs -->
-  <line x1="28" y1="42" x2="26" y2="52" stroke="#F97316" stroke-width="2" stroke-linecap="round"/>
-  <line x1="33" y1="42" x2="35" y2="52" stroke="#F97316" stroke-width="2" stroke-linecap="round"/>
-  <!-- Feet -->
-  <path d="M23 52 L26 52 L28 52" stroke="#F97316" stroke-width="1.5" stroke-linecap="round"/>
-  <path d="M33 52 L35 52 L38 52" stroke="#F97316" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="39.5" cy="12" r="1.5" fill="#444CE7"/>
+  <!-- Beak — thicker for visibility -->
+  <path d="M42 13 L52 11 L42 15 Z" fill="#F97316"/>
+  <!-- Legs — thicker -->
+  <line x1="27" y1="44" x2="25" y2="54" stroke="#F97316" stroke-width="3" stroke-linecap="round"/>
+  <line x1="34" y1="44" x2="36" y2="54" stroke="#F97316" stroke-width="3" stroke-linecap="round"/>
 </svg>
