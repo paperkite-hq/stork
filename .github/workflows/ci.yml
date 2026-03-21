@@ -52,6 +52,28 @@ jobs:
           git commit -m "Update coverage badge"
           git push origin badges-tmp:badges --force
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci && cd frontend && npm ci
+
+      - name: Build frontend
+        run: cd frontend && npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E tests
+        run: STORK_FAST_KDF=1 npx playwright test
+        env:
+          CI: true
+
   docker:
     runs-on: ubuntu-latest
     steps:
