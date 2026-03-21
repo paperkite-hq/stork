@@ -218,4 +218,16 @@ describe("MessageList", () => {
 		if (refreshButton) await userEvent.click(refreshButton);
 		expect(onRefresh).toHaveBeenCalledOnce();
 	});
+
+	it("shows full date tooltip on hover over relative date", () => {
+		const messages = [makeMessage({ id: 1, date: "2026-01-15T10:30:00Z" })];
+		const { container } = render(<MessageList {...defaultProps} messages={messages} />);
+		// Find the date span with the title attribute
+		const dateSpan = container.querySelector("span[title]");
+		expect(dateSpan).toBeTruthy();
+		// Title should contain full date information (year, day, etc.)
+		const title = dateSpan?.getAttribute("title") ?? "";
+		expect(title).toContain("2026");
+		expect(title).toContain("15");
+	});
 });
