@@ -186,6 +186,11 @@ export const api = {
 			}),
 		delete: (id: number) => fetchJSON<{ ok: boolean }>(`/accounts/${id}`, { method: "DELETE" }),
 		syncStatus: (id: number) => fetchJSON<SyncStatus[]>(`/accounts/${id}/sync-status`),
+		testConnection: (data: Record<string, unknown>) =>
+			fetchJSON<{ ok: boolean; error?: string; mailboxes?: number }>("/accounts/test-connection", {
+				method: "POST",
+				body: JSON.stringify(data),
+			}),
 	},
 	folders: {
 		list: (accountId: number) => fetchJSON<Folder[]>(`/accounts/${accountId}/folders`),

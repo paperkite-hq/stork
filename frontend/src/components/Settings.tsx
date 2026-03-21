@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { type AccountDetail, type SyncStatus, api } from "../api";
 import { useAsync } from "../hooks";
+import { WELL_KNOWN_PROVIDERS } from "../utils";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MailIcon, SettingsIcon, ShieldIcon, XIcon } from "./Icons";
 
@@ -371,6 +372,12 @@ function AccountForm({
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [loaded, setLoaded] = useState(accountId === null);
+	const [testing, setTesting] = useState(false);
+	const [testResult, setTestResult] = useState<{
+		ok: boolean;
+		error?: string;
+		mailboxes?: number;
+	} | null>(null);
 
 	// Load existing account data
 	const loadAccount = useCallback(async () => {
@@ -404,6 +411,51 @@ function AccountForm({
 
 	const setField = <K extends keyof AccountFormData>(key: K, value: AccountFormData[K]) =>
 		setForm((f) => ({ ...f, [key]: value }));
+
+	const handleEmailChange = (email: string) => {
+		if (accountId !== null) {
+			setField("email", email);
+			return;
+		}
+		const domain = email.split("@")[1]?.toLowerCase();
+		if (domain && WELL_KNOWN_PROVIDERS[domain]) {
+			const provider = WELL_KNOWN_PROVIDERS[domain];
+			setForm((f) => ({
+				...f,
+				email,
+				imap_host: f.imap_host || provider.imap_host,
+				smtp_host: f.smtp_host || provider.smtp_host,
+				imap_user: !f.imap_user || f.imap_user === f.email ? email : f.imap_user,
+				smtp_user: !f.smtp_user || f.smtp_user === f.email ? email : f.smtp_user,
+			}));
+		} else {
+			setForm((f) => ({
+				...f,
+				email,
+				imap_user: !f.imap_user || f.imap_user === f.email ? email : f.imap_user,
+				smtp_user: !f.smtp_user || f.smtp_user === f.email ? email : f.smtp_user,
+			}));
+		}
+	};
+
+	const handleTestConnection = async () => {
+		setTesting(true);
+		setTestResult(null);
+		try {
+			const result = await api.accounts.testConnection({
+				imap_host: form.imap_host,
+				imap_port: form.imap_port,
+				imap_tls: form.imap_tls,
+				imap_user: form.imap_user,
+				imap_pass: form.imap_pass,
+			});
+			setTestResult(result);
+		} catch (err) {
+			setTestResult({ ok: false, error: (err as Error).message });
+		} finally {
+			setTesting(false);
+		}
+	};
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -463,7 +515,7 @@ function AccountForm({
 				<FormField
 					label="Email Address"
 					value={form.email}
-					onChange={(v) => setField("email", v)}
+					onChange={handleEmailChange}
 					placeholder="you@example.com"
 					type="email"
 					required
@@ -583,6 +635,21 @@ function AccountForm({
 				</label>
 			</fieldset>
 
+			{/* Test connection */}
+			{testResult && (
+				<div
+					className={`text-sm px-3 py-2 rounded ${
+						testResult.ok
+							? "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
+							: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20"
+					}`}
+				>
+					{testResult.ok
+						? `Connection successful — ${testResult.mailboxes} mailboxes found`
+						: `Connection failed: ${testResult.error}`}
+				</div>
+			)}
+
 			{/* Actions */}
 			<div className="flex items-center justify-end gap-2 pt-2">
 				<button
@@ -591,6 +658,14 @@ function AccountForm({
 					className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
 				>
 					Cancel
+				</button>
+				<button
+					type="button"
+					onClick={handleTestConnection}
+					disabled={testing || !form.imap_host || !form.imap_user || !form.imap_pass}
+					className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+				>
+					{testing ? "Testing..." : "Test Connection"}
 				</button>
 				<button
 					type="submit"
