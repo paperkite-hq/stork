@@ -261,10 +261,11 @@ export const api = {
 				body: JSON.stringify({ ids, action, ...opts }),
 			}),
 	},
-	search: (query: string, opts?: { accountId?: number; limit?: number }) => {
+	search: (query: string, opts?: { accountId?: number; limit?: number; offset?: number }) => {
 		const params = new URLSearchParams({ q: query });
 		if (opts?.accountId) params.set("account_id", String(opts.accountId));
 		if (opts?.limit) params.set("limit", String(opts.limit));
+		if (opts?.offset) params.set("offset", String(opts.offset));
 		return fetchJSON<SearchResult[]>(`/search?${params}`);
 	},
 	sync: {

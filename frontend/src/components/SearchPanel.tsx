@@ -11,15 +11,20 @@ interface SearchPanelProps {
 	accountId: number | null;
 }
 
+const SEARCH_PAGE_SIZE = 30;
+
 export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanelProps) {
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState<SearchResult[]>([]);
 	const [loading, setLoading] = useState(false);
+	const [loadingMore, setLoadingMore] = useState(false);
 	const [searched, setSearched] = useState(false);
+	const [hasMore, setHasMore] = useState(false);
 	const [focusedIndex, setFocusedIndex] = useState(-1);
 	const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 	const resultRefs = useRef<(HTMLButtonElement | null)[]>([]);
 	const dialogRef = useRef<HTMLDivElement>(null);
+	const lastQueryRef = useRef("");
 	useFocusTrap(dialogRef);
 
 	const doSearch = useCallback(
@@ -27,25 +32,48 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 			if (!q.trim()) {
 				setResults([]);
 				setSearched(false);
+				setHasMore(false);
 				return;
 			}
+			lastQueryRef.current = q;
 			setLoading(true);
 			api
-				.search(q, { accountId: accountId ?? undefined, limit: 30 })
+				.search(q, { accountId: accountId ?? undefined, limit: SEARCH_PAGE_SIZE })
 				.then((r) => {
 					setResults(r);
 					setSearched(true);
+					setHasMore(r.length >= SEARCH_PAGE_SIZE);
 					setFocusedIndex(r.length > 0 ? 0 : -1);
 				})
 				.catch(() => {
 					setResults([]);
 					setFocusedIndex(-1);
+					setHasMore(false);
 					toast("Search failed", "error");
 				})
 				.finally(() => setLoading(false));
 		},
 		[accountId],
 	);
+
+	const handleLoadMore = useCallback(() => {
+		if (loadingMore || !lastQueryRef.current) return;
+		setLoadingMore(true);
+		api
+			.search(lastQueryRef.current, {
+				accountId: accountId ?? undefined,
+				limit: SEARCH_PAGE_SIZE,
+				offset: results.length,
+			})
+			.then((more) => {
+				setResults((prev) => [...prev, ...more]);
+				setHasMore(more.length >= SEARCH_PAGE_SIZE);
+			})
+			.catch(() => {
+				toast("Failed to load more results", "error");
+			})
+			.finally(() => setLoadingMore(false));
+	}, [accountId, results.length, loadingMore]);
 
 	// Cleanup debounce timeout on unmount to prevent setState on unmounted component
 	useEffect(() => {
@@ -174,6 +202,18 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 							)}
 						</button>
 					))}
+					{hasMore && (
+						<div className="px-4 py-3 text-center">
+							<button
+								type="button"
+								onClick={handleLoadMore}
+								disabled={loadingMore}
+								className="text-sm text-stork-600 dark:text-stork-400 hover:text-stork-700 dark:hover:text-stork-300 disabled:opacity-50 transition-colors"
+							>
+								{loadingMore ? "Loading…" : `Load more results (${results.length} shown)`}
+							</button>
+						</div>
+					)}
 				</div>
 
 				{/* Hint */}

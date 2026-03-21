@@ -337,36 +337,28 @@ export function App() {
 	}, [pendingKeyboardDelete, selectedMessageId, refetchMessages, refetchLabels]);
 
 	// Keyboard shortcuts
+	const navigateDown = useCallback(() => {
+		if (allMessages.length > 0 && messageListIndex < allMessages.length - 1) {
+			const newIdx = messageListIndex + 1;
+			setMessageListIndex(newIdx);
+			setSelectedMessageId(allMessages[newIdx]?.id ?? 0);
+		}
+	}, [allMessages, messageListIndex]);
+
+	const navigateUp = useCallback(() => {
+		if (allMessages.length > 0 && messageListIndex > 0) {
+			const newIdx = messageListIndex - 1;
+			setMessageListIndex(newIdx);
+			setSelectedMessageId(allMessages[newIdx]?.id ?? 0);
+		}
+	}, [allMessages, messageListIndex]);
+
 	const shortcuts = useMemo(
 		() => ({
-			j: () => {
-				if (allMessages.length > 0 && messageListIndex < allMessages.length - 1) {
-					const newIdx = messageListIndex + 1;
-					setMessageListIndex(newIdx);
-					setSelectedMessageId(allMessages[newIdx]?.id ?? 0);
-				}
-			},
-			k: () => {
-				if (allMessages.length > 0 && messageListIndex > 0) {
-					const newIdx = messageListIndex - 1;
-					setMessageListIndex(newIdx);
-					setSelectedMessageId(allMessages[newIdx]?.id ?? 0);
-				}
-			},
-			ArrowDown: () => {
-				if (allMessages.length > 0 && messageListIndex < allMessages.length - 1) {
-					const newIdx = messageListIndex + 1;
-					setMessageListIndex(newIdx);
-					setSelectedMessageId(allMessages[newIdx]?.id ?? 0);
-				}
-			},
-			ArrowUp: () => {
-				if (allMessages.length > 0 && messageListIndex > 0) {
-					const newIdx = messageListIndex - 1;
-					setMessageListIndex(newIdx);
-					setSelectedMessageId(allMessages[newIdx]?.id ?? 0);
-				}
-			},
+			j: navigateDown,
+			k: navigateUp,
+			ArrowDown: navigateDown,
+			ArrowUp: navigateUp,
 			Enter: () => {
 				if (allMessages[messageListIndex]) {
 					setSelectedMessageId(allMessages[messageListIndex].id);
@@ -428,6 +420,8 @@ export function App() {
 			},
 		}),
 		[
+			navigateDown,
+			navigateUp,
 			allMessages,
 			messageListIndex,
 			focusedMessage,

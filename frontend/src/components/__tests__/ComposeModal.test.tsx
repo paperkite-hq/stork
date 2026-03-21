@@ -247,11 +247,7 @@ describe("ComposeModal", () => {
 
 		// First render: type some text → auto-saved
 		const { unmount } = render(
-			<ComposeModal
-				mode={{ type: "reply", original: msg }}
-				onClose={vi.fn()}
-				onSend={vi.fn()}
-			/>,
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
 		);
 		const textarea = screen.getByPlaceholderText("Write your message…") as HTMLTextAreaElement;
 		await userEvent.type(textarea, "My reply");
@@ -263,11 +259,7 @@ describe("ComposeModal", () => {
 
 		// Second render: draft should be restored
 		render(
-			<ComposeModal
-				mode={{ type: "reply", original: msg }}
-				onClose={vi.fn()}
-				onSend={vi.fn()}
-			/>,
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
 		);
 		const restoredTextarea = screen.getByPlaceholderText(
 			"Write your message…",
@@ -280,11 +272,7 @@ describe("ComposeModal", () => {
 		const draftKey = "stork-compose-draft:forward:99";
 
 		const { unmount } = render(
-			<ComposeModal
-				mode={{ type: "forward", original: msg }}
-				onClose={vi.fn()}
-				onSend={vi.fn()}
-			/>,
+			<ComposeModal mode={{ type: "forward", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
 		);
 		// Type into the To field
 		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "fwd@test.com");
@@ -303,11 +291,7 @@ describe("ComposeModal", () => {
 		);
 
 		render(
-			<ComposeModal
-				mode={{ type: "reply", original: msg }}
-				onClose={vi.fn()}
-				onSend={vi.fn()}
-			/>,
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
 		);
 		await userEvent.click(screen.getByText("Discard"));
 		expect(localStorage.getItem(draftKey)).toBeNull();
