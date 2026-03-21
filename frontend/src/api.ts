@@ -4,10 +4,25 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
+	// If the caller provides a signal (e.g. from useAsync), propagate its abort
+	// to our internal controller so the timeout still applies alongside it.
+	const callerSignal = init?.signal;
+	let onCallerAbort: (() => void) | undefined;
+	if (callerSignal) {
+		if (callerSignal.aborted) {
+			clearTimeout(timeout);
+			controller.abort();
+		} else {
+			onCallerAbort = () => controller.abort();
+			callerSignal.addEventListener("abort", onCallerAbort);
+		}
+	}
+
 	try {
 		const res = await fetch(`${BASE}${path}`, {
 			...init,
-			signal: init?.signal ?? controller.signal,
+			signal: controller.signal,
 			headers: { "Content-Type": "application/json", ...init?.headers },
 		});
 		if (!res.ok) {
@@ -17,11 +32,16 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 		return res.json() as Promise<T>;
 	} catch (e) {
 		if (e instanceof DOMException && e.name === "AbortError") {
+			// Distinguish caller-initiated abort from timeout
+			if (callerSignal?.aborted) throw e;
 			throw new Error(`Request to ${path} timed out after ${DEFAULT_TIMEOUT_MS / 1000}s`);
 		}
 		throw e;
 	} finally {
 		clearTimeout(timeout);
+		if (callerSignal && onCallerAbort) {
+			callerSignal.removeEventListener("abort", onCallerAbort);
+		}
 	}
 }
 

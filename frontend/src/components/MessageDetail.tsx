@@ -35,10 +35,6 @@ function sanitizeEmailHtml(html: string, opts?: { blockRemoteImages?: boolean })
 		USE_PROFILES: { html: true },
 		ADD_ATTR: ["target"],
 		FORBID_TAGS: ["style", "script", "form", "meta", "link", "object", "embed", "iframe"],
-		FORBID_ATTR: [
-			// Block all inline event handlers (onclick, onload, onerror, onmouseover, etc.)
-			...Array.from({ length: 1 }, () => []).flat(),
-		],
 	});
 	// Post-process: strip event handler attributes, enforce safe links,
 	// and block tracking pixels (1x1 images)

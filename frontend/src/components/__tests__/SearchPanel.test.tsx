@@ -286,6 +286,23 @@ describe("SearchPanel", () => {
 		expect(screen.queryByText(/Load more/)).not.toBeInTheDocument();
 	});
 
+	it("calls onClose when backdrop is clicked", async () => {
+		const onClose = vi.fn();
+		render(<SearchPanel onClose={onClose} onSelectMessage={vi.fn()} accountId={null} />);
+		// Click the backdrop (the outer dialog overlay)
+		const backdrop = screen.getByRole("dialog");
+		await userEvent.click(backdrop);
+		expect(onClose).toHaveBeenCalledOnce();
+	});
+
+	it("does not close when clicking inside the modal content", async () => {
+		const onClose = vi.fn();
+		render(<SearchPanel onClose={onClose} onSelectMessage={vi.fn()} accountId={null} />);
+		// Click on the search input (inside the modal)
+		await userEvent.click(screen.getByPlaceholderText("Search messages…"));
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
 	it("shows (no subject) for messages without subject", async () => {
 		mockSearch.mockResolvedValue([
 			{
