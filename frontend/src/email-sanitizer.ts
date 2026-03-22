@@ -9,8 +9,12 @@ import DOMPurify from "dompurify";
  * using tracking pixels or fingerprinting via image loads. The caller can
  * re-render with `blockRemoteImages: false` when the user clicks "Show images".
  */
-export function sanitizeEmailHtml(html: string, opts?: { blockRemoteImages?: boolean }): string {
+export function sanitizeEmailHtml(
+	html: string,
+	opts?: { blockRemoteImages?: boolean; messageId?: number },
+): string {
 	const blockImages = opts?.blockRemoteImages ?? true;
+	const messageId = opts?.messageId;
 	const clean = DOMPurify.sanitize(html, {
 		USE_PROFILES: { html: true },
 		ADD_ATTR: ["target"],
@@ -41,6 +45,20 @@ export function sanitizeEmailHtml(html: string, opts?: { blockRemoteImages?: boo
 		const style = el.getAttribute("style") ?? "";
 		if (/url\s*\(/i.test(style)) {
 			el.setAttribute("style", style.replace(/url\s*\([^)]*\)/gi, "url()"));
+		}
+	}
+
+	// Rewrite cid: URLs to API endpoint (inline images in MIME emails)
+	if (messageId) {
+		for (const img of div.querySelectorAll('img[src^="cid:"]')) {
+			const src = img.getAttribute("src") ?? "";
+			const contentId = src.slice(4); // strip "cid:"
+			if (contentId) {
+				img.setAttribute(
+					"src",
+					`/api/attachments/by-cid/${messageId}/${encodeURIComponent(contentId)}`,
+				);
+			}
 		}
 	}
 
