@@ -198,4 +198,35 @@ describe("SesSendConnector", () => {
 		const connector = new SesSendConnector({ region: "eu-west-1" });
 		expect(connector.name).toBe("ses");
 	});
+
+	test("getClient throws descriptive error when AWS SDK is not installed", async () => {
+		// Temporarily make the SESv2Client constructor throw to simulate missing SDK
+		const sdk = await import("@aws-sdk/client-sesv2");
+		const OriginalClient = sdk.SESv2Client;
+		// @ts-expect-error — override for testing
+		sdk.SESv2Client = class ThrowingClient {
+			constructor() {
+				throw new Error("Cannot find module '@aws-sdk/client-sesv2'");
+			}
+		};
+
+		const connector = new SesSendConnector({ region: "us-east-1" });
+		await expect(
+			connector.send({
+				from: "a@b.com",
+				to: ["c@d.com"],
+				subject: "test",
+				textBody: "test",
+			}),
+		).rejects.toThrow("@aws-sdk/client-sesv2 is required");
+
+		// Restore
+		sdk.SESv2Client = OriginalClient;
+	});
+
+	test("destroy() is a no-op when no client has been created", () => {
+		const connector = createConnector();
+		// Should not throw when called without prior send()
+		connector.destroy();
+	});
 });
