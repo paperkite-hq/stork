@@ -10,6 +10,33 @@ permissions:
   contents: write
 
 jobs:
+  commit-hygiene:
+    name: Commit hygiene check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check for Co-Authored-By lines
+        run: |
+          LEAKED=$(git log --format="%B" HEAD~20..HEAD 2>/dev/null | grep -i "Co-Authored-By:" || true)
+          if [ -n "$LEAKED" ]; then
+            echo "::error::Commit messages must not contain Co-Authored-By lines"
+            echo "$LEAKED"
+            exit 1
+          fi
+          echo "No Co-Authored-By lines found."
+      - name: Check for issue references
+        run: |
+          # This project does not use GitHub Issues — any #NNN reference is an error
+          LEAKED=$(git log --format="%s" HEAD~20..HEAD 2>/dev/null | grep -E '(^|[[:space:](])#[0-9]{1,5}([[:space:])]|$)' || true)
+          if [ -n "$LEAKED" ]; then
+            echo "::error::Commit messages must not contain issue references (#NNN)"
+            echo "$LEAKED"
+            exit 1
+          fi
+          echo "No issue references found."
+
   test:
     runs-on: ubuntu-latest
     steps:
