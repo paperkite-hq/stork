@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
+import { CloudflareEmailIngestConnector } from "../../src/connectors/cloudflare-email.js";
 import { ImapIngestConnector } from "../../src/connectors/imap.js";
 import { createIngestConnector, createSendConnector } from "../../src/connectors/registry.js";
+import { SesSendConnector } from "../../src/connectors/ses.js";
 import { SmtpSendConnector } from "../../src/connectors/smtp.js";
 
 describe("connector registry", () => {
@@ -19,8 +21,24 @@ describe("connector registry", () => {
 		expect(connector.name).toBe("imap");
 	});
 
+	test("createIngestConnector creates CloudflareEmailIngestConnector for type 'cloudflare-email'", () => {
+		const connector = createIngestConnector({
+			type: "cloudflare-email",
+			cloudflareEmail: { webhookSecret: "secret-123" },
+		});
+
+		expect(connector).toBeInstanceOf(CloudflareEmailIngestConnector);
+		expect(connector.name).toBe("cloudflare-email");
+	});
+
 	test("createIngestConnector throws for missing imap config", () => {
 		expect(() => createIngestConnector({ type: "imap" })).toThrow("IMAP configuration required");
+	});
+
+	test("createIngestConnector throws for missing cloudflare-email config", () => {
+		expect(() => createIngestConnector({ type: "cloudflare-email" })).toThrow(
+			"Cloudflare Email configuration required",
+		);
 	});
 
 	test("createIngestConnector throws for unknown type", () => {
@@ -44,8 +62,22 @@ describe("connector registry", () => {
 		expect(connector.name).toBe("smtp");
 	});
 
+	test("createSendConnector creates SesSendConnector for type 'ses'", () => {
+		const connector = createSendConnector({
+			type: "ses",
+			ses: { region: "us-east-1" },
+		});
+
+		expect(connector).toBeInstanceOf(SesSendConnector);
+		expect(connector.name).toBe("ses");
+	});
+
 	test("createSendConnector throws for missing smtp config", () => {
 		expect(() => createSendConnector({ type: "smtp" })).toThrow("SMTP configuration required");
+	});
+
+	test("createSendConnector throws for missing ses config", () => {
+		expect(() => createSendConnector({ type: "ses" })).toThrow("SES configuration required");
 	});
 
 	test("createSendConnector throws for unknown type", () => {

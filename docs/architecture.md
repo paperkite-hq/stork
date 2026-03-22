@@ -52,7 +52,9 @@ src/
   connectors/
     types.ts                 Connector interfaces (IngestConnector, SendConnector)
     imap.ts                  IMAP IngestConnector (ImapFlow + mailparser)
+    cloudflare-email.ts      Cloudflare Email Workers IngestConnector (webhook push)
     smtp.ts                  SMTP SendConnector (Nodemailer)
+    ses.ts                   AWS SES SendConnector (@aws-sdk/client-sesv2)
     registry.ts              Factory functions for creating connectors
     index.ts                 Barrel export
   search/search.ts           Full-text search using FTS5
@@ -155,9 +157,11 @@ Stork uses a pluggable connector architecture to abstract mail transport. Two in
 **Implementations**:
 
 - **`ImapIngestConnector`** (`imap.ts`) — connects to IMAP servers via ImapFlow. Lists folders, streams messages with MIME parsing via mailparser, and supports message deletion. Used by the sync engine as the transport layer.
+- **`CloudflareEmailIngestConnector`** (`cloudflare-email.ts`) — push-based ingest via Cloudflare Email Workers. A Cloudflare Worker receives mail at the edge, base64-encodes the raw RFC 5322 message, and POSTs it to Stork's webhook endpoint. Messages are buffered in memory with auto-incrementing UIDs and yielded via `fetchMessages()`. Includes webhook secret validation (constant-time comparison) and an `acknowledge()` method to clear processed messages.
 - **`SmtpSendConnector`** (`smtp.ts`) — sends email via SMTP using Nodemailer. Supports plain text, HTML, attachments, and threading headers (In-Reply-To, References). Call `verify()` to test credentials before sending.
+- **`SesSendConnector`** (`ses.ts`) — sends email via AWS SES v2. Builds raw RFC 5322 messages using Nodemailer's stream transport, then sends via the SES `SendEmail` API with raw content. Supports all message features (HTML, attachments, threading). The `@aws-sdk/client-sesv2` package is an optional peer dependency — dynamically imported at runtime with a clear error if not installed. Call `verify()` to test AWS credentials via `GetAccount`.
 
-**Registry** (`registry.ts`) — factory functions `createIngestConnector()` and `createSendConnector()` instantiate the right connector from a typed configuration object. New connector types (Cloudflare Email Workers, AWS SES) are added here.
+**Registry** (`registry.ts`) — factory functions `createIngestConnector()` and `createSendConnector()` instantiate the right connector from a typed configuration object. Supports four connector types: `imap`, `cloudflare-email`, `smtp`, and `ses`.
 
 **Barrel export** (`index.ts`) — re-exports all types, implementations, and factory functions.
 
