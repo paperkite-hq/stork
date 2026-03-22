@@ -9,7 +9,7 @@ import { SearchPanel } from "./components/SearchPanel";
 import { Settings } from "./components/Settings";
 import { SetupScreen } from "./components/SetupScreen";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
-import { ALL_MAIL_LABEL_ID, Sidebar } from "./components/Sidebar";
+import { ALL_MAIL_LABEL_ID, INBOX_LABEL_ID, Sidebar, UNREAD_LABEL_ID } from "./components/Sidebar";
 import { ToastContainer, toast } from "./components/Toast";
 import { UnlockScreen } from "./components/UnlockScreen";
 import { Welcome } from "./components/Welcome";
@@ -75,18 +75,27 @@ export function App() {
 		[effectiveAccountId],
 	);
 
-	// Auto-select Inbox label
-	const effectiveLabelId =
-		selectedLabelId ??
-		labels?.find((l) => l.name.toLowerCase() === "inbox")?.id ??
-		labels?.[0]?.id ??
-		null;
+	// Auto-select promoted Inbox view
+	const effectiveLabelId = selectedLabelId ?? (labels && labels.length > 0 ? INBOX_LABEL_ID : null);
 
 	const isAllMail = effectiveLabelId === ALL_MAIL_LABEL_ID;
+	const isUnread = effectiveLabelId === UNREAD_LABEL_ID;
+	const isInbox = effectiveLabelId === INBOX_LABEL_ID;
+
+	// Find the real inbox label for the promoted Inbox view
+	const inboxLabel = labels?.find((l) => l.name.toLowerCase() === "inbox") ?? null;
+	const inboxLabelId = inboxLabel?.id ?? null;
 
 	// Fetch "All Mail" count for the sidebar badge
 	const { data: allMailCount, refetch: refetchAllMailCount } = useAsync(
 		() => (effectiveAccountId ? api.allMessages.count(effectiveAccountId) : Promise.resolve(null)),
+		[effectiveAccountId],
+	);
+
+	// Fetch "Unread" count for the sidebar badge
+	const { data: unreadCount, refetch: refetchUnreadCount } = useAsync(
+		() =>
+			effectiveAccountId ? api.unreadMessages.count(effectiveAccountId) : Promise.resolve(null),
 		[effectiveAccountId],
 	);
 
@@ -100,7 +109,12 @@ export function App() {
 		hasMore,
 		loadingMore,
 		handleLoadMore,
-	} = useMessagePagination({ effectiveLabelId, effectiveAccountId, isAllMail });
+	} = useMessagePagination({
+		effectiveLabelId: isInbox ? inboxLabelId : effectiveLabelId,
+		effectiveAccountId,
+		isAllMail,
+		isUnread,
+	});
 
 	// Fetch selected message detail
 	const {
@@ -123,17 +137,26 @@ export function App() {
 	);
 
 	// Poll sync status — auto-refresh labels & messages when sync completes
-	const { syncing, syncStatus } = useSyncPoller(
+	const {
+		syncing,
+		lastError: syncError,
+		syncStatus,
+	} = useSyncPoller(
 		useCallback(() => {
 			refetchLabels();
 			refetchMessages();
 			refetchAllMailCount();
-		}, [refetchLabels, refetchMessages, refetchAllMailCount]),
+			refetchUnreadCount();
+		}, [refetchLabels, refetchMessages, refetchAllMailCount, refetchUnreadCount]),
 	);
 
 	const currentLabelName = isAllMail
 		? "All Mail"
-		: (labels?.find((l) => l.id === effectiveLabelId)?.name ?? "Inbox");
+		: isUnread
+			? "Unread"
+			: isInbox
+				? "Inbox"
+				: (labels?.find((l) => l.id === effectiveLabelId)?.name ?? "Inbox");
 
 	// Update document title with total unread count
 	const totalUnread = labels?.reduce((sum, l) => sum + (l.unread_count || 0), 0) ?? 0;
@@ -147,10 +170,11 @@ export function App() {
 			refetchMessages();
 			refetchLabels();
 			refetchAllMailCount();
+			refetchUnreadCount();
 		};
 		window.addEventListener("focus", handler);
 		return () => window.removeEventListener("focus", handler);
-	}, [refetchMessages, refetchLabels, refetchAllMailCount]);
+	}, [refetchMessages, refetchLabels, refetchAllMailCount, refetchUnreadCount]);
 
 	// Message selection
 	const handleSelectMessage = useCallback(
@@ -184,8 +208,12 @@ export function App() {
 		if (!effectiveAccountId) return;
 		try {
 			await api.sync.trigger(effectiveAccountId);
-		} catch {
-			// Sync trigger is best-effort; sync status poller will show any errors
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Unknown error";
+			// "already syncing" is expected — sync poller will show progress
+			if (!message.includes("already syncing")) {
+				toast(`Sync failed: ${message}`, "error");
+			}
 		}
 	}, [effectiveAccountId]);
 
@@ -215,6 +243,11 @@ export function App() {
 		[allMessages, setAllMessages, refetchMessages],
 	);
 
+	// Resolve the real label ID for archive operations — only Inbox supports archive
+	const archiveLabelId = isInbox ? inboxLabelId : effectiveLabelId;
+	// Archive is only available when viewing a specific label (not All Mail or Unread)
+	const archiveDisabled = isAllMail || isUnread;
+
 	// Bulk selection (state + action handlers extracted to hook)
 	const bulk = useBulkSelection({
 		messages: allMessages,
@@ -222,8 +255,8 @@ export function App() {
 		setSelectedMessageId,
 		refetchMessages,
 		refetchLabels,
-		effectiveLabelId,
-		isAllMail,
+		effectiveLabelId: archiveLabelId,
+		isAllMail: archiveDisabled,
 		refetchAllMailCount,
 	});
 
@@ -269,8 +302,8 @@ export function App() {
 		setAllMessages,
 		labels: labels ?? null,
 		folders: folders ?? null,
-		effectiveLabelId,
-		isAllMail,
+		effectiveLabelId: archiveLabelId,
+		isAllMail: archiveDisabled,
 		refetchMessages,
 		refetchLabels,
 		refetchAllMailCount,
@@ -481,9 +514,12 @@ export function App() {
 					dark={dark}
 					onToggleDark={toggleDark}
 					syncing={syncing}
+					syncError={syncError}
 					syncStatus={syncStatus}
 					onLabelsChanged={refetchLabels}
 					allMailCount={allMailCount}
+					unreadCount={unreadCount}
+					inboxLabel={inboxLabel}
 				/>
 			</div>
 
@@ -539,7 +575,11 @@ export function App() {
 						totalCount={
 							isAllMail
 								? allMailCount?.total
-								: labels?.find((l) => l.id === effectiveLabelId)?.message_count
+								: isUnread
+									? unreadCount?.total
+									: isInbox
+										? inboxLabel?.message_count
+										: labels?.find((l) => l.id === effectiveLabelId)?.message_count
 						}
 						selectedIds={bulk.selectedIds}
 						onToggleSelect={bulk.toggle}
@@ -549,7 +589,7 @@ export function App() {
 						onBulkMarkRead={bulk.markRead}
 						onBulkMarkUnread={bulk.markUnread}
 						onBulkMove={bulk.move}
-						onBulkArchive={!isAllMail ? bulk.archive : undefined}
+						onBulkArchive={!archiveDisabled ? bulk.archive : undefined}
 						folders={folders ?? []}
 					/>
 				</div>

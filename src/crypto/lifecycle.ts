@@ -90,7 +90,11 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 			);
 		},
 		onSyncError: (accountId, error) => {
-			console.error(`Sync failed for account ${accountId}: ${error.message}`);
+			const imapErr = error as Error & { responseText?: string; responseStatus?: string };
+			const detail = imapErr.responseText
+				? `${imapErr.responseStatus ?? "ERROR"}: ${imapErr.responseText}`
+				: error.message;
+			console.error(`Sync failed for account ${accountId}: ${detail}`);
 		},
 	});
 	scheduler.loadAccountsFromDb();

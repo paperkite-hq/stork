@@ -300,7 +300,11 @@ export class SyncScheduler {
 				}
 			} catch (err) {
 				const error = err instanceof Error ? err : new Error(String(err));
-				scheduled.lastError = error.message;
+				// ImapFlow puts the actual server response in responseText, not message
+				const imapErr = error as Error & { responseText?: string; responseStatus?: string };
+				scheduled.lastError = imapErr.responseText
+					? `${imapErr.responseStatus ?? "ERROR"}: ${imapErr.responseText}`
+					: error.message;
 				scheduled.consecutiveErrors++;
 				this.onSyncError?.(accountId, error);
 
