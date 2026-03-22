@@ -31,8 +31,9 @@ export function SandboxedEmail({ html, className, allowRemoteImages, dark }: San
 		try {
 			const doc = iframe.contentDocument;
 			if (doc?.body) {
-				// Add a small buffer to prevent scrollbars
-				iframe.style.height = `${doc.body.scrollHeight + 2}px`;
+				// Use the larger of body and documentElement scrollHeight for accuracy
+				const height = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
+				iframe.style.height = `${height}px`;
 			}
 		} catch {
 			// Same-origin access failed — leave at default height
@@ -69,9 +70,12 @@ export function SandboxedEmail({ html, className, allowRemoteImages, dark }: San
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: ${allowRemoteImages ? "https: http: " : ""}${`${window.location.origin}/api/`};">
 <style>
-  body {
+  html, body {
     margin: 0;
     padding: 0;
+    overflow: hidden;
+  }
+  body {
     font-family: system-ui, -apple-system, sans-serif;
     font-size: 14px;
     line-height: 1.6;
