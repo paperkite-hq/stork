@@ -11,6 +11,7 @@ import {
 } from "./Icons";
 
 import { AttachmentList } from "./AttachmentList";
+import { SandboxedEmail } from "./SandboxedEmail";
 
 interface ThreadMessageProps {
 	msg: Message;
@@ -125,13 +126,11 @@ export function ThreadMessage({
 					)}
 
 					{showHtml && msg.html_body ? (
-						<div
-							className="email-content prose prose-sm dark:prose-invert max-w-none"
-							dangerouslySetInnerHTML={{
-								__html: sanitizeEmailHtml(msg.html_body, {
-									blockRemoteImages: !imagesAllowed,
-								}),
-							}}
+						<SandboxedEmail
+							html={sanitizeEmailHtml(msg.html_body, {
+								blockRemoteImages: !imagesAllowed,
+							})}
+							className="email-content"
 						/>
 					) : (
 						<pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 font-sans">

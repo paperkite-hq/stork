@@ -261,7 +261,7 @@ mail.example.com {
 - **Encryption at rest**: All data (emails, credentials, attachments, FTS index) is encrypted using SQLCipher (AES-256). The database files on disk are opaque bytes without the password.
 - **Authentication**: The encryption password serves as the primary authentication mechanism. If exposed beyond localhost, you should still use a reverse proxy with additional authentication (e.g., Authelia, Authentik, HTTP Basic Auth, VPN) as defense in depth.
 - **Container security**: The `docker-compose.yml` and recommended `docker run` flags disable swap (`mem_swappiness: 0`), core dumps (`ulimit core=0`), and privilege escalation (`no-new-privileges`) to protect the in-memory vault key.
-- The web UI sanitizes HTML email content with DOMPurify to prevent XSS attacks.
+- **Email HTML isolation**: HTML emails are rendered inside a sandboxed iframe that blocks all script execution at the browser level. Even if a novel XSS vector bypasses the HTML sanitizer, the sandbox prevents it from running. Additionally, DOMPurify strips dangerous tags/attributes, CSS `url()` references are neutralized, and Content-Security-Policy headers provide further defense-in-depth. See `docs/architecture.md` for the full security model.
 - Attachment filenames are sanitized to prevent path traversal.
 
 ## Troubleshooting
