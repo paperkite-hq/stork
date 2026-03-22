@@ -584,8 +584,10 @@ describe("MessageDetail", () => {
 				})}
 			/>,
 		);
-		expect(screen.getByText("Images are hidden to protect your privacy.")).toBeInTheDocument();
-		expect(screen.getByText("Show images")).toBeInTheDocument();
+		expect(
+			screen.getByText(/Remote images are hidden to protect your privacy/),
+		).toBeInTheDocument();
+		expect(screen.getByText("Show for this message")).toBeInTheDocument();
 	});
 
 	it("updates iframe srcdoc when user clicks 'Show images'", async () => {
@@ -605,7 +607,7 @@ describe("MessageDetail", () => {
 		expect(iframe?.getAttribute("srcdoc")).not.toContain("banner.jpg");
 
 		// Click "Show images"
-		await user.click(screen.getByText("Show images"));
+		await user.click(screen.getByText("Show for this message"));
 
 		// Now srcdoc should include the image
 		iframe = container.querySelector(".email-content") as HTMLIFrameElement | null;
@@ -623,7 +625,7 @@ describe("MessageDetail", () => {
 			/>,
 		);
 		expect(
-			screen.queryByText("Images are hidden to protect your privacy."),
+			screen.queryByText(/Remote images are hidden to protect your privacy/),
 		).not.toBeInTheDocument();
 	});
 
@@ -639,7 +641,7 @@ describe("MessageDetail", () => {
 			/>,
 		);
 		expect(
-			screen.queryByText("Images are hidden to protect your privacy."),
+			screen.queryByText(/Remote images are hidden to protect your privacy/),
 		).not.toBeInTheDocument();
 	});
 
