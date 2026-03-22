@@ -1,0 +1,32 @@
+# Fly.io configuration for stork read-only demo
+# Deployed at stork-demo.paperkite.sh
+app = 'stork-demo'
+primary_region = 'sea'
+
+[build]
+  image = 'ghcr.io/paperkite-hq/stork:latest'
+
+[env]
+  STORK_DEMO_MODE = '1'
+  STORK_PORT = '3100'
+  STORK_DATA_DIR = '/app/data'
+
+[http_service]
+  internal_port = 3100
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[checks]
+  [checks.health]
+    port = 3100
+    type = 'http'
+    interval = '30s'
+    timeout = '5s'
+    path = '/api/health'
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1
