@@ -278,7 +278,7 @@ export function App() {
 	}, []);
 
 	const handleSend = useCallback(
-		(_data: {
+		async (_data: {
 			accountId?: number;
 			to: string;
 			cc: string;
@@ -287,8 +287,8 @@ export function App() {
 			body: string;
 		}) => {
 			// SMTP sending not yet available — requires #491
-			toast("Sending is not yet available — SMTP integration coming soon", "error");
-			setComposeMode(null);
+			// Throw so ComposeModal keeps the draft and shows the error inline
+			throw new Error("Sending is not yet available — SMTP integration coming soon");
 		},
 		[],
 	);

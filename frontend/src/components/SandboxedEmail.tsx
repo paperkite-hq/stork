@@ -16,9 +16,11 @@ import { useCallback, useEffect, useRef } from "react";
 interface SandboxedEmailProps {
 	html: string;
 	className?: string;
+	/** When true, the iframe's CSP allows loading remote images (http/https). */
+	allowRemoteImages?: boolean;
 }
 
-export function SandboxedEmail({ html, className }: SandboxedEmailProps) {
+export function SandboxedEmail({ html, className, allowRemoteImages }: SandboxedEmailProps) {
 	const iframeRef = useRef<HTMLIFrameElement>(null);
 
 	const adjustHeight = useCallback(() => {
@@ -63,7 +65,7 @@ export function SandboxedEmail({ html, className }: SandboxedEmailProps) {
 <html>
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: cid:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: cid:${allowRemoteImages ? " https: http:" : ""};">
 <style>
   body {
     margin: 0;

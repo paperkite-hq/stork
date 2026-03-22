@@ -1513,8 +1513,8 @@ describe("App — Mobile sidebar", () => {
 // Tests: Send (SMTP not yet available)
 // ------------------------------------------------------------------
 
-describe("App — Send shows unavailable toast", () => {
-	it("clicking Send in compose modal shows SMTP unavailable toast and closes modal", async () => {
+describe("App — Send shows unavailable error", () => {
+	it("clicking Send in compose modal shows SMTP unavailable error inline and keeps modal open", async () => {
 		setupWithAccounts();
 		render(<App />);
 		await waitForAppLayout();
@@ -1527,13 +1527,11 @@ describe("App — Send shows unavailable toast", () => {
 		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "test@test.com");
 		// Click Send
 		await userEvent.click(screen.getByRole("button", { name: /send/i }));
-		// Toast should appear
+		// Error should appear inline in the compose modal (not as a toast)
 		await waitFor(() => {
 			expect(screen.getByText(/not yet available/i)).toBeInTheDocument();
 		});
-		// Compose modal should be closed
-		await waitFor(() => {
-			expect(screen.queryByPlaceholderText("recipient@example.com")).not.toBeInTheDocument();
-		});
+		// Compose modal should still be open — draft is preserved
+		expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument();
 	});
 });
