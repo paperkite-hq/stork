@@ -86,8 +86,9 @@ describe("Settings", () => {
 
 	it("shows Accounts and General tabs", () => {
 		render(<Settings onClose={vi.fn()} />);
-		expect(screen.getByText("Accounts")).toBeInTheDocument();
-		expect(screen.getByText("General")).toBeInTheDocument();
+		// Both mobile and desktop tab bars render — use getAllByText
+		expect(screen.getAllByText("Accounts").length).toBeGreaterThanOrEqual(1);
+		expect(screen.getAllByText("General").length).toBeGreaterThanOrEqual(1);
 	});
 
 	it("calls onClose when close button is clicked", async () => {
@@ -144,7 +145,7 @@ describe("Settings", () => {
 
 	it("switches to General tab", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		expect(screen.getByText("General Settings")).toBeInTheDocument();
 		expect(screen.getByText("Theme")).toBeInTheDocument();
 		expect(screen.getByText("Messages per page")).toBeInTheDocument();
@@ -152,7 +153,7 @@ describe("Settings", () => {
 
 	it("shows keyboard shortcuts in General tab", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		expect(screen.getByText("Keyboard Shortcuts")).toBeInTheDocument();
 		expect(screen.getByText("Navigate messages")).toBeInTheDocument();
 		expect(screen.getByText("Compose new message")).toBeInTheDocument();
@@ -160,20 +161,20 @@ describe("Settings", () => {
 
 	it("shows theme select with options", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		const themeSelect = screen.getByDisplayValue("System Default");
 		expect(themeSelect).toBeInTheDocument();
 	});
 
 	it("shows notification checkbox in General tab", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		expect(screen.getByText("Enable desktop notifications for new mail")).toBeInTheDocument();
 	});
 
 	it("shows Save Preferences button in General tab", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		expect(screen.getByText("Save Preferences")).toBeInTheDocument();
 	});
 
@@ -350,7 +351,7 @@ describe("Settings", () => {
 
 	it("saves dark theme preference", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		const themeSelect = screen.getByDisplayValue("System Default");
 		await userEvent.selectOptions(themeSelect, "dark");
 		await userEvent.click(screen.getByText("Save Preferences"));
@@ -359,7 +360,7 @@ describe("Settings", () => {
 
 	it("saves light theme preference", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		const themeSelect = screen.getByDisplayValue("System Default");
 		await userEvent.selectOptions(themeSelect, "light");
 		await userEvent.click(screen.getByText("Save Preferences"));
@@ -369,7 +370,7 @@ describe("Settings", () => {
 	it("saves system theme preference (removes key)", async () => {
 		localStorageMock.setItem("stork-dark-mode", "true");
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		const themeSelect = screen.getByDisplayValue("Dark");
 		await userEvent.selectOptions(themeSelect, "system");
 		await userEvent.click(screen.getByText("Save Preferences"));
@@ -378,7 +379,7 @@ describe("Settings", () => {
 
 	it("saves messages per page preference", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		const pageSelect = screen.getByDisplayValue("50");
 		await userEvent.selectOptions(pageSelect, "100");
 		await userEvent.click(screen.getByText("Save Preferences"));
@@ -387,7 +388,7 @@ describe("Settings", () => {
 
 	it("saves notification toggle", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		const checkbox = screen.getByRole("checkbox", {
 			name: /Enable desktop notifications/,
 		});
@@ -399,7 +400,7 @@ describe("Settings", () => {
 	it("loads stored theme preference on mount", async () => {
 		localStorageMock.setItem("stork-dark-mode", "false");
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		expect(screen.getByDisplayValue("Light")).toBeInTheDocument();
 	});
 
@@ -452,7 +453,7 @@ describe("Settings", () => {
 
 	it("changes messages per page selection", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByText("General"));
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		const pageSelect = screen.getByDisplayValue("50");
 		await userEvent.selectOptions(pageSelect, "25");
 		expect((pageSelect as HTMLSelectElement).value).toBe("25");
@@ -596,14 +597,14 @@ describe("Settings — Security tab", () => {
 
 	it("shows change password and rotate recovery key sections", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
 		expect(screen.getByRole("heading", { name: "Change Password" })).toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: "Rotate Recovery Key" })).toBeInTheDocument();
 	});
 
 	it("shows validation error when new passwords do not match", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
 		await userEvent.type(
 			screen.getByPlaceholderText("Your current encryption password"),
 			"oldpassword123!",
@@ -619,7 +620,7 @@ describe("Settings — Security tab", () => {
 
 	it("shows validation error when new password is too short", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
 		await userEvent.type(
 			screen.getByPlaceholderText("Your current encryption password"),
 			"oldpassword123!",
@@ -633,7 +634,7 @@ describe("Settings — Security tab", () => {
 	it("calls changePassword API on valid submit", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
 		await userEvent.type(
 			screen.getByPlaceholderText("Your current encryption password"),
 			"oldpassword123!",
@@ -659,7 +660,7 @@ describe("Settings — Security tab", () => {
 			new Error("Current password is incorrect"),
 		);
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
 		await userEvent.type(
 			screen.getByPlaceholderText("Your current encryption password"),
 			"wrongpassword!!",
@@ -678,7 +679,7 @@ describe("Settings — Security tab", () => {
 	it("calls rotateRecoveryKey API and shows mnemonic", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
 		await userEvent.type(
 			screen.getByPlaceholderText("Confirm your encryption password"),
 			"mypassword123!",
@@ -698,7 +699,7 @@ describe("Settings — Security tab", () => {
 			new Error("Incorrect password"),
 		);
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
 		await userEvent.type(
 			screen.getByPlaceholderText("Confirm your encryption password"),
 			"wrongpassword!!",
@@ -709,7 +710,7 @@ describe("Settings — Security tab", () => {
 
 	it("requires acknowledgement checkbox before confirm button works", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
 		await userEvent.type(
 			screen.getByPlaceholderText("Confirm your encryption password"),
 			"mypassword123!",
@@ -725,7 +726,7 @@ describe("Settings — Security tab", () => {
 	it("confirming rotation calls API and returns to rotate form", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
-		await userEvent.click(screen.getByRole("button", { name: /security/i }));
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
 		await userEvent.type(
 			screen.getByPlaceholderText("Confirm your encryption password"),
 			"mypassword123!",

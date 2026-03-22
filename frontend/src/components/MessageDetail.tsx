@@ -46,13 +46,16 @@ export function MessageDetail({
 	// Per-message remote image allow-list — tracks message IDs where user clicked "Show images"
 	const [imagesAllowed, setImagesAllowed] = useState<Set<number>>(new Set());
 
-	// Auto-mark message as read when opened — only fires on new message selection
+	// Auto-mark message as read when opened — debounced to avoid marking every message
+	// as read during rapid j/k keyboard navigation (1s delay, like Gmail)
 	const messageId = message?.id;
 	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only trigger on messageId change, not on flag/callback changes
 	useEffect(() => {
 		if (messageId == null) return;
 		const currentFlags = message?.flags;
-		if (isUnread(currentFlags ?? null)) {
+		if (!isUnread(currentFlags ?? null)) return;
+
+		const timer = setTimeout(() => {
 			api.messages
 				.updateFlags(messageId, { add: ["\\Seen"] })
 				.then(() => {
@@ -61,7 +64,8 @@ export function MessageDetail({
 				.catch(() => {
 					/* silent — non-critical, will retry on next open */
 				});
-		}
+		}, 1000);
+		return () => clearTimeout(timer);
 	}, [messageId]);
 
 	const toggleExpanded = useCallback((id: number) => {
