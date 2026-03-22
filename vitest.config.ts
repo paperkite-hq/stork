@@ -9,8 +9,9 @@ export default defineConfig({
 		exclude: ["tests/e2e/**", "tests/e2e-container.test.ts", "**/node_modules/**"],
 		coverage: {
 			provider: "v8",
-			// Only measure coverage for production source — exclude test helpers
+			// Only measure coverage for production source — exclude test helpers and type-only files
 			include: ["src/**"],
+			exclude: ["src/connectors/types.ts", "src/connectors/index.ts"],
 			thresholds: {
 				lines: 80,
 				functions: 80,
