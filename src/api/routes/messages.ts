@@ -41,7 +41,20 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 		if (message.message_id) threadIds.add(message.message_id);
 		if (message.in_reply_to) threadIds.add(message.in_reply_to);
 		if (message.references) {
-			for (const ref of message.references.split(/\s+/)) {
+			// IMAP sync stores references as JSON array, send route stores space-separated
+			let refs: string[];
+			const trimmed = message.references.trim();
+			if (trimmed.startsWith("[")) {
+				try {
+					const parsed = JSON.parse(trimmed);
+					refs = Array.isArray(parsed) ? parsed : [trimmed];
+				} catch {
+					refs = trimmed.split(/\s+/);
+				}
+			} else {
+				refs = trimmed.split(/\s+/);
+			}
+			for (const ref of refs) {
 				if (ref.trim()) threadIds.add(ref.trim());
 			}
 		}

@@ -302,7 +302,22 @@ export function App() {
 			if (composeMode && composeMode.type !== "new" && composeMode.original.message_id) {
 				inReplyTo = composeMode.original.message_id;
 				const rawRefs = composeMode.original.references ?? "";
-				const existingRefs = rawRefs ? rawRefs.split(/\s+/).filter(Boolean) : [];
+				let existingRefs: string[] = [];
+				if (rawRefs) {
+					const t = rawRefs.trim();
+					if (t.startsWith("[")) {
+						try {
+							const parsed = JSON.parse(t);
+							existingRefs = Array.isArray(parsed)
+								? parsed.filter(Boolean)
+								: t.split(/\s+/).filter(Boolean);
+						} catch {
+							existingRefs = t.split(/\s+/).filter(Boolean);
+						}
+					} else {
+						existingRefs = t.split(/\s+/).filter(Boolean);
+					}
+				}
 				references = [...existingRefs, composeMode.original.message_id];
 			}
 
