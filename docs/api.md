@@ -96,14 +96,18 @@ New password must be at least 12 characters.
 
 **Response**: `200 OK` | `401 Unauthorized` (wrong current password)
 
-### Rotate recovery key
+### Rotate recovery key (two-phase)
+
+Recovery key rotation uses a two-phase protocol for power-failure resilience. The old mnemonic continues to work until the rotation is explicitly confirmed.
+
+#### Phase 1 — Prepare
 
 ```
 POST /api/rotate-recovery-key
 Content-Type: application/json
 ```
 
-Generates a new recovery mnemonic, invalidating the old one. Requires the container to be unlocked. This is an O(1) operation — only the recovery envelope is re-wrapped.
+Generates a new recovery mnemonic and stores it as a pending rotation. Both old and new mnemonics will work until confirmed. Requires the container to be unlocked. O(1) operation.
 
 **Request body**:
 ```json
@@ -112,10 +116,50 @@ Generates a new recovery mnemonic, invalidating the old one. Requires the contai
 
 **Response**: `200 OK`
 ```json
-{ "recoveryMnemonic": "new mnemonic words..." }
+{ "recoveryMnemonic": "new mnemonic words...", "pending": true }
 ```
 
 **Response**: `401 Unauthorized` (wrong password)
+
+#### Phase 2 — Confirm
+
+```
+POST /api/confirm-recovery-rotation
+Content-Type: application/json
+```
+
+Promotes the pending recovery key and invalidates the old mnemonic.
+
+**Request body**:
+```json
+{ "password": "your-current-password" }
+```
+
+**Response**: `200 OK` — `{ "ok": true }`
+**Response**: `409 Conflict` — no pending rotation exists
+**Response**: `401 Unauthorized` (wrong password)
+
+#### Cancel pending rotation
+
+```
+POST /api/cancel-recovery-rotation
+Content-Type: application/json
+```
+
+Removes the pending recovery key. The old mnemonic remains valid.
+
+**Response**: `200 OK` — `{ "ok": true }`
+
+#### Check rotation status
+
+```
+GET /api/recovery-rotation-status
+```
+
+**Response**: `200 OK`
+```json
+{ "pending": true }
+```
 
 ## Health
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api";
 import { FormField } from "./FormField";
 
@@ -6,7 +6,7 @@ export function SecurityTab() {
 	// Change password state
 	const [currentPassword, setCurrentPassword] = useState("");
 	const [newPassword, setNewPassword] = useState("");
-	const [confirmPassword, setConfirmPassword] = useState("");
+	const [confirmNewPassword, setConfirmNewPassword] = useState("");
 	const [changePwLoading, setChangePwLoading] = useState(false);
 	const [changePwError, setChangePwError] = useState<string | null>(null);
 	const [changePwSuccess, setChangePwSuccess] = useState(false);
@@ -17,10 +17,22 @@ export function SecurityTab() {
 	const [rotateError, setRotateError] = useState<string | null>(null);
 	const [newMnemonic, setNewMnemonic] = useState<string | null>(null);
 	const [rotateAcknowledged, setRotateAcknowledged] = useState(false);
+	const [confirmLoading, setConfirmLoading] = useState(false);
+	const [confirmError, setConfirmError] = useState<string | null>(null);
+	const [rotateConfirmPassword, setRotateConfirmPassword] = useState("");
+	const [hasPendingRotation, setHasPendingRotation] = useState(false);
+
+	// Check for pending rotation on mount (e.g. power failed before confirmation)
+	useEffect(() => {
+		api.encryption.recoveryRotationStatus().then(
+			({ pending }) => setHasPendingRotation(pending),
+			() => {}, // ignore errors (locked state, etc.)
+		);
+	}, []);
 
 	const handleChangePassword = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (newPassword !== confirmPassword) {
+		if (newPassword !== confirmNewPassword) {
 			setChangePwError("New passwords do not match.");
 			return;
 		}
@@ -36,7 +48,7 @@ export function SecurityTab() {
 			setChangePwSuccess(true);
 			setCurrentPassword("");
 			setNewPassword("");
-			setConfirmPassword("");
+			setConfirmNewPassword("");
 		} catch (err) {
 			setChangePwError((err as Error).message);
 		} finally {
@@ -51,6 +63,8 @@ export function SecurityTab() {
 		try {
 			const { recoveryMnemonic } = await api.encryption.rotateRecoveryKey(rotatePassword);
 			setNewMnemonic(recoveryMnemonic);
+			// Pre-fill confirm password since we just verified it
+			setRotateConfirmPassword(rotatePassword);
 			setRotatePassword("");
 		} catch (err) {
 			setRotateError((err as Error).message);
@@ -59,9 +73,32 @@ export function SecurityTab() {
 		}
 	};
 
-	const handleRotateDone = () => {
+	const handleConfirmRotation = async () => {
+		setConfirmLoading(true);
+		setConfirmError(null);
+		try {
+			await api.encryption.confirmRecoveryRotation(rotateConfirmPassword);
+			setNewMnemonic(null);
+			setRotateAcknowledged(false);
+			setRotateConfirmPassword("");
+			setHasPendingRotation(false);
+		} catch (err) {
+			setConfirmError((err as Error).message);
+		} finally {
+			setConfirmLoading(false);
+		}
+	};
+
+	const handleCancelRotation = async () => {
+		try {
+			await api.encryption.cancelRecoveryRotation();
+		} catch {
+			// best effort
+		}
 		setNewMnemonic(null);
 		setRotateAcknowledged(false);
+		setRotateConfirmPassword("");
+		setHasPendingRotation(false);
 	};
 
 	return (
@@ -101,8 +138,8 @@ export function SecurityTab() {
 				/>
 				<FormField
 					label="Confirm New Password"
-					value={confirmPassword}
-					onChange={setConfirmPassword}
+					value={confirmNewPassword}
+					onChange={setConfirmNewPassword}
 					type="password"
 					placeholder="Repeat your new password"
 					required
@@ -113,7 +150,7 @@ export function SecurityTab() {
 					disabled={changePwLoading}
 					className="px-4 py-1.5 bg-stork-600 hover:bg-stork-700 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"
 				>
-					{changePwLoading ? "Changing…" : "Change Password"}
+					{changePwLoading ? "Changing\u2026" : "Change Password"}
 				</button>
 			</form>
 
@@ -125,10 +162,10 @@ export function SecurityTab() {
 					<h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
 						New Recovery Phrase
 					</h4>
-					<p className="text-sm text-gray-500 dark:text-gray-400">
-						Your old recovery phrase is no longer valid. Write down this new phrase and store it
-						safely.
-					</p>
+					<div className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-md">
+						Your old recovery phrase still works until you confirm below. Write down the new phrase,
+						then confirm to complete the rotation.
+					</div>
 
 					<div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
 						<p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-3">
@@ -159,47 +196,79 @@ export function SecurityTab() {
 						</span>
 					</label>
 
-					<button
-						type="button"
-						disabled={!rotateAcknowledged}
-						onClick={handleRotateDone}
-						className="px-4 py-1.5 bg-stork-600 hover:bg-stork-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors"
-					>
-						Done
-					</button>
-				</div>
-			) : (
-				<form onSubmit={handleRotateRecoveryKey} className="space-y-4">
-					<h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-						Rotate Recovery Key
-					</h4>
-					<p className="text-sm text-gray-500 dark:text-gray-400">
-						Generate a new 24-word recovery phrase. Your old phrase will stop working.
-					</p>
-
-					{rotateError && (
+					{confirmError && (
 						<div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-md">
-							{rotateError}
+							{confirmError}
 						</div>
 					)}
 
-					<FormField
-						label="Current Password"
-						value={rotatePassword}
-						onChange={setRotatePassword}
-						type="password"
-						placeholder="Confirm your encryption password"
-						required
-					/>
+					<div className="flex gap-3">
+						<button
+							type="button"
+							disabled={!rotateAcknowledged || confirmLoading}
+							onClick={handleConfirmRotation}
+							className="px-4 py-1.5 bg-stork-600 hover:bg-stork-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors"
+						>
+							{confirmLoading ? "Confirming\u2026" : "Confirm \u2014 Invalidate Old Phrase"}
+						</button>
+						<button
+							type="button"
+							onClick={handleCancelRotation}
+							className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium transition-colors"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			) : (
+				<div className="space-y-4">
+					{hasPendingRotation && (
+						<div className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-md">
+							A recovery key rotation was started but not confirmed. Your old recovery phrase still
+							works.{" "}
+							<button
+								type="button"
+								onClick={handleCancelRotation}
+								className="underline hover:no-underline font-medium"
+							>
+								Cancel the pending rotation
+							</button>
+						</div>
+					)}
 
-					<button
-						type="submit"
-						disabled={rotateLoading}
-						className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"
-					>
-						{rotateLoading ? "Generating…" : "Rotate Recovery Key"}
-					</button>
-				</form>
+					<form onSubmit={handleRotateRecoveryKey} className="space-y-4">
+						<h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+							Rotate Recovery Key
+						</h4>
+						<p className="text-sm text-gray-500 dark:text-gray-400">
+							Generate a new 24-word recovery phrase. Your old phrase will continue to work until
+							you confirm the rotation.
+						</p>
+
+						{rotateError && (
+							<div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-md">
+								{rotateError}
+							</div>
+						)}
+
+						<FormField
+							label="Current Password"
+							value={rotatePassword}
+							onChange={setRotatePassword}
+							type="password"
+							placeholder="Confirm your encryption password"
+							required
+						/>
+
+						<button
+							type="submit"
+							disabled={rotateLoading}
+							className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"
+						>
+							{rotateLoading ? "Generating\u2026" : "Rotate Recovery Key"}
+						</button>
+					</form>
+				</div>
 			)}
 		</div>
 	);

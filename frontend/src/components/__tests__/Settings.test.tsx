@@ -46,7 +46,11 @@ vi.mock("../../api", () => ({
 			changePassword: vi.fn().mockResolvedValue({ ok: true }),
 			rotateRecoveryKey: vi.fn().mockResolvedValue({
 				recoveryMnemonic: Array(24).fill("word").join(" "),
+				pending: true,
 			}),
+			confirmRecoveryRotation: vi.fn().mockResolvedValue({ ok: true }),
+			cancelRecoveryRotation: vi.fn().mockResolvedValue({ ok: true }),
+			recoveryRotationStatus: vi.fn().mockResolvedValue({ pending: false }),
 		},
 	},
 }));
@@ -703,7 +707,7 @@ describe("Settings — Security tab", () => {
 		await waitFor(() => expect(screen.getByText("Incorrect password")).toBeInTheDocument());
 	});
 
-	it("requires acknowledgement checkbox before Done button works", async () => {
+	it("requires acknowledgement checkbox before confirm button works", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await userEvent.click(screen.getByRole("button", { name: /security/i }));
 		await userEvent.type(
@@ -712,13 +716,14 @@ describe("Settings — Security tab", () => {
 		);
 		await userEvent.click(screen.getByRole("button", { name: /rotate recovery key/i }));
 		await waitFor(() => expect(screen.getByText("New Recovery Phrase")).toBeInTheDocument());
-		const doneBtn = screen.getByRole("button", { name: "Done" });
-		expect(doneBtn).toBeDisabled();
+		const confirmBtn = screen.getByRole("button", { name: /confirm/i });
+		expect(confirmBtn).toBeDisabled();
 		await userEvent.click(screen.getByRole("checkbox"));
-		expect(doneBtn).toBeEnabled();
+		expect(confirmBtn).toBeEnabled();
 	});
 
-	it("clicking Done after acknowledging returns to rotate form", async () => {
+	it("confirming rotation calls API and returns to rotate form", async () => {
+		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
 		await userEvent.click(screen.getByRole("button", { name: /security/i }));
 		await userEvent.type(
@@ -727,9 +732,10 @@ describe("Settings — Security tab", () => {
 		);
 		await userEvent.click(screen.getByRole("button", { name: /rotate recovery key/i }));
 		await waitFor(() => expect(screen.getByText("New Recovery Phrase")).toBeInTheDocument());
-		// Acknowledge and click Done
+		// Acknowledge and confirm
 		await userEvent.click(screen.getByRole("checkbox"));
-		await userEvent.click(screen.getByRole("button", { name: "Done" }));
+		await userEvent.click(screen.getByRole("button", { name: /confirm/i }));
+		await waitFor(() => expect(api.encryption.confirmRecoveryRotation).toHaveBeenCalled());
 		// Should return to rotate recovery key form
 		await waitFor(() =>
 			expect(screen.getByRole("heading", { name: "Rotate Recovery Key" })).toBeInTheDocument(),

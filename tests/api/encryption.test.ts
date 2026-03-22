@@ -350,17 +350,45 @@ describe("POST /api/rotate-recovery-key", () => {
 		expect(body.recoveryMnemonic).not.toBe(originalMnemonic);
 	});
 
-	test("old recovery mnemonic is invalidated after rotation", async () => {
+	test("old recovery mnemonic still works before confirmation (two-phase)", async () => {
 		const { app, recoveryMnemonic: oldMnemonic } = await setupUnlocked();
 
-		// Rotate the key
+		// Prepare rotation (phase 1)
 		await app.request("/api/rotate-recovery-key", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ password: "testpassword123!" }),
 		});
 
-		// Boot fresh locked instance and try to unlock with old mnemonic — should fail
+		// Boot fresh locked instance — old mnemonic should still work
+		const { app: freshApp } = await bootContainer(dataDir, createApp);
+		const res = await freshApp.request("/api/unlock", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ recoveryMnemonic: oldMnemonic, newPassword: "newpass123456!" }),
+		});
+		expect(res.status).toBe(200);
+	});
+
+	test("old recovery mnemonic invalidated after confirmation (two-phase)", async () => {
+		const { app, recoveryMnemonic: oldMnemonic } = await setupUnlocked();
+
+		// Prepare rotation (phase 1)
+		await app.request("/api/rotate-recovery-key", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ password: "testpassword123!" }),
+		});
+
+		// Confirm rotation (phase 2)
+		const confirmRes = await app.request("/api/confirm-recovery-rotation", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ password: "testpassword123!" }),
+		});
+		expect(confirmRes.status).toBe(200);
+
+		// Boot fresh locked instance — old mnemonic should fail now
 		const { app: freshApp } = await bootContainer(dataDir, createApp);
 		const res = await freshApp.request("/api/unlock", {
 			method: "POST",
@@ -368,6 +396,55 @@ describe("POST /api/rotate-recovery-key", () => {
 			body: JSON.stringify({ recoveryMnemonic: oldMnemonic, newPassword: "newpass123456!" }),
 		});
 		expect(res.status).toBe(401);
+	});
+
+	test("cancel-recovery-rotation preserves old mnemonic", async () => {
+		const { app, recoveryMnemonic: oldMnemonic } = await setupUnlocked();
+
+		// Prepare rotation
+		await app.request("/api/rotate-recovery-key", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ password: "testpassword123!" }),
+		});
+
+		// Cancel
+		const cancelRes = await app.request("/api/cancel-recovery-rotation", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({}),
+		});
+		expect(cancelRes.status).toBe(200);
+
+		// Boot fresh locked instance — old mnemonic should still work
+		const { app: freshApp } = await bootContainer(dataDir, createApp);
+		const res = await freshApp.request("/api/unlock", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ recoveryMnemonic: oldMnemonic, newPassword: "newpass123456!" }),
+		});
+		expect(res.status).toBe(200);
+	});
+
+	test("recovery-rotation-status reflects pending state", async () => {
+		const { app } = await setupUnlocked();
+
+		// Initially no pending rotation
+		const before = await app.request("/api/recovery-rotation-status");
+		const beforeBody = (await before.json()) as { pending: boolean };
+		expect(beforeBody.pending).toBe(false);
+
+		// Prepare rotation
+		await app.request("/api/rotate-recovery-key", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ password: "testpassword123!" }),
+		});
+
+		// Now pending
+		const after = await app.request("/api/recovery-rotation-status");
+		const afterBody = (await after.json()) as { pending: boolean };
+		expect(afterBody.pending).toBe(true);
 	});
 });
 
