@@ -1503,3 +1503,32 @@ describe("App — Mobile sidebar", () => {
 		});
 	});
 });
+
+// ------------------------------------------------------------------
+// Tests: Send (SMTP not yet available)
+// ------------------------------------------------------------------
+
+describe("App — Send shows unavailable toast", () => {
+	it("clicking Send in compose modal shows SMTP unavailable toast and closes modal", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+		// Open compose
+		fireEvent.keyDown(window, { key: "c" });
+		await waitFor(() => {
+			expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument();
+		});
+		// Fill required field
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "test@test.com");
+		// Click Send
+		await userEvent.click(screen.getByRole("button", { name: /send/i }));
+		// Toast should appear
+		await waitFor(() => {
+			expect(screen.getByText(/not yet available/i)).toBeInTheDocument();
+		});
+		// Compose modal should be closed
+		await waitFor(() => {
+			expect(screen.queryByPlaceholderText("recipient@example.com")).not.toBeInTheDocument();
+		});
+	});
+});
