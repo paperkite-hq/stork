@@ -10,60 +10,20 @@
 
 ![Stork inbox](docs/screenshots/inbox.png)
 
-Stork syncs your email from any IMAP server, stores it locally with **AES-256 encryption at rest**, full-text search, and a modern web interface. Keep using your existing mail server for sending and receiving — Stork handles storage, search, and the UI. Your data is encrypted on disk: without your password, the data directory is opaque bytes.
+Stork syncs your email from any IMAP server, stores it locally with **AES-256 encryption at rest**, full-text search, and a modern web interface. Keep using your existing mail server for sending and receiving — Stork handles storage, search, and the UI.
 
-## Why Stork?
-
-Running your own mail server is hard. Getting deliverability right, maintaining uptime, managing DNS records — it's a lot of work. But handing your data to Gmail isn't great either.
-
-Stork takes a different approach: **let your mail server handle the hard parts** (receiving mail, sending mail, maintaining reputation) while you **self-host everything else** (storage, search, the interface you actually use every day).
-
-- **Encryption at rest** — AES-256 whole-database encryption via SQLCipher. Container boots locked; your password unlocks it. No password = no data.
+- **Encryption at rest** — AES-256 via SQLCipher. Container boots locked; your password unlocks it.
 - **Sync from any IMAP server** — Mailcow, Dovecot, Fastmail, whatever you've got
-- **Local SQLite storage** — your mail lives on your hardware, not in the cloud
-- **Full-text search** — actually find that email from 3 years ago, instantly. FTS5 search works normally under encryption.
-- **Recovery key** — 24-word BIP39 mnemonic backup so a forgotten password doesn't mean lost mail
-- **Labels, not folders** — Gmail-style labels replace rigid folder hierarchies
-- **Modern web UI** — something you'd actually want to use daily
-- **Docker deployment** — `docker compose up` and you're running
-- **Delete from server** _(planned)_ — opt-in workflow to remove synced messages from the IMAP server after local storage
-- **Pluggable connectors** _(planned)_ — swap in Cloudflare Email Workers, SES, or other services
-
-## Labels Over Folders
-
-Stork is **deliberately opinionated** about email organization: it uses **labels** instead of folders.
-
-Most email clients mirror the IMAP folder tree — rigid, single-parent hierarchies where a message can only live in one place. This made sense when browsing folders was the primary way to find email. It doesn't anymore. If your email client has good search, you rarely navigate by folder.
-
-Stork takes the Gmail approach: when email syncs from an IMAP folder, the folder name becomes a **suggested label** automatically applied to incoming messages. But labels aren't folders — a message can have multiple labels, labels are easy to create and manage, and your organizational system isn't locked to what your IMAP server happens to expose.
-
-**How it works:**
-- IMAP folders are still synced for tracking sync state (UIDs, UIDVALIDITY)
-- Each folder name automatically becomes a label (source: `imap`)
-- New messages get the label matching their IMAP folder
-- You can add, remove, and create your own labels freely
-- The sidebar shows labels with unread counts, not a folder tree
-- Search works across all labels — no more hunting through folders
-
-This is a deliberate design choice: **search is the primary navigation, labels are the primary organization**. If you want traditional folder-based browsing, Stork isn't the right fit — and that's okay.
-
-## Screenshots
-
-**Threaded conversations** — messages are grouped by thread with expand/collapse, reply, reply-all, and forward actions:
-
-![Thread view](docs/screenshots/thread.png)
-
-**Compose** — clean compose form with keyboard shortcut to send:
-
-![Compose form](docs/screenshots/compose.png)
+- **Full-text search** — FTS5-powered search across your entire mailbox, instantly
+- **Compose & send** — reply, reply-all, forward, and compose via your SMTP server
+- **Labels, not folders** — Gmail-style labels replace rigid folder hierarchies ([why?](docs/design-decisions.md))
+- **Recovery key** — 24-word BIP39 mnemonic so a forgotten password doesn't mean lost mail
+- **Single container** — `docker compose up` and you're running. No PHP, no external DB.
 
 ## Quick Start
 
-### Docker Compose (recommended)
-
-Create a `docker-compose.yml` (or download from the repo):
-
 ```yaml
+# docker-compose.yml
 services:
   stork:
     image: ghcr.io/paperkite-hq/stork:latest
@@ -80,9 +40,13 @@ volumes:
 
 ```bash
 docker compose up -d
+# Open http://localhost:3100
 ```
 
-### Docker Run
+The setup wizard will guide you through creating a password and connecting your email account. See the [Getting Started guide](docs/getting-started.md) for a full walkthrough.
+
+<details>
+<summary>Docker run (single command)</summary>
 
 ```bash
 docker run -d --init \
@@ -95,94 +59,28 @@ docker run -d --init \
   ghcr.io/paperkite-hq/stork:latest
 ```
 
-This:
-- Pulls the pre-built image — no clone or build needed
-- Binds to **localhost only** (`127.0.0.1`) — not exposed to your network
-- Stores the encrypted database in `~/stork-data` (change to any path you like) — regular files that work with your existing backup tooling
-- The security flags disable swap, core dumps, and privilege escalation
+Binds to localhost only, stores the encrypted database in `~/stork-data`, disables swap/core dumps/privilege escalation.
+</details>
 
-### Build from Source
-
-If you prefer to build locally:
+<details>
+<summary>Build from source</summary>
 
 ```bash
 git clone https://github.com/paperkite-hq/stork.git
 cd stork
 docker compose up --build
 ```
+</details>
 
-Open `http://localhost:3100` — the setup wizard will guide you through creating a password and connecting your email account. See the [Getting Started guide](docs/getting-started.md) for a full walkthrough.
+## Screenshots
 
-## Architecture
+**Threaded conversations** — messages grouped by thread with expand/collapse, reply, reply-all, and forward:
 
-```
-┌─────────────────────────────────────────────┐
-│                  Web UI                      │
-│            (React + Tailwind)                │
-├─────────────────────────────────────────────┤
-│                REST API                      │
-│              (Hono/Node.js)                  │
-├──────────┬──────────┬───────────────────────┤
-│  IMAP    │  SQLite  │  Full-Text            │
-│  Sync    │  Storage │  Search (FTS5)        │
-├──────────┴──────────┴───────────────────────┤
-│           Connector Layer                    │
-│   IMAP  │  SMTP  │  CF Workers  │  SES     │
-└─────────────────────────────────────────────┘
-```
+![Thread view](docs/screenshots/thread.png)
 
-## Status
+**Compose** — clean compose form with keyboard shortcut to send:
 
-🚧 **Early development** — functional but still evolving. Core features work: IMAP sync, local storage with full-text search, web UI, and Docker deployment. See the [roadmap](#roadmap) for what's done and what's next.
-
-## Roadmap
-
-- [x] IMAP sync engine (incremental, resumable)
-- [x] SQLite storage with FTS5 full-text search
-- [x] SMTP sending via configured server
-- [x] Web UI — inbox, threads, compose, search
-- [x] Docker single-container deployment
-- [x] Label-based organization (Gmail-style, replaces folder navigation)
-- [x] Encryption at rest (AES-256 via SQLCipher, locked boot, BIP39 recovery key)
-- [ ] Pluggable connector architecture
-- [ ] Delete-from-server workflow
-- [ ] Multi-account support
-
-## Documentation
-
-- **[Getting Started](docs/getting-started.md)** — first launch, encryption setup, adding an account, search, labels
-- **[Use Cases](docs/use-cases.md)** — encrypted Gmail backup, Mailcow webmail replacement, VPN-based private access
-- **[User Guide](docs/user-guide.md)** — installation, account setup, search tips, backups, reverse proxy
-- **[Configuration](docs/configuration.md)** — environment variables, Docker options, database settings
-- **[API Reference](docs/api.md)** — full REST API documentation with examples
-- **[Architecture](docs/architecture.md)** — system design, codebase walkthrough, design principles
-- **[Contributing](CONTRIBUTING.md)** — development setup, running tests, code style
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Run in development mode
-npm run dev
-
-# Run tests
-npm test
-
-# Lint
-npm run lint
-```
-
-## Tech Stack
-
-- **Runtime**: [Node.js](https://nodejs.org) 22+
-- **Backend**: [Hono](https://hono.dev) (lightweight web framework)
-- **Database**: SQLite via [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) + [SQLCipher](https://www.zetetic.net/sqlcipher/) (AES-256 encryption at rest)
-- **Search**: SQLite FTS5
-- **IMAP**: [ImapFlow](https://github.com/postalsys/imapflow)
-- **SMTP**: [Nodemailer](https://nodemailer.com)
-- **Frontend**: React + Tailwind CSS + Vite
+![Compose form](docs/screenshots/compose.png)
 
 ## How Stork Compares
 
@@ -198,23 +96,46 @@ npm run lint
 | **Compose/send** | ✅ SMTP | ✅ | ❌ (read-only) | ✅ (full MTA) |
 | **Recovery key** | ✅ BIP39 mnemonic | ❌ | ❌ | ❌ |
 | **Self-contained** | ✅ (no PHP, no extra DB) | ❌ | ✅ | ❌ (many services) |
-| **IMAP server needed** | ✅ (BYO server) | ✅ (BYO server) | ✅ (BYO server) | ❌ (IS the server) |
 
-**Roundcube** is the most mature option and has the deepest plugin ecosystem. If you need plugins, calendar integration, or multi-user shared hosting, Roundcube is the better fit. Stork's advantages are its single-container deployment, encryption at rest, and modern React UI.
+**Roundcube** is the most mature option with the deepest plugin ecosystem — better for calendar integration or multi-user shared hosting. **Bichon** is focused on email archiving — better for long-term preservation of large mailboxes. **Mailu** is a complete mail server stack — use it if you need to replace your mail infrastructure entirely. Stork is a client that connects to your existing server.
 
-**Bichon** is focused on email archiving and search — great for long-term preservation of large mailboxes with deduplication and compression. Stork is a daily-driver email client with compose, reply, and labels. If you need to archive 10+ years of email and never send from the same interface, Bichon is the better fit.
+## Roadmap
 
-**Mailu** is a complete mail server stack (SMTP, IMAP, antispam, antivirus, admin panel). It replaces your mail infrastructure entirely. Stork is a client that connects to an existing mail server — if you already run Mailu, you can point Stork at its IMAP endpoint for encrypted local storage and search.
+- [x] IMAP sync engine (incremental, resumable)
+- [x] SQLite storage with FTS5 full-text search
+- [x] SMTP sending via configured server
+- [x] Web UI — inbox, threads, compose, search
+- [x] Docker single-container deployment
+- [x] Label-based organization (Gmail-style)
+- [x] Encryption at rest (AES-256 via SQLCipher, BIP39 recovery key)
+- [ ] Pluggable connector architecture
+- [ ] Delete-from-server workflow
+- [ ] Multi-account support
 
-## FAQ
+## Documentation
 
-### Will Stork delete email from my IMAP server?
+- **[Getting Started](docs/getting-started.md)** — first launch, encryption setup, adding an account
+- **[User Guide](docs/user-guide.md)** — search tips, backups, reverse proxy
+- **[Use Cases](docs/use-cases.md)** — encrypted Gmail backup, Mailcow replacement, VPN access
+- **[Configuration](docs/configuration.md)** — environment variables, Docker options
+- **[API Reference](docs/api.md)** — REST API documentation
+- **[Architecture](docs/architecture.md)** — system design and codebase walkthrough
+- **[Design Decisions](docs/design-decisions.md)** — labels over folders, and why
+- **[FAQ](docs/faq.md)** — common questions about sync, search, and data safety
+- **[Contributing](CONTRIBUTING.md)** — development setup, running tests
 
-**No.** The sync engine is strictly read-only by default. It fetches messages and flags from your IMAP server but never modifies or deletes anything on the server. A "delete from server" feature is planned as an opt-in workflow — it will only run when you explicitly enable it per account and confirm the action. Safe for testing against a production mailbox.
+## Development
 
-### Will full-text search scale to a large mailbox?
+```bash
+npm install
+npm run dev    # Start dev server
+npm test       # Run tests
+npm run lint   # Lint
+```
 
-Yes. Stork uses SQLite's [FTS5](https://www.sqlite.org/fts5.html) extension, which is designed for exactly this. FTS5 maintains an inverted index that handles millions of rows efficiently — 10+ years of email (hundreds of thousands of messages) is well within its comfort zone. Combined with WAL mode (enabled by default), searches stay fast even while new messages are being synced in the background.
+## Tech Stack
+
+[Node.js](https://nodejs.org) 22+ · [Hono](https://hono.dev) · SQLite/[SQLCipher](https://www.zetetic.net/sqlcipher/) · [FTS5](https://www.sqlite.org/fts5.html) · [ImapFlow](https://github.com/postalsys/imapflow) · [Nodemailer](https://nodemailer.com) · React · Tailwind CSS · Vite
 
 ## License
 
