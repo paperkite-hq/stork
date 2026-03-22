@@ -1,4 +1,4 @@
-import Database from "@signalapp/better-sqlite3";
+import Database from "better-sqlite3-multiple-ciphers";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { MessageSearch } from "../src/search/search.js";
 import { MIGRATIONS } from "../src/storage/schema.js";

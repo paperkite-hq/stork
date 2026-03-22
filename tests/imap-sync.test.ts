@@ -1,4 +1,4 @@
-import Database from "@signalapp/better-sqlite3";
+import Database from "better-sqlite3-multiple-ciphers";
 import { simpleParser } from "mailparser";
 import { beforeEach, describe, expect, test } from "vitest";
 import { ensureSchema } from "../src/storage/db.js";

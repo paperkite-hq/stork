@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import Database from "@signalapp/better-sqlite3";
+import Database from "better-sqlite3-multiple-ciphers";
 import { MIGRATIONS, SCHEMA_VERSION } from "./schema.js";
 
 const DATA_DIR = process.env.STORK_DATA_DIR || "./data";

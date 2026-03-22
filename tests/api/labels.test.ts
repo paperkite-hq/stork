@@ -1,4 +1,4 @@
-import type Database from "@signalapp/better-sqlite3";
+import type Database from "better-sqlite3-multiple-ciphers";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../src/api/server.js";

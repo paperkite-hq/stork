@@ -20,7 +20,7 @@
 	"dependencies": {
 		"@hono/node-server": "^1.19.11",
 		"@noble/hashes": "^2.0.1",
-		"@signalapp/better-sqlite3": "^9.0.13",
+		"better-sqlite3-multiple-ciphers": "^12.8.0",
 		"bip39": "^3.1.0",
 		"hono": "^4.7.0",
 		"imapflow": "^1.0.171",
@@ -30,7 +30,6 @@
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.0",
 		"@playwright/test": "^1.58.2",
-		"@types/better-sqlite3": "^7.6.13",
 		"@types/mailparser": "^3.4.6",
 		"@types/node": "^22.0.0",
 		"@types/nodemailer": "^6.4.17",
