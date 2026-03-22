@@ -401,6 +401,29 @@ describe("Sidebar", () => {
 		expect(screen.getByText("1 new message found")).toBeInTheDocument();
 	});
 
+	it("shows sync error indicator when not syncing and syncError is set", () => {
+		render(
+			<Sidebar
+				{...defaultProps}
+				syncing={false}
+				syncError="IMAP auth failed: invalid credentials"
+			/>,
+		);
+		expect(screen.getByText("Sync failed")).toBeInTheDocument();
+		expect(screen.getByText("IMAP auth failed: invalid credentials")).toBeInTheDocument();
+		expect(screen.getByTitle("Sync error")).toBeInTheDocument();
+	});
+
+	it("does not show sync error indicator when syncing", () => {
+		render(<Sidebar {...defaultProps} syncing={true} syncError="stale error" />);
+		expect(screen.queryByText("Sync failed")).not.toBeInTheDocument();
+	});
+
+	it("does not show sync error indicator when no error", () => {
+		render(<Sidebar {...defaultProps} syncing={false} syncError={null} />);
+		expect(screen.queryByText("Sync failed")).not.toBeInTheDocument();
+	});
+
 	it("does not show context menu on right-click for imap labels", async () => {
 		const labels = [makeLabel({ id: 1, name: "Inbox", source: "imap" })];
 		render(<Sidebar {...defaultProps} labels={labels} onLabelsChanged={vi.fn()} />);
