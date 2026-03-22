@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.3.0-alpha (2026-03-22)
+
+- **Pluggable connectors** — IMAP and SMTP are now modular connectors behind a common interface, preparing for future transports (Cloudflare Email Workers, SES)
+- **Recovery key rotation** — two-phase rotation with power-failure resilience; rotate your BIP39 mnemonic without risk of data loss
+- **Podman compatibility** — fully-qualified base images work with both Docker and Podman
+- **Comparison table** — README now compares Stork against Roundcube, Bichon, and Mailu
+- **Use-case docs** — three complete use-case guides (encrypted Gmail backup, Mailcow webmail, VPN-based private access)
+- **Issue templates** — bug report and feature request templates for contributors
+- **Improved test coverage** — IMAP connector and sync errors API now tested; branch coverage back above 80%
+
+## v0.2.0-alpha (2026-03-21)
+
+- **Encryption at rest** — AES-256 whole-database encryption via SQLCipher; container boots locked, password unlocks
+- **Recovery key** — 24-word BIP39 mnemonic backup for password recovery
+- **HTML email sandboxing** — defense-in-depth with sandboxed iframe, DOMPurify, CSP headers
+- **Sync error tracking** — persistent error classification with automatic resolution on successful sync
+- **Docker HEALTHCHECK** — `/api/health` endpoint with container health monitoring
+- **GHCR publishing** — pre-built images on `ghcr.io/paperkite-hq/stork`
+- **Labels** — Gmail-style label organization replacing rigid folder hierarchies
+- **Archive workflow** — archive removes Inbox label, message stays in All Mail
+- **Getting Started guide** — first-run walkthrough with encryption setup, account configuration, search, labels
+- **Screenshots** — inbox, thread, and compose views in README
+
 ## v0.1.0-alpha (2026-03-19)
 
 First tagged release. Core functionality is working:
