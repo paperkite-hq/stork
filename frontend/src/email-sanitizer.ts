@@ -128,8 +128,11 @@ export function hasRemoteImages(html: string): boolean {
 	return false;
 }
 
-export function formatFullDate(dateStr: string): string {
-	return new Date(dateStr).toLocaleString(undefined, {
+export function formatFullDate(dateStr: string | null | undefined): string {
+	if (!dateStr) return "";
+	const d = new Date(dateStr);
+	if (Number.isNaN(d.getTime())) return dateStr;
+	return d.toLocaleString(undefined, {
 		weekday: "long",
 		year: "numeric",
 		month: "long",
