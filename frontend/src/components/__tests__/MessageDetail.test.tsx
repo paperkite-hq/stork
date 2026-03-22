@@ -480,6 +480,7 @@ describe("MessageDetail", () => {
 	});
 
 	it("auto-marks unread message as read on open", async () => {
+		vi.useFakeTimers();
 		const { api } = await import("../../api");
 		const onMessageChanged = vi.fn();
 		render(
@@ -489,9 +490,10 @@ describe("MessageDetail", () => {
 				onMessageChanged={onMessageChanged}
 			/>,
 		);
-		await waitFor(() => {
-			expect(api.messages.updateFlags).toHaveBeenCalledWith(99, { add: ["\\Seen"] });
-		});
+		// Auto-mark is debounced by 1s to avoid marking every message during j/k navigation
+		await vi.advanceTimersByTimeAsync(1100);
+		expect(api.messages.updateFlags).toHaveBeenCalledWith(99, { add: ["\\Seen"] });
+		vi.useRealTimers();
 	});
 
 	it("does not auto-mark already-read message", async () => {
