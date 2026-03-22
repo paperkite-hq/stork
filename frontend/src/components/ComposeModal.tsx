@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Account, Message } from "../api";
 import { useFocusTrap } from "../hooks";
+import { parseAddressField } from "../utils";
 import { XIcon } from "./Icons";
 
 export type ComposeMode =
@@ -108,23 +109,25 @@ function buildReplyBody(msg: Message): string {
 	return header + quoted;
 }
 
-function buildReplyAllCc(msg: Message): string {
+function buildReplyAllCc(msg: Message, userEmail?: string): string {
 	// Include all To and CC addresses except the sender (who goes in To)
+	// and the current user (who is sending the reply)
+	const exclude = new Set<string>();
+	if (msg.from_address) exclude.add(msg.from_address.toLowerCase());
+	if (userEmail) exclude.add(userEmail.toLowerCase());
+
 	const addresses: string[] = [];
-	if (msg.to_addresses) {
-		for (const addr of msg.to_addresses.split(",")) {
-			const trimmed = addr.trim();
-			if (trimmed && trimmed !== msg.from_address) {
-				addresses.push(trimmed);
-			}
+	for (const addr of parseAddressField(msg.to_addresses)) {
+		// Extract bare email for comparison (handles "Name <email>" format)
+		const email = (addr.match(/<([^>]+)>/)?.[1] ?? addr).toLowerCase();
+		if (!exclude.has(email)) {
+			addresses.push(addr);
 		}
 	}
-	if (msg.cc_addresses) {
-		for (const addr of msg.cc_addresses.split(",")) {
-			const trimmed = addr.trim();
-			if (trimmed && trimmed !== msg.from_address) {
-				addresses.push(trimmed);
-			}
+	for (const addr of parseAddressField(msg.cc_addresses)) {
+		const email = (addr.match(/<([^>]+)>/)?.[1] ?? addr).toLowerCase();
+		if (!exclude.has(email)) {
+			addresses.push(addr);
 		}
 	}
 	return addresses.join(", ");
@@ -138,6 +141,7 @@ export function ComposeModal({
 	onSend,
 }: ComposeModalProps) {
 	const currentDraftKey = draftKey(mode);
+	const userEmail = accounts?.find((a) => a.id === (selectedAccountId ?? accounts[0]?.id))?.email;
 
 	const [fromAccountId, setFromAccountId] = useState<number | undefined>(
 		selectedAccountId ?? undefined,
@@ -151,7 +155,7 @@ export function ComposeModal({
 	const [cc, setCc] = useState(() => {
 		const saved = loadDraft(currentDraftKey);
 		if (saved) return saved.cc;
-		if (mode.type === "reply-all") return buildReplyAllCc(mode.original);
+		if (mode.type === "reply-all") return buildReplyAllCc(mode.original, userEmail);
 		return "";
 	});
 	const [bcc, setBcc] = useState(() => {
@@ -183,7 +187,7 @@ export function ComposeModal({
 	const [showCc, setShowCc] = useState(() => {
 		const saved = loadDraft(currentDraftKey);
 		if (saved) return !!saved.cc;
-		if (mode.type === "reply-all") return buildReplyAllCc(mode.original).length > 0;
+		if (mode.type === "reply-all") return buildReplyAllCc(mode.original, userEmail).length > 0;
 		return false;
 	});
 	const [showBcc, setShowBcc] = useState(() => {

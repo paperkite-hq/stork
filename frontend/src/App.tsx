@@ -639,6 +639,7 @@ export function App() {
 							thread={thread ?? []}
 							loading={messageLoading && selectedMessageId !== null}
 							error={messageError}
+							dark={dark}
 							onReply={handleReply}
 							onReplyAll={handleReplyAll}
 							onForward={handleForward}
