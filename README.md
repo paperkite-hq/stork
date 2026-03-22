@@ -99,7 +99,7 @@ cd stork
 docker compose up --build
 ```
 
-Open `http://localhost:3100` — the setup wizard will guide you through creating a password and connecting your email account.
+Open `http://localhost:3100` — the setup wizard will guide you through creating a password and connecting your email account. See the [Getting Started guide](docs/getting-started.md) for a full walkthrough.
 
 ## Architecture
 
@@ -138,6 +138,7 @@ Open `http://localhost:3100` — the setup wizard will guide you through creatin
 
 ## Documentation
 
+- **[Getting Started](docs/getting-started.md)** — first launch, encryption setup, adding an account, search, labels
 - **[User Guide](docs/user-guide.md)** — installation, account setup, search tips, backups, reverse proxy
 - **[Configuration](docs/configuration.md)** — environment variables, Docker options, database settings
 - **[API Reference](docs/api.md)** — full REST API documentation with examples
