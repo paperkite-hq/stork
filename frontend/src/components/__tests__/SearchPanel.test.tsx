@@ -476,4 +476,40 @@ describe("SearchPanel", () => {
 			expect(mockSearch).toHaveBeenCalled();
 		});
 	});
+
+	it("shows loading skeleton while search is in progress", async () => {
+		let resolveSearch: ((value: unknown[]) => void) | undefined;
+		mockSearch.mockReturnValueOnce(
+			new Promise((resolve) => {
+				resolveSearch = resolve;
+			}),
+		);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "test");
+		await waitFor(() => expect(mockSearch).toHaveBeenCalled());
+		expect(screen.getByTestId("search-skeleton")).toBeInTheDocument();
+		// Resolve search — skeleton should disappear
+		resolveSearch?.([]);
+		await waitFor(() => expect(screen.queryByTestId("search-skeleton")).not.toBeInTheDocument());
+	});
+
+	it("does not show skeleton when results already exist", async () => {
+		mockSearch.mockResolvedValueOnce([
+			{
+				id: 1,
+				subject: "Result",
+				from_name: "Alice",
+				from_address: "a@b.com",
+				date: "2024-01-01",
+				snippet: "",
+			},
+		]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "test");
+		await waitFor(() => expect(mockSearch).toHaveBeenCalled());
+		await waitFor(() => expect(screen.getByText("Result")).toBeInTheDocument());
+		expect(screen.queryByTestId("search-skeleton")).not.toBeInTheDocument();
+	});
 });
