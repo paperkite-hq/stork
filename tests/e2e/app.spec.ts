@@ -5,15 +5,15 @@ test.describe("App layout and navigation", () => {
 		await page.goto("/");
 		// Sidebar should show Stork branding
 		await expect(page.getByText("Stork")).toBeVisible();
-		// Folder list should show INBOX in the sidebar folder button
-		await expect(page.getByRole("button", { name: /INBOX/ })).toBeVisible();
+		// Folder list should show Inbox in the promoted sidebar section
+		await expect(page.getByRole("button", { name: /Inbox/ })).toBeVisible();
 		// Should show compose button (use role to avoid matching SVG <title>Compose</title>)
 		await expect(page.getByRole("button", { name: /compose/i }).first()).toBeVisible();
 	});
 
 	test("shows folder list with correct folders", async ({ page }) => {
 		await page.goto("/");
-		await expect(page.getByRole("button", { name: /INBOX/ })).toBeVisible();
+		await expect(page.getByRole("button", { name: /Inbox/ })).toBeVisible();
 		await expect(page.getByRole("button", { name: /Sent/ })).toBeVisible();
 		await expect(page.getByRole("button", { name: /Drafts/ })).toBeVisible();
 		await expect(page.getByRole("button", { name: /Trash/ })).toBeVisible();
@@ -26,10 +26,10 @@ test.describe("App layout and navigation", () => {
 		await expect(page.getByText("Sender 1", { exact: true })).toBeVisible();
 	});
 
-	test("shows unread count badge on INBOX", async ({ page }) => {
+	test("shows unread count badge on Inbox", async ({ page }) => {
 		await page.goto("/");
-		// Check the INBOX folder button contains the unread badge
-		const inboxBtn = page.getByRole("button", { name: /INBOX/ });
+		// Check the Inbox promoted button contains the unread badge
+		const inboxBtn = page.getByRole("button", { name: /Inbox/ });
 		await expect(inboxBtn).toBeVisible();
 		await expect(inboxBtn).toContainText("3");
 	});
@@ -115,11 +115,11 @@ test.describe("Folder navigation", () => {
 		await expect(page.getByText("No messages in this folder")).toBeVisible();
 	});
 
-	test("switching back to INBOX restores message list", async ({ page }) => {
+	test("switching back to Inbox restores message list", async ({ page }) => {
 		await page.goto("/");
 		await page.getByRole("button", { name: /Sent/ }).click();
 		await expect(page.getByText("Outgoing Test")).toBeVisible();
-		await page.getByRole("button", { name: /INBOX/ }).click();
+		await page.getByRole("button", { name: /Inbox/ }).click();
 		await expect(page.getByText("E2E Test Email #2", { exact: true })).toBeVisible();
 	});
 });
