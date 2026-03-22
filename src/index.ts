@@ -2,13 +2,38 @@ import { mkdirSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { createApp } from "./api/server.js";
 import { bootContainer } from "./crypto/lifecycle.js";
+import { bootDemoDatabase, isDemoMode } from "./demo/demo-mode.js";
 
 const DATA_DIR = process.env.STORK_DATA_DIR || "./data";
 const PORT = Number(process.env.STORK_PORT || 3100);
 
 mkdirSync(DATA_DIR, { recursive: true });
 
-const { app, shutdown } = await bootContainer(DATA_DIR, createApp);
+let app: ReturnType<typeof createApp>["app"];
+let shutdown: () => Promise<void>;
+
+if (isDemoMode()) {
+	// Demo mode: unencrypted DB, pre-seeded data, no IMAP sync
+	const db = bootDemoDatabase(DATA_DIR);
+	const context = {
+		state: "unlocked" as const,
+		dataDir: DATA_DIR,
+		db,
+		scheduler: null,
+		_vaultKeyInMemory: null,
+	};
+	const result = createApp(context);
+	app = result.app;
+	shutdown = async () => {
+		console.log("\nShutting down demo...");
+		db.close();
+		process.exit(0);
+	};
+} else {
+	const result = await bootContainer(DATA_DIR, createApp);
+	app = result.app;
+	shutdown = result.shutdown;
+}
 
 // ANSI color/style helpers
 const c1 = "\x1b[96m\x1b[1m"; // bright cyan bold

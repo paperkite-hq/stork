@@ -3,6 +3,7 @@ import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { ContainerContext } from "../crypto/lifecycle.js";
+import { isDemoMode } from "../demo/demo-mode.js";
 import type { SyncScheduler } from "../sync/sync-scheduler.js";
 import { accountRoutes } from "./routes/accounts.js";
 import { attachmentRoutes } from "./routes/attachments.js";
@@ -48,6 +49,11 @@ export function createApp(context: ContainerContext): { app: Hono } {
 
 	const api = new Hono();
 
+	// ── Demo mode indicator ─────────────────────────────────────────────────
+	api.get("/demo", (c) => {
+		return c.json({ demo: isDemoMode() });
+	});
+
 	// ── Always-accessible endpoints (health, status, setup, unlock) ─────────
 	api.route("/", encryptionRoutes(context));
 
@@ -58,6 +64,17 @@ export function createApp(context: ContainerContext): { app: Hono } {
 		}
 		await next();
 	});
+
+	// ── Demo read-only middleware — blocks mutations on data routes ──────────
+	if (isDemoMode()) {
+		api.use("*", async (c, next) => {
+			const method = c.req.method;
+			if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
+				return c.json({ error: "This is a read-only demo" }, 403);
+			}
+			await next();
+		});
+	}
 
 	// ── Data routes (all require unlocked state via middleware above) ────────
 
