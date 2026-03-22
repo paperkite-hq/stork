@@ -47,37 +47,59 @@ This is a deliberate design choice: **search is the primary navigation, labels a
 
 ## Quick Start
 
-### Docker Compose
+### Docker Compose (recommended)
 
-```bash
-git clone https://github.com/paperkite-hq/stork.git
-cd stork
-docker compose up
+Create a `docker-compose.yml` (or download from the repo):
+
+```yaml
+services:
+  stork:
+    image: ghcr.io/paperkite-hq/stork:latest
+    init: true
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - stork-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  stork-data:
 ```
 
-### Docker (single container)
+```bash
+docker compose up -d
+```
 
-If you prefer a direct `docker run` command and want your data stored as regular files at a path you control:
+### Docker Run
 
 ```bash
-git clone https://github.com/paperkite-hq/stork.git
-cd stork
-docker build -t stork .
-docker run --rm --init \
+docker run -d --init \
   -p 127.0.0.1:3100:3100 \
   -v ~/stork-data:/app/data \
   --memory-swappiness=0 \
   --ulimit core=0 \
   --security-opt no-new-privileges \
-  stork
+  --restart unless-stopped \
+  ghcr.io/paperkite-hq/stork:latest
 ```
 
 This:
+- Pulls the pre-built image — no clone or build needed
 - Binds to **localhost only** (`127.0.0.1`) — not exposed to your network
-- Stores the SQLite database and key file in `~/stork-data` (change to any path you like) — regular files that work with your existing backup tooling
-- The security flags match the `docker-compose.yml` defaults: disabled swap, no core dumps, no privilege escalation
+- Stores the encrypted database in `~/stork-data` (change to any path you like) — regular files that work with your existing backup tooling
+- The security flags disable swap, core dumps, and privilege escalation
 
-Open `http://localhost:3100` and configure your IMAP connection.
+### Build from Source
+
+If you prefer to build locally:
+
+```bash
+git clone https://github.com/paperkite-hq/stork.git
+cd stork
+docker compose up --build
+```
+
+Open `http://localhost:3100` — the setup wizard will guide you through creating a password and connecting your email account.
 
 ## Architecture
 
