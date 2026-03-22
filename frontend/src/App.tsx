@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { type ContainerState, type Message, api } from "./api";
 import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { DemoBanner } from "./components/DemoBanner";
 import { AlertCircleIcon } from "./components/Icons";
 import { MessageDetail } from "./components/MessageDetail";
 import { MessageList } from "./components/MessageList";
@@ -475,185 +476,190 @@ export function App() {
 	}
 
 	return (
-		<div className="h-screen flex overflow-hidden">
-			{/* Skip to content link — visible on Tab for keyboard users */}
-			<a
-				href="#message-list"
-				className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-stork-600 focus:text-white focus:rounded-md focus:text-sm"
-			>
-				Skip to messages
-			</a>
-			{/* Mobile sidebar overlay */}
-			{sidebarOpen && (
-				<button
-					type="button"
-					className="fixed inset-0 z-30 bg-black/30 md:hidden"
-					onClick={() => setSidebarOpen(false)}
-					aria-label="Close sidebar"
-				/>
-			)}
-
-			{/* Sidebar */}
-			<div
-				className={`fixed inset-y-0 left-0 z-40 md:relative md:z-0 transform transition-transform duration-200 ease-in-out ${
-					sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-				}`}
-			>
-				<Sidebar
-					accounts={accounts ?? []}
-					labels={labels ?? []}
-					selectedAccountId={effectiveAccountId}
-					selectedLabelId={effectiveLabelId}
-					onSelectAccount={handleSelectAccount}
-					onSelectLabel={handleSelectLabel}
-					onCompose={handleCompose}
-					onSearch={() => setShowSearch(true)}
-					onSettings={() => setShowSettings(true)}
-					onSyncNow={handleSyncNow}
-					dark={dark}
-					onToggleDark={toggleDark}
-					syncing={syncing}
-					syncError={syncError}
-					syncStatus={syncStatus}
-					onLabelsChanged={refetchLabels}
-					allMailCount={allMailCount}
-					unreadCount={unreadCount}
-					inboxLabel={inboxLabel}
-				/>
-			</div>
-
-			{/* Main content area — split into message list + detail */}
-			<div className="flex-1 flex min-w-0">
-				{/* Mobile header with hamburger */}
-				<div className="md:hidden absolute top-0 left-0 z-20 p-2">
+		<div className="h-screen flex flex-col overflow-hidden">
+			<DemoBanner />
+			<div className="flex-1 flex min-h-0 overflow-hidden">
+				{/* Skip to content link — visible on Tab for keyboard users */}
+				<a
+					href="#message-list"
+					className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-stork-600 focus:text-white focus:rounded-md focus:text-sm"
+				>
+					Skip to messages
+				</a>
+				{/* Mobile sidebar overlay */}
+				{sidebarOpen && (
 					<button
 						type="button"
-						onClick={() => setSidebarOpen(true)}
-						className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
-						aria-label="Open sidebar"
-					>
-						<svg
-							className="w-5 h-5"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-							role="img"
-							aria-label="Menu"
-						>
-							<title>Menu</title>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M4 6h16M4 12h16M4 18h16"
-							/>
-						</svg>
-					</button>
-				</div>
+						className="fixed inset-0 z-30 bg-black/30 md:hidden"
+						onClick={() => setSidebarOpen(false)}
+						aria-label="Close sidebar"
+					/>
+				)}
 
-				{/* Message list panel — hidden on mobile when viewing a message */}
+				{/* Sidebar */}
 				<div
-					id="message-list"
-					className={`w-full md:w-80 xl:w-96 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col min-h-0 ${
-						selectedMessageId !== null ? "hidden md:flex" : "flex"
+					className={`fixed inset-y-0 left-0 z-40 md:relative md:z-0 transform transition-transform duration-200 ease-in-out ${
+						sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
 					}`}
 				>
-					<MessageList
-						messages={allMessages}
-						selectedId={selectedMessageId}
-						focusedId={focusedMessage?.id ?? null}
-						onSelect={handleSelectMessage}
-						loading={messagesLoading}
-						error={messagesError}
-						folderName={currentLabelName}
-						onRefresh={refetchMessages}
-						hasMore={hasMore}
-						onLoadMore={handleLoadMore}
-						loadingMore={loadingMore}
-						onToggleStar={handleToggleStar}
-						totalCount={
-							isAllMail
-								? allMailCount?.total
-								: isUnread
-									? unreadCount?.total
-									: isInbox
-										? inboxLabel?.message_count
-										: labels?.find((l) => l.id === effectiveLabelId)?.message_count
-						}
-						selectedIds={bulk.selectedIds}
-						onToggleSelect={bulk.toggle}
-						onSelectAll={bulk.selectAll}
-						onClearSelection={bulk.clear}
-						onBulkDelete={bulk.bulkDelete}
-						onBulkMarkRead={bulk.markRead}
-						onBulkMarkUnread={bulk.markUnread}
-						onBulkMove={bulk.move}
-						onBulkArchive={!archiveDisabled ? bulk.archive : undefined}
-						folders={folders ?? []}
-					/>
-				</div>
-
-				{/* Message detail / thread view — hidden on mobile when no message selected */}
-				<div className={`flex-1 min-w-0 ${selectedMessageId === null ? "hidden md:flex" : "flex"}`}>
-					<MessageDetail
-						message={selectedMessage ?? null}
-						thread={thread ?? []}
-						loading={messageLoading && selectedMessageId !== null}
-						error={messageError}
-						onReply={handleReply}
-						onReplyAll={handleReplyAll}
-						onForward={handleForward}
-						onBack={() => setSelectedMessageId(null)}
-						onMessageChanged={() => {
-							refetchMessage();
-							refetchMessages();
-							refetchLabels();
-						}}
-						onMessageDeleted={() => {
-							setSelectedMessageId(null);
-							refetchMessages();
-							refetchLabels();
-						}}
-						folders={folders ?? []}
-						accountId={effectiveAccountId}
+					<Sidebar
+						accounts={accounts ?? []}
+						labels={labels ?? []}
+						selectedAccountId={effectiveAccountId}
+						selectedLabelId={effectiveLabelId}
+						onSelectAccount={handleSelectAccount}
+						onSelectLabel={handleSelectLabel}
+						onCompose={handleCompose}
+						onSearch={() => setShowSearch(true)}
+						onSettings={() => setShowSettings(true)}
+						onSyncNow={handleSyncNow}
+						dark={dark}
+						onToggleDark={toggleDark}
+						syncing={syncing}
+						syncError={syncError}
+						syncStatus={syncStatus}
 						onLabelsChanged={refetchLabels}
+						allMailCount={allMailCount}
+						unreadCount={unreadCount}
+						inboxLabel={inboxLabel}
 					/>
 				</div>
-			</div>
 
-			{/* Modals */}
-			{composeMode && (
-				<ComposeModal
-					mode={composeMode}
-					accounts={accounts ?? []}
-					selectedAccountId={effectiveAccountId}
-					onClose={() => setComposeMode(null)}
-					onSend={handleSend}
-				/>
-			)}
-			{showSearch && (
-				<SearchPanel
-					onClose={() => setShowSearch(false)}
-					onSelectMessage={(id) => {
-						setSelectedMessageId(id);
-						setShowSearch(false);
-					}}
-					accountId={effectiveAccountId}
-				/>
-			)}
-			{showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
-			{showSettings && <Settings onClose={() => setShowSettings(false)} />}
-			{msgActions.pendingDelete !== null && (
-				<ConfirmDialog
-					title="Delete message"
-					message="This will permanently delete this message. This action cannot be undone."
-					confirmLabel="Delete"
-					variant="danger"
-					onConfirm={msgActions.confirmDelete}
-					onCancel={() => msgActions.setPendingDelete(null)}
-				/>
-			)}
-			<ToastContainer />
+				{/* Main content area — split into message list + detail */}
+				<div className="flex-1 flex min-w-0">
+					{/* Mobile header with hamburger */}
+					<div className="md:hidden absolute top-0 left-0 z-20 p-2">
+						<button
+							type="button"
+							onClick={() => setSidebarOpen(true)}
+							className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+							aria-label="Open sidebar"
+						>
+							<svg
+								className="w-5 h-5"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+								role="img"
+								aria-label="Menu"
+							>
+								<title>Menu</title>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M4 6h16M4 12h16M4 18h16"
+								/>
+							</svg>
+						</button>
+					</div>
+
+					{/* Message list panel — hidden on mobile when viewing a message */}
+					<div
+						id="message-list"
+						className={`w-full md:w-80 xl:w-96 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col min-h-0 ${
+							selectedMessageId !== null ? "hidden md:flex" : "flex"
+						}`}
+					>
+						<MessageList
+							messages={allMessages}
+							selectedId={selectedMessageId}
+							focusedId={focusedMessage?.id ?? null}
+							onSelect={handleSelectMessage}
+							loading={messagesLoading}
+							error={messagesError}
+							folderName={currentLabelName}
+							onRefresh={refetchMessages}
+							hasMore={hasMore}
+							onLoadMore={handleLoadMore}
+							loadingMore={loadingMore}
+							onToggleStar={handleToggleStar}
+							totalCount={
+								isAllMail
+									? allMailCount?.total
+									: isUnread
+										? unreadCount?.total
+										: isInbox
+											? inboxLabel?.message_count
+											: labels?.find((l) => l.id === effectiveLabelId)?.message_count
+							}
+							selectedIds={bulk.selectedIds}
+							onToggleSelect={bulk.toggle}
+							onSelectAll={bulk.selectAll}
+							onClearSelection={bulk.clear}
+							onBulkDelete={bulk.bulkDelete}
+							onBulkMarkRead={bulk.markRead}
+							onBulkMarkUnread={bulk.markUnread}
+							onBulkMove={bulk.move}
+							onBulkArchive={!archiveDisabled ? bulk.archive : undefined}
+							folders={folders ?? []}
+						/>
+					</div>
+
+					{/* Message detail / thread view — hidden on mobile when no message selected */}
+					<div
+						className={`flex-1 min-w-0 ${selectedMessageId === null ? "hidden md:flex" : "flex"}`}
+					>
+						<MessageDetail
+							message={selectedMessage ?? null}
+							thread={thread ?? []}
+							loading={messageLoading && selectedMessageId !== null}
+							error={messageError}
+							onReply={handleReply}
+							onReplyAll={handleReplyAll}
+							onForward={handleForward}
+							onBack={() => setSelectedMessageId(null)}
+							onMessageChanged={() => {
+								refetchMessage();
+								refetchMessages();
+								refetchLabels();
+							}}
+							onMessageDeleted={() => {
+								setSelectedMessageId(null);
+								refetchMessages();
+								refetchLabels();
+							}}
+							folders={folders ?? []}
+							accountId={effectiveAccountId}
+							onLabelsChanged={refetchLabels}
+						/>
+					</div>
+				</div>
+
+				{/* Modals */}
+				{composeMode && (
+					<ComposeModal
+						mode={composeMode}
+						accounts={accounts ?? []}
+						selectedAccountId={effectiveAccountId}
+						onClose={() => setComposeMode(null)}
+						onSend={handleSend}
+					/>
+				)}
+				{showSearch && (
+					<SearchPanel
+						onClose={() => setShowSearch(false)}
+						onSelectMessage={(id) => {
+							setSelectedMessageId(id);
+							setShowSearch(false);
+						}}
+						accountId={effectiveAccountId}
+					/>
+				)}
+				{showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
+				{showSettings && <Settings onClose={() => setShowSettings(false)} />}
+				{msgActions.pendingDelete !== null && (
+					<ConfirmDialog
+						title="Delete message"
+						message="This will permanently delete this message. This action cannot be undone."
+						confirmLabel="Delete"
+						variant="danger"
+						onConfirm={msgActions.confirmDelete}
+						onCancel={() => msgActions.setPendingDelete(null)}
+					/>
+				)}
+				<ToastContainer />
+			</div>
 		</div>
 	);
 }

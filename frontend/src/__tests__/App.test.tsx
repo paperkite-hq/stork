@@ -11,6 +11,7 @@ import type { Account, Label, Message, MessageSummary } from "../api";
 vi.mock("../api", () => ({
 	api: {
 		status: vi.fn().mockResolvedValue({ state: "unlocked" }),
+		demo: vi.fn().mockResolvedValue({ demo: false }),
 		encryption: {
 			setup: vi.fn(),
 			unlock: vi.fn(),

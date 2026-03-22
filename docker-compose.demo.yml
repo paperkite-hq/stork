@@ -1,0 +1,24 @@
+# Hosted read-only demo — pre-seeded with sample data, all mutations blocked.
+# Usage: docker compose -f docker-compose.demo.yml up -d
+services:
+  stork-demo:
+    image: ghcr.io/paperkite-hq/stork:latest
+    # To build from source:
+    # build: .
+    init: true
+    ports:
+      - "127.0.0.1:3101:3100"
+    volumes:
+      - stork-demo-data:/app/data
+    environment:
+      - STORK_PORT=3100
+      - STORK_DEMO_MODE=1
+    restart: unless-stopped
+    mem_swappiness: 0
+    ulimits:
+      core: 0
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  stork-demo-data:
