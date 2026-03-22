@@ -17,6 +17,31 @@ export function createApp(context: ContainerContext): { app: Hono } {
 
 	app.use("*", cors());
 
+	// Content Security Policy — defense-in-depth against XSS.
+	// Even if the HTML sanitizer misses something, these headers prevent
+	// inline script execution and restrict resource loading.
+	app.use("*", async (c, next) => {
+		await next();
+		// Only set CSP on HTML responses (the SPA shell)
+		const ct = c.res.headers.get("content-type") ?? "";
+		if (ct.includes("text/html")) {
+			c.res.headers.set(
+				"Content-Security-Policy",
+				[
+					"default-src 'self'",
+					"script-src 'self'",
+					"style-src 'self' 'unsafe-inline'",
+					"img-src 'self' data: cid: https:",
+					"font-src 'self'",
+					"connect-src 'self'",
+					"frame-src 'self' blob:",
+					"object-src 'none'",
+					"base-uri 'self'",
+				].join("; "),
+			);
+		}
+	});
+
 	// Serve frontend static files
 	app.use("/assets/*", serveStatic({ root: "./frontend/dist" }));
 	app.get("/stork.svg", serveStatic({ root: "./frontend/dist", path: "stork.svg" }));
