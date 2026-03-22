@@ -367,7 +367,24 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 
 				{/* Results */}
 				<div className="flex-1 overflow-y-auto">
-					{searched && results.length === 0 && (
+					{loading && results.length === 0 && (
+						<div className="animate-pulse" data-testid="search-skeleton">
+							{[1, 2, 3, 4].map((i) => (
+								<div
+									key={i}
+									className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 space-y-1.5"
+								>
+									<div className="flex items-baseline gap-2">
+										<div className="h-3.5 bg-gray-200 dark:bg-gray-700 rounded w-28" />
+										<div className="h-3 bg-gray-100 dark:bg-gray-800 rounded w-16 ml-auto" />
+									</div>
+									<div className="h-3.5 bg-gray-200 dark:bg-gray-700 rounded w-48" />
+									<div className="h-3 bg-gray-100 dark:bg-gray-800 rounded w-64" />
+								</div>
+							))}
+						</div>
+					)}
+					{searched && results.length === 0 && !loading && (
 						<div className="p-6 text-center text-gray-400 text-sm">
 							{query.trim()
 								? `No results for \u201c${query}\u201d`
