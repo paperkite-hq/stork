@@ -223,6 +223,89 @@ describe("Send API", () => {
 			expect(status).toBe(404);
 		});
 
+		test("rejects request with no content (no subject, text, or html)", async () => {
+			const accountId = createSmtpAccount();
+			const { status, body } = await jsonRequest("/api/send", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					account_id: accountId,
+					to: ["test@example.com"],
+				}),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toContain("subject");
+		});
+
+		test("sends with BCC recipients", async () => {
+			const accountId = createSmtpAccount();
+			const { status, body } = await jsonRequest("/api/send", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					account_id: accountId,
+					to: ["alice@example.com"],
+					bcc: ["secret@example.com"],
+					subject: "BCC test",
+					text_body: "Hidden recipient test",
+				}),
+			});
+			expect(status).toBe(200);
+			expect(body.ok).toBe(true);
+
+			// Verify BCC stored in DB
+			const stored = db
+				.prepare("SELECT * FROM messages WHERE id = ?")
+				.get(body.stored_message_id) as Record<string, unknown>;
+			expect(stored.bcc_addresses).toBe('["secret@example.com"]');
+		});
+
+		test("uses existing Sent folder with special_use flag", async () => {
+			const accountId = createSmtpAccount();
+			// Pre-create a Sent folder with special_use
+			db.prepare(`
+				INSERT INTO folders (account_id, path, name, delimiter, flags, special_use, message_count, unread_count)
+				VALUES (?, '[Gmail]/Sent Mail', 'Sent Mail', '/', '[]', '\\\\Sent', 0, 0)
+			`).run(accountId);
+
+			const existingFolderId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+
+			const { body } = await jsonRequest("/api/send", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					account_id: accountId,
+					to: ["test@example.com"],
+					subject: "Reuse folder test",
+					text_body: "Body",
+				}),
+			});
+
+			// Verify message was saved to the existing folder, not a new one
+			const stored = db
+				.prepare("SELECT folder_id FROM messages WHERE id = ?")
+				.get(body.stored_message_id) as { folder_id: number };
+			expect(stored.folder_id).toBe(existingFolderId);
+		});
+
+		test("sends with html_body only (no text_body)", async () => {
+			const accountId = createSmtpAccount();
+			const { status, body } = await jsonRequest("/api/send", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					account_id: accountId,
+					to: ["test@example.com"],
+					subject: "HTML only",
+					html_body: "<p>Rich content</p>",
+				}),
+			});
+			expect(status).toBe(200);
+			expect(body.ok).toBe(true);
+		});
+
 		test("sends with attachments", async () => {
 			const accountId = createSmtpAccount();
 			const content = Buffer.from("Hello, attachment!").toString("base64");

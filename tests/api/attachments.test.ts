@@ -86,6 +86,83 @@ describe("Attachments API", () => {
 		});
 	});
 
+	// ─── Content-ID (cid:) endpoint ────────────────────────
+	describe("By Content-ID", () => {
+		test("GET /api/attachments/by-cid/:messageId/:contentId returns inline image", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			const msgId = createTestMessage(db, accountId, folderId, 1);
+
+			db.prepare(`
+				INSERT INTO attachments (message_id, filename, content_type, size, data, content_id)
+				VALUES (?, 'logo.png', 'image/png', 5, X'89504E47', 'logo123')
+			`).run(msgId);
+
+			const res = await request(`/api/attachments/by-cid/${msgId}/logo123`);
+			expect(res.status).toBe(200);
+			expect(res.headers.get("Content-Type")).toBe("image/png");
+			expect(res.headers.get("Cache-Control")).toContain("max-age=86400");
+			const data = await res.arrayBuffer();
+			expect(data.byteLength).toBe(4);
+		});
+
+		test("GET /api/attachments/by-cid returns 404 for missing", async () => {
+			const { status } = await jsonRequest("/api/attachments/by-cid/999/nonexistent");
+			expect(status).toBe(404);
+		});
+
+		test("null content_type falls back to application/octet-stream", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			const msgId = createTestMessage(db, accountId, folderId, 1);
+
+			db.prepare(`
+				INSERT INTO attachments (message_id, filename, content_type, size, data, content_id)
+				VALUES (?, 'data.bin', NULL, 3, X'414243', 'cid-null')
+			`).run(msgId);
+
+			const res = await request(`/api/attachments/by-cid/${msgId}/cid-null`);
+			expect(res.status).toBe(200);
+			expect(res.headers.get("Content-Type")).toBe("application/octet-stream");
+		});
+
+		test("null data returns empty response", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			const msgId = createTestMessage(db, accountId, folderId, 1);
+
+			db.prepare(`
+				INSERT INTO attachments (message_id, filename, content_type, size, data, content_id)
+				VALUES (?, 'empty.bin', 'application/octet-stream', 0, NULL, 'cid-empty')
+			`).run(msgId);
+
+			const res = await request(`/api/attachments/by-cid/${msgId}/cid-empty`);
+			expect(res.status).toBe(200);
+		});
+	});
+
+	// ─── Null data in download endpoint ─────────────────────
+	describe("Null data handling", () => {
+		test("GET /api/attachments/:id returns response for null data", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			const msgId = createTestMessage(db, accountId, folderId, 1);
+
+			db.prepare(`
+				INSERT INTO attachments (message_id, filename, content_type, size, data)
+				VALUES (?, 'empty.txt', 'text/plain', 0, NULL)
+			`).run(msgId);
+
+			const attId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+
+			const res = await request(`/api/attachments/${attId}`);
+			expect(res.status).toBe(200);
+			expect(res.headers.get("Content-Type")).toBe("text/plain");
+		});
+	});
+
 	// ─── Content-Disposition security ───────────────────────
 	describe("Filename sanitization", () => {
 		test("sanitizes path separators in attachment filename", async () => {
