@@ -198,7 +198,7 @@ describe("schema migrations", () => {
 
 		// Verify schema version is set to latest
 		const version = db.prepare("SELECT version FROM schema_version").get() as { version: number };
-		expect(version.version).toBe(4);
+		expect(version.version).toBe(5);
 
 		db.close();
 	});

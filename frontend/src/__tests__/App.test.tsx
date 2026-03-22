@@ -58,6 +58,15 @@ vi.mock("../api", () => ({
 			status: vi.fn().mockResolvedValue({}),
 			trigger: vi.fn().mockResolvedValue({}),
 		},
+		send: vi.fn(),
+		testSmtp: vi.fn(),
+		drafts: {
+			list: vi.fn().mockResolvedValue([]),
+			get: vi.fn(),
+			create: vi.fn(),
+			update: vi.fn(),
+			delete: vi.fn(),
+		},
 	},
 }));
 
@@ -1510,11 +1519,19 @@ describe("App — Mobile sidebar", () => {
 });
 
 // ------------------------------------------------------------------
-// Tests: Send (SMTP not yet available)
+// Tests: Send via SMTP
 // ------------------------------------------------------------------
 
-describe("App — Send shows unavailable error", () => {
-	it("clicking Send in compose modal shows SMTP unavailable error inline and keeps modal open", async () => {
+describe("App — Send email", () => {
+	it("clicking Send calls api.send and closes the compose modal on success", async () => {
+		const { api } = await import("../api");
+		(api.send as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			message_id: "<test@example.com>",
+			accepted: ["test@test.com"],
+			rejected: [],
+			stored_message_id: 1,
+		});
 		setupWithAccounts();
 		render(<App />);
 		await waitForAppLayout();
@@ -1527,9 +1544,31 @@ describe("App — Send shows unavailable error", () => {
 		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "test@test.com");
 		// Click Send
 		await userEvent.click(screen.getByRole("button", { name: /send/i }));
-		// Error should appear inline in the compose modal (not as a toast)
+		// Modal should close after successful send
 		await waitFor(() => {
-			expect(screen.getByText(/not yet available/i)).toBeInTheDocument();
+			expect(screen.queryByPlaceholderText("recipient@example.com")).not.toBeInTheDocument();
+		});
+		expect(api.send).toHaveBeenCalled();
+	});
+
+	it("shows error inline when send fails", async () => {
+		const { api } = await import("../api");
+		(api.send as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("SMTP connection refused"));
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+		// Open compose
+		fireEvent.keyDown(window, { key: "c" });
+		await waitFor(() => {
+			expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument();
+		});
+		// Fill required field
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "test@test.com");
+		// Click Send
+		await userEvent.click(screen.getByRole("button", { name: /send/i }));
+		// Error should appear inline in the compose modal
+		await waitFor(() => {
+			expect(screen.getByText(/SMTP connection refused/i)).toBeInTheDocument();
 		});
 		// Compose modal should still be open — draft is preserved
 		expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument();
