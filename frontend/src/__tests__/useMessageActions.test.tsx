@@ -163,28 +163,16 @@ describe("useMessageActions", () => {
 		expect(refetchAllMailCount).toHaveBeenCalled();
 	});
 
-	it("archive falls back to folder-based move in All Mail view", async () => {
-		const archiveFolder = makeFolder({ id: 5, name: "Archive", special_use: "\\Archive" });
+	it("archive shows error in All Mail view", async () => {
 		const { result } = renderActions({
 			isAllMail: true,
 			effectiveLabelId: -1,
-			folders: [archiveFolder],
+			folders: [],
 			labels: [],
 		});
 		await act(() => result.current.archive());
-		expect(mockMove).toHaveBeenCalledWith(1, 5);
-		expect(mockToast).toHaveBeenCalledWith("Archived");
-	});
-
-	it("archive shows error when no archive folder exists", async () => {
-		const { result } = renderActions({
-			isAllMail: true,
-			effectiveLabelId: -1,
-			folders: [makeFolder({ name: "INBOX" })],
-			labels: [],
-		});
-		await act(() => result.current.archive());
-		expect(mockToast).toHaveBeenCalledWith("No archive folder found", "error");
+		expect(mockMove).not.toHaveBeenCalled();
+		expect(mockToast).toHaveBeenCalledWith("Archive is only available from a label view", "error");
 	});
 
 	it("archive reverts on label removal failure", async () => {
@@ -195,18 +183,16 @@ describe("useMessageActions", () => {
 		expect(mockToast).toHaveBeenCalledWith("Failed to archive: Failed", "error");
 	});
 
-	it("archive reverts on folder-based move failure", async () => {
-		mockMove.mockRejectedValueOnce(new Error("Move failed"));
-		const archiveFolder = makeFolder({ id: 5, name: "All Mail", special_use: "\\All" });
+	it("archive shows error when no label context", async () => {
 		const { result } = renderActions({
-			isAllMail: true,
-			effectiveLabelId: -1,
-			folders: [archiveFolder],
+			isAllMail: false,
+			effectiveLabelId: null,
+			folders: [],
 			labels: [],
 		});
 		await act(() => result.current.archive());
-		expect(refetchMessages).toHaveBeenCalled();
-		expect(mockToast).toHaveBeenCalledWith("Failed to archive: Move failed", "error");
+		expect(mockMove).not.toHaveBeenCalled();
+		expect(mockToast).toHaveBeenCalledWith("Archive is only available from a label view", "error");
 	});
 
 	it("confirmDelete does nothing when pendingDelete is null", async () => {

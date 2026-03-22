@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Account, GlobalSyncStatus, Label } from "../../api";
-import { Sidebar } from "../Sidebar";
+import { INBOX_LABEL_ID, Sidebar } from "../Sidebar";
 
 function makeAccount(overrides: Partial<Account> = {}): Account {
 	return {
@@ -81,8 +81,9 @@ describe("Sidebar", () => {
 	});
 
 	it("shows unread count badges", () => {
-		const labels = [makeLabel({ id: 1, name: "Inbox", unread_count: 5 })];
-		render(<Sidebar {...defaultProps} labels={labels} />);
+		const inboxLabel = makeLabel({ id: 1, name: "Inbox", unread_count: 5 });
+		const labels = [inboxLabel];
+		render(<Sidebar {...defaultProps} labels={labels} inboxLabel={inboxLabel} />);
 		expect(screen.getByText("5")).toBeInTheDocument();
 	});
 
@@ -188,7 +189,10 @@ describe("Sidebar", () => {
 			makeLabel({ id: 1, name: "Inbox" }),
 			makeLabel({ id: 2, name: "Sent", unread_count: 0 }),
 		];
-		const { container } = render(<Sidebar {...defaultProps} labels={labels} selectedLabelId={1} />);
+		// Inbox is promoted — selecting it uses the INBOX_LABEL_ID sentinel
+		const { container } = render(
+			<Sidebar {...defaultProps} labels={labels} selectedLabelId={INBOX_LABEL_ID} />,
+		);
 		// Active label button has the stork-100 highlight class
 		const buttons = container.querySelectorAll("nav button");
 		const inboxBtn = Array.from(buttons).find((b) => b.textContent?.includes("Inbox"));

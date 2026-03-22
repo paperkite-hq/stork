@@ -102,8 +102,8 @@ After entering your credentials, Stork begins syncing immediately. The initial s
 ### Reading Mail
 
 The interface has three panels:
-- **Sidebar** (left) — your accounts and labels. Click a label to view its messages.
-- **Message list** (center) — messages with the selected label, newest first. Unread messages are visually distinguished. Click "Load more" at the bottom for older messages.
+- **Sidebar** (left) — promoted views (Inbox, Unread, All Mail) at the top, followed by your labels. Click any view or label to see its messages.
+- **Message list** (center) — messages in the selected view, newest first. Unread messages are visually distinguished. Click "Load more" at the bottom for older messages.
 - **Message detail** (right) — the full message content when you select a message.
 
 ### Composing and Replying
@@ -136,7 +136,27 @@ Toggle dark mode from the settings or use the theme button. Your preference is s
 
 You can add multiple email accounts from the Settings panel. Each account syncs independently on its own schedule. The sidebar shows all accounts with their labels.
 
-### Labels
+### Mail Organization Philosophy
+
+Stork uses a **labels, not folders** model inspired by Gmail. Every IMAP folder is synced as a label, and messages can have multiple labels simultaneously. The sidebar is organized into two sections:
+
+**Promoted views** (always at the top of the sidebar):
+- **Inbox** — your landing view. Shows messages with the Inbox label. This is portable across providers because every IMAP server has an INBOX folder, which Stork syncs as a label.
+- **Unread** — shows all unread messages across every label. This is a Stork-internal unread bit and does not flow back to the IMAP server. Useful when your IMAP server auto-sorts emails into folders — new messages in those folders will surface here.
+- **All Mail** — every message for the account, regardless of labels. Nothing is hidden from this view.
+
+**Labels** (below the divider):
+- All other labels (Sent, Drafts, Trash, Spam, custom labels, etc.) appear in the lower section.
+
+#### Archive workflow
+
+Archiving removes the **Inbox** label from a message. The message remains accessible in All Mail and any other labels it has. This mirrors Gmail's archive behavior.
+
+- The **Archive** action (`e` key) is only available when viewing a label — typically Inbox.
+- When viewing All Mail or Unread, archive is disabled because there is no single label to remove.
+- Archiving is purely local — Stork does not move messages on your IMAP server.
+
+#### Labels
 
 Stork organizes email with labels instead of folders. When your email syncs from an IMAP server, each folder name automatically becomes a label. You can also create your own labels to organize mail however you like.
 

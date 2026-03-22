@@ -517,6 +517,45 @@ export function CalendarIcon({ className = "w-4 h-4" }: IconProps) {
 	);
 }
 
+export function UnreadIcon({ className = "w-4 h-4" }: IconProps) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		>
+			<title>Unread</title>
+			<circle cx="18" cy="5" r="3" fill="currentColor" />
+			<path d="M21 11v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h8" />
+			<polyline points="3 8 12 14 21 8" />
+		</svg>
+	);
+}
+
+export function MailAllIcon({ className = "w-4 h-4" }: IconProps) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		>
+			<title>All Mail</title>
+			<path d="M22 8.5V18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.5l10 6 10-6z" />
+			<path d="M22 8.5l-10 -5-10 5" />
+			<line x1="2" y1="8.5" x2="8" y2="12" />
+			<line x1="22" y1="8.5" x2="16" y2="12" />
+		</svg>
+	);
+}
+
 export function AlertCircleIcon({ className = "w-4 h-4" }: IconProps) {
 	return (
 		<svg

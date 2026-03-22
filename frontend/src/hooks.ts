@@ -359,7 +359,6 @@ export function useMessageActions(opts: {
 		setSelectedMessageId,
 		setAllMessages,
 		labels,
-		folders,
 		effectiveLabelId,
 		isAllMail,
 		refetchMessages,
@@ -422,59 +421,35 @@ export function useMessageActions(opts: {
 		const msg = messages[messageListIndex];
 		if (!msg) return;
 
-		// Label-based archive: if viewing a specific label, remove that label from the message.
-		// The message remains accessible in "All Mail". This mirrors the Gmail archive workflow.
+		// Archive = remove the current label from the message. The message stays in "All Mail".
+		// Archive is only available when viewing a label (typically Inbox). In views without
+		// a label context (All Mail, Unread), the archive action is disabled at the UI level.
 		const currentLabel = labels?.find((l) => l.id === effectiveLabelId);
-		if (currentLabel && !isAllMail) {
-			// Optimistic: remove from list
-			setAllMessages((prev) => prev.filter((m) => m.id !== msg.id));
-			if (selectedMessageId === msg.id) setSelectedMessageId(null);
-			try {
-				await api.messages.removeLabel(msg.id, currentLabel.id);
-				refetchLabels();
-				refetchAllMailCount();
-				toast("Archived", "success", {
-					label: "Undo",
-					onClick: () => {
-						api.messages
-							.addLabels(msg.id, [currentLabel.id])
-							.then(() => {
-								refetchMessages();
-								refetchLabels();
-								refetchAllMailCount();
-							})
-							.catch(() => toast("Failed to undo", "error"));
-					},
-				});
-			} catch (err) {
-				refetchMessages(); // Revert on failure
-				toast(
-					`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`,
-					"error",
-				);
-			}
+		if (!currentLabel || isAllMail) {
+			toast("Archive is only available from a label view", "error");
 			return;
 		}
 
-		// Fallback: folder-based archive (for "All Mail" view or when no label context)
-		const archiveFolder = folders?.find((f) => {
-			const name = f.name.toLowerCase();
-			const special = f.special_use?.toLowerCase() ?? "";
-			return (
-				name === "archive" || name === "all mail" || special === "\\archive" || special === "\\all"
-			);
-		});
-		if (!archiveFolder) {
-			toast("No archive folder found", "error");
-			return;
-		}
 		// Optimistic: remove from list
 		setAllMessages((prev) => prev.filter((m) => m.id !== msg.id));
 		if (selectedMessageId === msg.id) setSelectedMessageId(null);
-		toast("Archived");
 		try {
-			await api.messages.move(msg.id, archiveFolder.id);
+			await api.messages.removeLabel(msg.id, currentLabel.id);
 			refetchLabels();
+			refetchAllMailCount();
+			toast("Archived", "success", {
+				label: "Undo",
+				onClick: () => {
+					api.messages
+						.addLabels(msg.id, [currentLabel.id])
+						.then(() => {
+							refetchMessages();
+							refetchLabels();
+							refetchAllMailCount();
+						})
+						.catch(() => toast("Failed to undo", "error"));
+				},
+			});
 		} catch (err) {
 			refetchMessages(); // Revert on failure
 			toast(`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
@@ -482,7 +457,6 @@ export function useMessageActions(opts: {
 	}, [
 		messages,
 		messageListIndex,
-		folders,
 		labels,
 		effectiveLabelId,
 		isAllMail,
@@ -529,49 +503,55 @@ export function useMessagePagination(opts: {
 	effectiveLabelId: number | null;
 	effectiveAccountId: number | null;
 	isAllMail: boolean;
+	isUnread?: boolean;
 }) {
-	const { effectiveLabelId, effectiveAccountId, isAllMail } = opts;
+	const { effectiveLabelId, effectiveAccountId, isAllMail, isUnread } = opts;
 
 	const [allMessages, setAllMessages] = useState<MessageSummary[]>([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [loadingMore, setLoadingMore] = useState(false);
+
+	const getFetchFn = useCallback(
+		(paginationOpts: { limit: number; offset?: number }) => {
+			if (isUnread && effectiveAccountId) {
+				return api.unreadMessages.list(effectiveAccountId, paginationOpts);
+			}
+			if (isAllMail && effectiveAccountId) {
+				return api.allMessages.list(effectiveAccountId, paginationOpts);
+			}
+			if (effectiveLabelId && effectiveLabelId > 0) {
+				return api.labels.messages(effectiveLabelId, paginationOpts);
+			}
+			return Promise.resolve([]);
+		},
+		[isUnread, isAllMail, effectiveAccountId, effectiveLabelId],
+	);
 
 	const {
 		loading: messagesLoading,
 		error: messagesError,
 		refetch: refetchMessages,
 	} = useAsync(() => {
-		if (!effectiveLabelId || (isAllMail && !effectiveAccountId)) {
+		const needsAccount = isAllMail || isUnread;
+		if ((!effectiveLabelId && !needsAccount) || (needsAccount && !effectiveAccountId)) {
 			setAllMessages([]);
 			setHasMore(false);
 			return Promise.resolve([]);
 		}
-		const fetchFn =
-			isAllMail && effectiveAccountId
-				? api.allMessages.list(effectiveAccountId, { limit: getPageSize() })
-				: api.labels.messages(effectiveLabelId, { limit: getPageSize() });
-		return fetchFn.then((msgs) => {
+		return getFetchFn({ limit: getPageSize() }).then((msgs) => {
 			setAllMessages(msgs);
 			setHasMore(msgs.length >= getPageSize());
 			return msgs;
 		});
-	}, [effectiveLabelId, isAllMail, effectiveAccountId]);
+	}, [effectiveLabelId, isAllMail, isUnread, effectiveAccountId, getFetchFn]);
 
 	const handleLoadMore = useCallback(() => {
-		if (!effectiveLabelId || loadingMore) return;
-		if (isAllMail && !effectiveAccountId) return;
+		if (loadingMore) return;
+		const needsAccount = isAllMail || isUnread;
+		if (!effectiveLabelId && !needsAccount) return;
+		if (needsAccount && !effectiveAccountId) return;
 		setLoadingMore(true);
-		const fetchFn =
-			isAllMail && effectiveAccountId
-				? api.allMessages.list(effectiveAccountId, {
-						limit: getPageSize(),
-						offset: allMessages.length,
-					})
-				: api.labels.messages(effectiveLabelId, {
-						limit: getPageSize(),
-						offset: allMessages.length,
-					});
-		fetchFn
+		getFetchFn({ limit: getPageSize(), offset: allMessages.length })
 			.then((more) => {
 				setAllMessages((prev) => [...prev, ...more]);
 				setHasMore(more.length >= getPageSize());
@@ -580,7 +560,15 @@ export function useMessagePagination(opts: {
 				toast("Failed to load more messages", "error");
 			})
 			.finally(() => setLoadingMore(false));
-	}, [effectiveLabelId, isAllMail, effectiveAccountId, allMessages.length, loadingMore]);
+	}, [
+		effectiveLabelId,
+		isAllMail,
+		isUnread,
+		effectiveAccountId,
+		allMessages.length,
+		loadingMore,
+		getFetchFn,
+	]);
 
 	return {
 		allMessages,
