@@ -162,7 +162,7 @@ describe("Send API", () => {
 				.prepare("SELECT * FROM messages WHERE id = ?")
 				.get(body.stored_message_id) as Record<string, unknown>;
 			expect(stored.in_reply_to).toBe("<original@example.com>");
-			expect(stored.references).toBe("<original@example.com>");
+			expect(stored.references).toBe('["<original@example.com>"]');
 		});
 
 		test("rejects missing account_id", async () => {
