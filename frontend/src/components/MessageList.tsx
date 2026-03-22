@@ -162,8 +162,8 @@ const MessageListItem = memo(function MessageListItem({
 				data-index={idx}
 				onClick={() => onSelect(msg.id)}
 				className={`w-full text-left py-3 border-b-0 transition-colors ${
-					onToggleSelect ? hasBulk || "group-hover:[&]:pl-8" : ""
-				} ${hasBulk || bulkSelected ? "pl-8 pr-4" : "px-4"}`}
+					onToggleSelect ? "pl-8 pr-4" : "px-4"
+				}`}
 			>
 				<div className="flex items-start gap-2 min-w-0">
 					{/* Unread dot */}
