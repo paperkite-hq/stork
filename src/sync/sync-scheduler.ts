@@ -12,6 +12,7 @@ export interface ActiveSyncProgress {
 	foldersCompleted: number;
 	totalFolders: number;
 	messagesNew: number;
+	errors: number;
 	startedAt: number;
 }
 
@@ -267,6 +268,7 @@ export class SyncScheduler {
 			foldersCompleted: 0,
 			totalFolders: 0,
 			messagesNew: 0,
+			errors: 0,
 			startedAt: Date.now(),
 		};
 		const accountId = scheduled.config.accountId;
@@ -280,6 +282,7 @@ export class SyncScheduler {
 				foldersCompleted: p.foldersCompleted,
 				totalFolders: p.totalFolders,
 				messagesNew: p.messagesNew,
+				errors: p.errors,
 				startedAt: scheduled.progress.startedAt,
 			};
 		};
