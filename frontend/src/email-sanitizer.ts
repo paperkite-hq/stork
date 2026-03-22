@@ -46,8 +46,15 @@ export function sanitizeEmailHtml(html: string, opts?: { blockRemoteImages?: boo
 
 	// Handle images: always remove tracking pixels, optionally block all remote images
 	for (const img of div.querySelectorAll("img")) {
-		const w = img.getAttribute("width");
-		const h = img.getAttribute("height");
+		// Check both HTML attributes and inline style for pixel dimensions.
+		// Tracking pixels often use width="1" height="1" or style="width:1px;height:1px".
+		const attrW = img.getAttribute("width");
+		const attrH = img.getAttribute("height");
+		const style = img.getAttribute("style") ?? "";
+		const styleW = style.match(/width\s*:\s*(\d+)/)?.[1];
+		const styleH = style.match(/height\s*:\s*(\d+)/)?.[1];
+		const w = attrW ?? styleW;
+		const h = attrH ?? styleH;
 		// Always strip tracking pixels (1x1 or 0x0)
 		if ((w === "1" || w === "0") && (h === "1" || h === "0")) {
 			img.remove();
@@ -84,8 +91,11 @@ export function hasRemoteImages(html: string): boolean {
 	div.innerHTML = html;
 	for (const img of div.querySelectorAll("img")) {
 		const src = img.getAttribute("src") ?? "";
-		const w = img.getAttribute("width");
-		const h = img.getAttribute("height");
+		const attrW = img.getAttribute("width");
+		const attrH = img.getAttribute("height");
+		const style = img.getAttribute("style") ?? "";
+		const w = attrW ?? style.match(/width\s*:\s*(\d+)/)?.[1];
+		const h = attrH ?? style.match(/height\s*:\s*(\d+)/)?.[1];
 		// Skip tracking pixels
 		if ((w === "1" || w === "0") && (h === "1" || h === "0")) continue;
 		if (
