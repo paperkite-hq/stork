@@ -1,4 +1,4 @@
-import Database from "@signalapp/better-sqlite3";
+import Database from "better-sqlite3-multiple-ciphers";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { MIGRATIONS } from "../src/storage/schema.js";
 import { SyncScheduler } from "../src/sync/sync-scheduler.js";

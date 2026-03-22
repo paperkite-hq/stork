@@ -152,7 +152,7 @@ Future connectors (Cloudflare Email Workers, SES, etc.) will implement these int
 ### SQLite Storage (`src/storage/`)
 
 **Database initialization** (`db.ts`):
-- Opens SQLite via `@signalapp/better-sqlite3` (SQLCipher fork) at `$STORK_DATA_DIR/stork.db`.
+- Opens SQLite via `better-sqlite3-multiple-ciphers` (SQLCipher support) at `$STORK_DATA_DIR/stork.db`.
 - Applies the vault key via `PRAGMA key` for transparent encryption/decryption.
 - Enables WAL mode for concurrent reads during sync.
 - Enables foreign keys for cascading deletes.

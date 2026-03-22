@@ -7,7 +7,7 @@
  *   unlocked → vault key loaded, database open, sync running
  */
 
-import type Database from "@signalapp/better-sqlite3";
+import type Database from "better-sqlite3-multiple-ciphers";
 import type { Hono } from "hono";
 import { openDatabase } from "../storage/db.js";
 import { SyncScheduler } from "../sync/sync-scheduler.js";

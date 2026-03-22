@@ -1,4 +1,4 @@
-import type Database from "@signalapp/better-sqlite3";
+import type Database from "better-sqlite3-multiple-ciphers";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { SyncScheduler } from "../src/sync/sync-scheduler.js";
 import { MockImapServer } from "./helpers/mock-imap-server.js";

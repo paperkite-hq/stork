@@ -1,4 +1,4 @@
-import type Database from "@signalapp/better-sqlite3";
+import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
 import type { SyncScheduler } from "../../sync/sync-scheduler.js";
 
