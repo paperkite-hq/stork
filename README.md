@@ -8,6 +8,8 @@
 
 > Self-host the client, not the edge.
 
+![Stork inbox](docs/screenshots/inbox.png)
+
 Stork syncs your email from any IMAP server, stores it locally with **AES-256 encryption at rest**, full-text search, and a modern web interface. Keep using your existing mail server for sending and receiving — Stork handles storage, search, and the UI. Your data is encrypted on disk: without your password, the data directory is opaque bytes.
 
 ## Why Stork?
@@ -44,6 +46,16 @@ Stork takes the Gmail approach: when email syncs from an IMAP folder, the folder
 - Search works across all labels — no more hunting through folders
 
 This is a deliberate design choice: **search is the primary navigation, labels are the primary organization**. If you want traditional folder-based browsing, Stork isn't the right fit — and that's okay.
+
+## Screenshots
+
+**Threaded conversations** — messages are grouped by thread with expand/collapse, reply, reply-all, and forward actions:
+
+![Thread view](docs/screenshots/thread.png)
+
+**Compose** — clean compose form with keyboard shortcut to send:
+
+![Compose form](docs/screenshots/compose.png)
 
 ## Quick Start
 
