@@ -49,7 +49,12 @@ src/
   crypto/
     keys.ts                  Vault key management, Argon2id KDF, AES-256-GCM envelopes
     lifecycle.ts             Container state machine (setup → locked → unlocked)
-  connectors/types.ts        Connector interfaces (IngestConnector, SendConnector)
+  connectors/
+    types.ts                 Connector interfaces (IngestConnector, SendConnector)
+    imap.ts                  IMAP IngestConnector (ImapFlow + mailparser)
+    smtp.ts                  SMTP SendConnector (Nodemailer)
+    registry.ts              Factory functions for creating connectors
+    index.ts                 Barrel export
   search/search.ts           Full-text search using FTS5
   storage/
     db.ts                    Database initialization (SQLCipher), WAL mode, schema bootstrap
@@ -140,14 +145,21 @@ The `SyncScheduler` orchestrates background sync for all accounts:
 - Supports on-demand sync via `syncNow(accountId)`.
 - On startup, loads all accounts from the database and registers them for periodic sync.
 
-### Connector Interfaces (`src/connectors/types.ts`)
+### Connector Layer (`src/connectors/`)
 
-Stork defines two connector interfaces for pluggable mail transport:
+Stork uses a pluggable connector architecture to abstract mail transport. Two interfaces define the contract:
 
-- **`IngestConnector`** — abstracts how mail enters the system. Methods: `connect()`, `disconnect()`, `listFolders()`, `fetchMessages()`, and optional `deleteMessages()`. The IMAP sync engine implements this pattern (though not yet refactored to the interface).
-- **`SendConnector`** — abstracts how mail leaves. Methods: `send()` and `verify()`. Currently backed by Nodemailer/SMTP.
+- **`IngestConnector`** — abstracts how mail enters the system. Methods: `connect()`, `disconnect()`, `listFolders()`, `fetchMessages()`, and optional `deleteMessages()`.
+- **`SendConnector`** — abstracts how mail leaves. Methods: `send()` and `verify()`.
 
-Future connectors (Cloudflare Email Workers, SES, etc.) will implement these interfaces.
+**Implementations**:
+
+- **`ImapIngestConnector`** (`imap.ts`) — connects to IMAP servers via ImapFlow. Lists folders, streams messages with MIME parsing via mailparser, and supports message deletion. Used by the sync engine as the transport layer.
+- **`SmtpSendConnector`** (`smtp.ts`) — sends email via SMTP using Nodemailer. Supports plain text, HTML, attachments, and threading headers (In-Reply-To, References). Call `verify()` to test credentials before sending.
+
+**Registry** (`registry.ts`) — factory functions `createIngestConnector()` and `createSendConnector()` instantiate the right connector from a typed configuration object. New connector types (Cloudflare Email Workers, AWS SES) are added here.
+
+**Barrel export** (`index.ts`) — re-exports all types, implementations, and factory functions.
 
 ### SQLite Storage (`src/storage/`)
 
