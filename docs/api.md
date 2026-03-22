@@ -271,6 +271,38 @@ Deletes the account and all associated folders, messages, and attachments (casca
 
 **Response**: `200 OK` | `404 Not Found`
 
+### Test IMAP connection
+
+```
+POST /api/accounts/test-connection
+Content-Type: application/json
+```
+
+Verifies IMAP credentials by connecting to the server and listing mailboxes. Use during account setup before saving.
+
+**Required fields**: `imap_host`, `imap_user`, `imap_pass`
+
+**Optional fields**: `imap_port` (default: 993), `imap_tls` (default: 1)
+
+**Request body**:
+```json
+{
+  "imap_host": "imap.example.com",
+  "imap_user": "user@example.com",
+  "imap_pass": "app-password"
+}
+```
+
+**Response**: `200 OK`
+```json
+{ "ok": true, "mailboxes": 12 }
+```
+
+**Response**: `200 OK` (connection failed)
+```json
+{ "ok": false, "error": "Connection timed out" }
+```
+
 ## Folders
 
 ### List folders
@@ -551,6 +583,181 @@ DELETE /api/messages/:messageId
 ```
 
 Permanently deletes a message from local storage. Does not affect the IMAP server.
+
+**Response**: `200 OK` | `404 Not Found`
+
+## Sending Email
+
+### Send an email
+
+```
+POST /api/send
+Content-Type: application/json
+```
+
+Sends an email via the account's configured SMTP server and saves it to the local Sent folder.
+
+**Required fields**: `account_id`, `to` (array of email addresses)
+
+At least one of `subject`, `text_body`, or `html_body` must be provided.
+
+**Optional fields**: `cc` (array), `bcc` (array), `html_body`, `text_body`, `in_reply_to` (Message-ID string for threading), `references` (array of Message-ID strings), `attachments` (array)
+
+**Request body**:
+```json
+{
+  "account_id": 1,
+  "to": ["recipient@example.com"],
+  "cc": ["cc@example.com"],
+  "subject": "Hello from Stork",
+  "text_body": "Plain text content",
+  "html_body": "<p>HTML content</p>",
+  "in_reply_to": "<original-msg-id@example.com>",
+  "references": ["<original-msg-id@example.com>"],
+  "attachments": [
+    {
+      "filename": "report.pdf",
+      "content_type": "application/pdf",
+      "content_base64": "base64-encoded-data..."
+    }
+  ]
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "ok": true,
+  "message_id": "<generated-id@example.com>",
+  "accepted": ["recipient@example.com"],
+  "rejected": [],
+  "stored_message_id": 42
+}
+```
+
+The sent message is automatically stored in the account's Sent folder (created if it doesn't exist) with the `\Seen` flag. Attachments are also saved locally.
+
+**Response**: `400 Bad Request` (missing fields or SMTP not configured) | `404 Not Found` (invalid account) | `500 Internal Server Error` (SMTP failure)
+
+### Test SMTP connection
+
+```
+POST /api/send/test-smtp
+Content-Type: application/json
+```
+
+Verifies SMTP credentials without sending a message. Use this during account setup to validate the SMTP configuration.
+
+**Required fields**: `smtp_host`, `smtp_user`, `smtp_pass`
+
+**Optional fields**: `smtp_port` (default: 587), `smtp_tls` (default: 1)
+
+**Request body**:
+```json
+{
+  "smtp_host": "smtp.example.com",
+  "smtp_port": 587,
+  "smtp_tls": 1,
+  "smtp_user": "user@example.com",
+  "smtp_pass": "app-password"
+}
+```
+
+**Response**: `200 OK`
+```json
+{ "ok": true }
+```
+
+**Response**: `200 OK` (verification failed)
+```json
+{ "ok": false, "error": "SMTP connection verification failed" }
+```
+
+## Drafts
+
+Drafts persist compose state server-side so work is preserved across browser refreshes and devices.
+
+### List drafts
+
+```
+GET /api/drafts?account_id=1
+```
+
+Returns all drafts for an account, sorted by last updated (newest first). Body content is truncated to a 200-character preview.
+
+**Query parameters**:
+- `account_id` (required)
+
+**Response**: `200 OK`
+```json
+[
+  {
+    "id": 1,
+    "account_id": 1,
+    "to_addresses": "alice@example.com",
+    "subject": "Draft subject",
+    "preview": "First 200 characters of body...",
+    "compose_mode": "new",
+    "original_message_id": null,
+    "created_at": "2026-01-15T10:30:00.000Z",
+    "updated_at": "2026-01-15T11:00:00.000Z"
+  }
+]
+```
+
+### Get a draft
+
+```
+GET /api/drafts/:id
+```
+
+Returns the full draft including complete body content.
+
+**Response**: `200 OK` | `404 Not Found`
+
+### Create a draft
+
+```
+POST /api/drafts
+Content-Type: application/json
+```
+
+**Required fields**: `account_id`
+
+**Optional fields**: `to_addresses`, `cc_addresses`, `bcc_addresses`, `subject`, `text_body`, `html_body`, `in_reply_to`, `references`, `original_message_id` (links to the message being replied to/forwarded), `compose_mode` (`new`, `reply`, `reply-all`, `forward` — default: `new`)
+
+**Request body**:
+```json
+{
+  "account_id": 1,
+  "to_addresses": "recipient@example.com",
+  "subject": "Work in progress",
+  "text_body": "Partial draft...",
+  "compose_mode": "new"
+}
+```
+
+**Response**: `201 Created`
+```json
+{ "id": 1 }
+```
+
+### Update a draft
+
+```
+PUT /api/drafts/:id
+Content-Type: application/json
+```
+
+Partial update — only include fields you want to change. Automatically updates the `updated_at` timestamp.
+
+**Response**: `200 OK` | `400 Bad Request` (no fields) | `404 Not Found`
+
+### Delete a draft
+
+```
+DELETE /api/drafts/:id
+```
 
 **Response**: `200 OK` | `404 Not Found`
 
