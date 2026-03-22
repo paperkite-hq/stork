@@ -6,6 +6,7 @@
 |----------|---------|-------------|
 | `STORK_DATA_DIR` | `./data` | Directory where the SQLite database and attachment data are stored |
 | `STORK_PORT` | `3100` | Port the HTTP server listens on |
+| `STORK_DEMO_MODE` | _(unset)_ | Set to `1` to run in read-only demo mode with sample data |
 
 ## Docker Compose
 
@@ -65,6 +66,24 @@ For security, bind to `127.0.0.1` so Stork is not accessible from the network:
     ports:
       - "127.0.0.1:3100:3100"
 ```
+
+## Demo Mode
+
+Set `STORK_DEMO_MODE=1` to run Stork as a read-only demo with pre-seeded sample data. In demo mode:
+
+- The container starts pre-unlocked with 15 sample emails, 7 labels, and 1 demo account
+- All write operations (create, update, delete) return `403 Forbidden`
+- No IMAP sync runs (no real mail server connection)
+- The database is unencrypted (no setup/unlock flow)
+- A banner displays at the top of the UI
+
+A separate compose file is provided:
+
+```bash
+docker compose -f docker-compose.demo.yml up -d
+```
+
+This is useful for hosting a public demo so potential users can explore the interface without installing anything.
 
 ## Health Check
 

@@ -169,6 +169,7 @@ export type ContainerState = "setup" | "locked" | "unlocked";
 // API calls
 export const api = {
 	status: () => fetchJSON<{ state: ContainerState }>("/status"),
+	demo: () => fetchJSON<{ demo: boolean }>("/demo"),
 	encryption: {
 		setup: (password: string) =>
 			fetchJSON<{ recoveryMnemonic: string }>("/setup", {
