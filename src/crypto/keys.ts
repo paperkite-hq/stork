@@ -44,6 +44,7 @@ interface KeysFile {
 	wrappedMasterKey: {
 		password: WrappedKey;
 		recovery: WrappedKey;
+		pendingRecovery?: WrappedKey; // present during two-phase rotation
 	};
 }
 
@@ -181,6 +182,7 @@ export function unlockWithPassword(dataDir: string, password: string): Buffer {
 
 /**
  * Unlock with BIP39 recovery mnemonic. Returns the vault key buffer.
+ * Tries both the active recovery envelope and any pending rotation envelope.
  */
 export function unlockWithRecovery(dataDir: string, mnemonic: string): Buffer {
 	if (!validateMnemonic(mnemonic)) {
@@ -188,14 +190,29 @@ export function unlockWithRecovery(dataDir: string, mnemonic: string): Buffer {
 	}
 	const keysData = readKeysFile(dataDir);
 	const recoveryKey = recoveryMnemonicToKey(mnemonic);
+
+	// Try active recovery envelope first
 	try {
 		const vaultKey = unwrapKey(keysData.wrappedMasterKey.recovery, recoveryKey);
 		zeroBuffer(recoveryKey);
 		return vaultKey;
-	} catch (e) {
-		zeroBuffer(recoveryKey);
-		throw e;
+	} catch {
+		// Fall through to try pending envelope
 	}
+
+	// Try pending recovery envelope (mid-rotation state)
+	if (keysData.wrappedMasterKey.pendingRecovery) {
+		try {
+			const vaultKey = unwrapKey(keysData.wrappedMasterKey.pendingRecovery, recoveryKey);
+			zeroBuffer(recoveryKey);
+			return vaultKey;
+		} catch {
+			// Both failed
+		}
+	}
+
+	zeroBuffer(recoveryKey);
+	throw new Error("Decryption failed: wrong password or corrupted key file");
 }
 
 /**
@@ -222,8 +239,81 @@ export function changePassword(
 }
 
 /**
- * Rotate recovery key. Re-wraps vault key with new recovery key. O(1) — database untouched.
- * Returns the new 24-word BIP39 mnemonic.
+ * Rotate recovery key — Phase 1 (prepare).
+ *
+ * Generates a new recovery envelope and stores it as `pendingRecovery` alongside
+ * the existing `recovery` envelope. Both the old and new mnemonics will unlock
+ * the vault until the rotation is confirmed or cancelled.
+ *
+ * Returns the new 24-word BIP39 mnemonic for the user to write down.
+ */
+export function prepareRecoveryKeyRotation(dataDir: string, currentPassword: string): string {
+	const vaultKey = unlockWithPassword(dataDir, currentPassword);
+	const keysData = readKeysFile(dataDir);
+
+	const newMnemonic = generateMnemonic(256);
+	const newRecoveryKey = recoveryMnemonicToKey(newMnemonic);
+
+	keysData.wrappedMasterKey.pendingRecovery = wrapKey(vaultKey, newRecoveryKey);
+
+	writeKeysFile(dataDir, keysData);
+
+	zeroBuffer(newRecoveryKey);
+	zeroBuffer(vaultKey);
+
+	return newMnemonic;
+}
+
+/**
+ * Rotate recovery key — Phase 2 (confirm).
+ *
+ * Promotes `pendingRecovery` to `recovery` and deletes the old envelope.
+ * After this call, only the new mnemonic (from prepareRecoveryKeyRotation) works.
+ * Requires password to authorize.
+ */
+export function confirmRecoveryKeyRotation(dataDir: string, currentPassword: string): void {
+	// Verify password is correct
+	const vaultKey = unlockWithPassword(dataDir, currentPassword);
+	zeroBuffer(vaultKey);
+
+	const keysData = readKeysFile(dataDir);
+	if (!keysData.wrappedMasterKey.pendingRecovery) {
+		throw new Error("No pending recovery key rotation to confirm");
+	}
+
+	keysData.wrappedMasterKey.recovery = keysData.wrappedMasterKey.pendingRecovery;
+	keysData.wrappedMasterKey.pendingRecovery = undefined;
+
+	writeKeysFile(dataDir, keysData);
+}
+
+/**
+ * Cancel a pending recovery key rotation.
+ *
+ * Removes the `pendingRecovery` envelope, leaving the original recovery key intact.
+ */
+export function cancelRecoveryKeyRotation(dataDir: string): void {
+	const keysData = readKeysFile(dataDir);
+	if (!keysData.wrappedMasterKey.pendingRecovery) {
+		return; // nothing to cancel
+	}
+
+	keysData.wrappedMasterKey.pendingRecovery = undefined;
+	writeKeysFile(dataDir, keysData);
+}
+
+/**
+ * Check whether a recovery key rotation is pending confirmation.
+ */
+export function hasPendingRecoveryRotation(dataDir: string): boolean {
+	if (!keysFileExists(dataDir)) return false;
+	const keysData = readKeysFile(dataDir);
+	return !!keysData.wrappedMasterKey.pendingRecovery;
+}
+
+/**
+ * @deprecated Use prepareRecoveryKeyRotation + confirmRecoveryKeyRotation instead.
+ * Kept for backward compatibility — performs an atomic (non-resilient) rotation.
  */
 export function rotateRecoveryKey(dataDir: string, currentPassword: string): string {
 	const vaultKey = unlockWithPassword(dataDir, currentPassword);
@@ -240,6 +330,28 @@ export function rotateRecoveryKey(dataDir: string, currentPassword: string): str
 	zeroBuffer(vaultKey);
 
 	return newMnemonic;
+}
+
+/**
+ * Set a new password using an already-unwrapped vault key.
+ * Used during recovery unlock to set a new password without knowing the old one.
+ */
+export function setPasswordFromVaultKey(
+	dataDir: string,
+	vaultKey: Buffer,
+	newPassword: string,
+): void {
+	const keysData = readKeysFile(dataDir);
+
+	const newSalt = randomBytes(KEY_BYTES);
+	const newKek = deriveKEK(newPassword, newSalt);
+
+	keysData.kdf.salt = newSalt.toString("base64");
+	keysData.wrappedMasterKey.password = wrapKey(vaultKey, newKek);
+
+	writeKeysFile(dataDir, keysData);
+
+	zeroBuffer(newKek);
 }
 
 /**

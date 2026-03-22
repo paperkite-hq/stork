@@ -175,7 +175,7 @@ The user writes this down and stores it somewhere safe (offline, physically secu
 
 - **Generated once at setup.** The recovery wrapping is stored in `stork.keys` as a second `wrappedMasterKey` entry keyed by `"recovery"`.
 - **Password changes do not require a new recovery key.** Changing the password re-wraps the MDK with a new KEK but does not change the MDK itself — the recovery wrapping remains valid.
-- **Routine recovery key rotation is O(1).** The user can rotate their recovery key at any time — for example, after writing it down somewhere that was later visible to others, or simply as a periodic security hygiene step. Rotation only re-wraps the MDK with a freshly generated recovery key; the MDK and the database are untouched. This is as fast as a password change regardless of database size. The old mnemonic becomes invalid immediately.
+- **Routine recovery key rotation is O(1) and two-phase.** The user can rotate their recovery key at any time — for example, after writing it down somewhere that was later visible to others, or simply as a periodic security hygiene step. Rotation only re-wraps the MDK with a freshly generated recovery key; the MDK and the database are untouched. This is as fast as a password change regardless of database size. Rotation uses a two-phase protocol for power-failure resilience: Phase 1 (prepare) generates the new recovery envelope and stores it as `pendingRecovery` alongside the existing `recovery` envelope — both the old and new mnemonics work during this window. Phase 2 (confirm) promotes the pending envelope and deletes the old one — only the new mnemonic works after confirmation. If the user loses power or closes their browser before confirming, the old mnemonic still works and the pending rotation can be cancelled or retried.
 - **If the recovery key is compromised** (an attacker possesses both the `stork.keys` file and the mnemonic, meaning they may have already unwrapped the MDK), the user should rotate the recovery key immediately and then also rotate the MDK itself using SQLCipher's rekey API — which re-encrypts the entire database with a new MDK. This MDK rotation is O(n) proportional to database size. Treat the recovery key as equivalent to the password in terms of sensitivity.
 
 ### Recovery (forgotten password) flow
@@ -185,17 +185,29 @@ The user writes this down and stores it somewhere safe (offline, physically secu
 3. Backend validates the mnemonic, derives the recovery key bytes, attempts to unwrap MDK
 4. If successful: MDK loaded, user sets a new password (which re-wraps MDK with new KEK), recovery key remains valid
 
-### Recovery key rotation flow
+### Recovery key rotation flow (two-phase)
+
+**Phase 1 — Prepare:**
 
 1. User navigates to Settings → Security → Rotate Recovery Key
 2. User enters current password to authorize (backend unwraps MDK as verification)
 3. Backend generates a new 24-word BIP39 mnemonic
-4. Backend re-wraps the existing MDK with the new recovery key bytes (fresh random IV)
-5. Writes updated `stork.keys` atomically (temp file, then rename)
-6. Web UI displays new mnemonic with acknowledgement prompt — user must confirm before leaving
-7. Old mnemonic is immediately invalid
+4. Backend wraps the MDK with the new recovery key bytes (fresh random IV)
+5. Writes the new envelope as `pendingRecovery` in `stork.keys` — the existing `recovery` envelope is preserved
+6. Web UI displays new mnemonic with a prominent note that the old phrase still works
 
-The `stork.keys` file format (see [Key Storage](#key-storage)) stores both the password-wrapped and recovery-wrapped MDK under separate keys in `wrappedMasterKey`. Both entries encrypt the same MDK, using independent random IVs.
+**Phase 2 — Confirm:**
+
+7. User checks acknowledgement that they've written down the new phrase
+8. UI sends confirmation request (re-authenticates with password)
+9. Backend promotes `pendingRecovery` to `recovery` and deletes the old envelope
+10. Old mnemonic is now invalid
+
+**Cancellation:** At any point before step 8, the user (or the UI on page load) can cancel the pending rotation, which removes the `pendingRecovery` envelope and leaves the original recovery key intact.
+
+**Power-failure resilience:** If power is lost between Phase 1 and Phase 2, `stork.keys` contains both envelopes. On next boot, `unlockWithRecovery` tries both — so the old mnemonic still works. The UI detects the pending state on mount and offers the user the choice to cancel or re-display the new phrase.
+
+The `stork.keys` file format (see [Key Storage](#key-storage)) stores password-wrapped and recovery-wrapped MDK under separate keys in `wrappedMasterKey`, with an optional `pendingRecovery` key during rotation. All entries encrypt the same MDK, using independent random IVs.
 
 ## Security Considerations
 
