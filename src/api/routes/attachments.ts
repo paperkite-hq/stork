@@ -27,5 +27,25 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 		});
 	});
 
+	// Serve inline images by Content-ID (for cid: URL resolution in HTML emails)
+	api.get("/by-cid/:messageId/:contentId", (c) => {
+		const messageId = Number(c.req.param("messageId"));
+		const contentId = c.req.param("contentId");
+		const attachment = getDb()
+			.prepare("SELECT content_type, data FROM attachments WHERE message_id = ? AND content_id = ?")
+			.get(messageId, contentId) as
+			| { content_type: string | null; data: Buffer | null }
+			| undefined;
+		if (!attachment) return c.json({ error: "Attachment not found" }, 404);
+
+		const contentType = attachment.content_type ?? "application/octet-stream";
+		return new Response(attachment.data ? new Uint8Array(attachment.data) : null, {
+			headers: {
+				"Content-Type": contentType,
+				"Cache-Control": "private, max-age=86400",
+			},
+		});
+	});
+
 	return api;
 }
