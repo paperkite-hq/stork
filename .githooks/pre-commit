@@ -5,6 +5,11 @@
 # Install: git config core.hooksPath .githooks
 set -euo pipefail
 
+# Use fast KDF for crypto tests — matches CI behavior.
+# Production Argon2id params (64 MiB, 3 iterations) make local tests extremely
+# slow for a pre-commit hook. CI already uses STORK_FAST_KDF=1.
+export STORK_FAST_KDF=1
+
 echo "=== Pre-commit: running lint ==="
 npm run lint
 echo "=== Pre-commit: lint passed ==="
