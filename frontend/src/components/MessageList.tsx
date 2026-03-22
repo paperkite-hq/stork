@@ -4,8 +4,10 @@ import { isFlagged, isUnread } from "../utils";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { AlertCircleIcon, InboxEmptyIcon, PaperclipIcon, RefreshIcon, StarIcon } from "./Icons";
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string | null | undefined): string {
+	if (!dateStr) return "";
 	const d = new Date(dateStr);
+	if (Number.isNaN(d.getTime())) return dateStr;
 	const now = new Date();
 	const diffMs = now.getTime() - d.getTime();
 	const diffMins = Math.floor(diffMs / 60000);

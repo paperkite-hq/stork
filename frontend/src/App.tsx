@@ -301,9 +301,8 @@ export function App() {
 			let references: string[] | undefined;
 			if (composeMode && composeMode.type !== "new" && composeMode.original.message_id) {
 				inReplyTo = composeMode.original.message_id;
-				const existingRefs = composeMode.original.references
-					? composeMode.original.references.split(/\s+/).filter(Boolean)
-					: [];
+				const rawRefs = composeMode.original.references ?? "";
+				const existingRefs = rawRefs ? rawRefs.split(/\s+/).filter(Boolean) : [];
 				references = [...existingRefs, composeMode.original.message_id];
 			}
 
