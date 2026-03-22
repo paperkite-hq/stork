@@ -59,6 +59,20 @@ describe("sanitizeEmailHtml", () => {
 		expect(result).not.toContain("tracker.com");
 	});
 
+	it("removes tracking pixels with CSS inline dimensions", () => {
+		const result = sanitizeEmailHtml(
+			'<img src="https://tracker.com/pixel.gif" style="width:1px;height:1px">',
+		);
+		expect(result).not.toContain("tracker.com");
+	});
+
+	it("removes tracking pixels with 0x0 CSS dimensions", () => {
+		const result = sanitizeEmailHtml(
+			'<img src="https://tracker.com/pixel.gif" style="width: 0px; height: 0px">',
+		);
+		expect(result).not.toContain("tracker.com");
+	});
+
 	it("removes known tracking URL patterns", () => {
 		for (const pattern of ["/track", "/pixel", "/open", "beacon"]) {
 			const result = sanitizeEmailHtml(

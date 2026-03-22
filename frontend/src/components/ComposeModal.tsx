@@ -86,13 +86,13 @@ function validateEmails(raw: string): string | null {
 }
 
 function buildReplySubject(subject: string | null): string {
-	if (!subject) return "Re: ";
+	if (!subject) return "Re: (no subject)";
 	if (/^re:/i.test(subject)) return subject;
 	return `Re: ${subject}`;
 }
 
 function buildForwardSubject(subject: string | null): string {
-	if (!subject) return "Fwd: ";
+	if (!subject) return "Fwd: (no subject)";
 	if (/^fwd:/i.test(subject)) return subject;
 	return `Fwd: ${subject}`;
 }
@@ -173,7 +173,10 @@ export function ComposeModal({
 		if (mode.type === "reply" || mode.type === "reply-all") return buildReplyBody(mode.original);
 		if (mode.type === "forward") {
 			const msg = mode.original;
-			return `\n\n---------- Forwarded message ----------\nFrom: ${msg.from_name || ""} <${msg.from_address}>\nDate: ${new Date(msg.date).toLocaleString()}\nSubject: ${msg.subject || ""}\nTo: ${msg.to_addresses || ""}\n\n${msg.text_body || ""}`;
+			const from = msg.from_name
+				? `${msg.from_name} <${msg.from_address || "unknown"}>`
+				: msg.from_address || "unknown";
+			return `\n\n---------- Forwarded message ----------\nFrom: ${from}\nDate: ${new Date(msg.date).toLocaleString()}\nSubject: ${msg.subject || "(no subject)"}\nTo: ${msg.to_addresses || ""}\n\n${msg.text_body || ""}`;
 		}
 		return "";
 	});

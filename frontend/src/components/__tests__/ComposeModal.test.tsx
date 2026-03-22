@@ -449,7 +449,7 @@ describe("ComposeModal", () => {
 		render(
 			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
 		);
-		expect(screen.getByLabelText("Subj")).toHaveValue("Re: ");
+		expect(screen.getByLabelText("Subj")).toHaveValue("Re: (no subject)");
 	});
 
 	it("shows Fwd: for forward with null subject", () => {
@@ -457,7 +457,7 @@ describe("ComposeModal", () => {
 		render(
 			<ComposeModal mode={{ type: "forward", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
 		);
-		expect(screen.getByLabelText("Subj")).toHaveValue("Fwd: ");
+		expect(screen.getByLabelText("Subj")).toHaveValue("Fwd: (no subject)");
 	});
 
 	it("shows validation error for invalid email in To field", async () => {
