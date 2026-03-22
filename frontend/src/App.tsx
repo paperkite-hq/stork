@@ -18,6 +18,7 @@ import {
 	useAsync,
 	useBulkSelection,
 	useDarkMode,
+	useHistoryNavigation,
 	useKeyboardShortcuts,
 	useMessageActions,
 	useMessagePagination,
@@ -203,6 +204,19 @@ export function App() {
 		setSelectedMessageId(null);
 		setMessageListIndex(0);
 	}, []);
+
+	// Browser back/forward navigation
+	useHistoryNavigation({
+		accountId: effectiveAccountId,
+		labelId: effectiveLabelId,
+		messageId: selectedMessageId,
+		onNavigate: useCallback((state) => {
+			if (state.accountId !== null) setSelectedAccountId(state.accountId);
+			setSelectedLabelId(state.labelId);
+			setSelectedMessageId(state.messageId);
+			setMessageListIndex(0);
+		}, []),
+	});
 
 	// Manual sync trigger
 	const handleSyncNow = useCallback(async () => {
