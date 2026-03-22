@@ -36,6 +36,7 @@
 		"@types/nodemailer": "^6.4.17",
 		"@vitest/coverage-v8": "^4.1.0",
 		"esbuild": "^0.25.0",
+		"happy-dom": "^20.8.4",
 		"tsx": "^4.19.0",
 		"vitest": "^4.1.0"
 	},

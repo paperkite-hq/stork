@@ -246,6 +246,16 @@ export const api = {
 		count: (accountId: number) =>
 			fetchJSON<{ total: number; unread: number }>(`/accounts/${accountId}/all-messages/count`),
 	},
+	unreadMessages: {
+		list: (accountId: number, opts?: { limit?: number; offset?: number }) => {
+			const params = new URLSearchParams();
+			if (opts?.limit) params.set("limit", String(opts.limit));
+			if (opts?.offset) params.set("offset", String(opts.offset));
+			return fetchJSON<MessageSummary[]>(`/accounts/${accountId}/unread-messages?${params}`);
+		},
+		count: (accountId: number) =>
+			fetchJSON<{ total: number }>(`/accounts/${accountId}/unread-messages/count`),
+	},
 	messages: {
 		list: (accountId: number, folderId: number, opts?: { limit?: number; offset?: number }) => {
 			const params = new URLSearchParams();

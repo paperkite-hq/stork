@@ -245,6 +245,45 @@ export function accountRoutes(
 		return c.json(messages);
 	});
 
+	// Unread messages for an account (messages without \Seen flag) — used by "Unread" view
+	api.get("/:accountId/unread-messages", (c) => {
+		const accountId = Number(c.req.param("accountId"));
+		const limit = Number(c.req.query("limit") ?? 50);
+		const offset = Number(c.req.query("offset") ?? 0);
+		const db = getDb();
+
+		const messages = db
+			.prepare(`
+				SELECT id, uid, message_id, subject, from_address, from_name,
+					to_addresses, date, flags, size, has_attachments,
+					SUBSTR(text_body, 1, 200) as preview
+				FROM messages
+				WHERE account_id = ?
+				AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')
+				ORDER BY date DESC
+				LIMIT ? OFFSET ?
+			`)
+			.all(accountId, limit, offset);
+
+		return c.json(messages);
+	});
+
+	// Count of unread messages for an account (for "Unread" badge)
+	api.get("/:accountId/unread-messages/count", (c) => {
+		const accountId = Number(c.req.param("accountId"));
+		const db = getDb();
+
+		const row = db
+			.prepare(`
+				SELECT COUNT(*) as total
+				FROM messages WHERE account_id = ?
+				AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')
+			`)
+			.get(accountId) as { total: number };
+
+		return c.json(row);
+	});
+
 	// Total message count for an account (for "All Mail" badge)
 	api.get("/:accountId/all-messages/count", (c) => {
 		const accountId = Number(c.req.param("accountId"));

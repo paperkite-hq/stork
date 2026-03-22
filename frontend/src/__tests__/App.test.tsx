@@ -49,6 +49,10 @@ vi.mock("../api", () => ({
 			list: vi.fn().mockResolvedValue([]),
 			count: vi.fn().mockResolvedValue({ total: 0, unread: 0 }),
 		},
+		unreadMessages: {
+			list: vi.fn().mockResolvedValue([]),
+			count: vi.fn().mockResolvedValue({ total: 0 }),
+		},
 		sync: {
 			status: vi.fn().mockResolvedValue({}),
 			trigger: vi.fn().mockResolvedValue({}),
@@ -270,9 +274,9 @@ describe("App — Main layout", () => {
 			[makeLabel({ id: 1, name: "inbox" }), makeLabel({ id: 2, name: "Sent Mail" })],
 		);
 		render(<App />);
-		// Wait for both labels to appear together (they come from the same API call)
+		// Inbox is promoted to the top section; other labels appear in the label list
 		await waitFor(() => {
-			expect(screen.getAllByText("inbox").length).toBeGreaterThanOrEqual(1);
+			expect(screen.getAllByText("Inbox").length).toBeGreaterThanOrEqual(1);
 			expect(screen.getByText("Sent Mail")).toBeInTheDocument();
 		});
 	});
