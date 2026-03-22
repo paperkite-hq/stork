@@ -32,24 +32,43 @@ export function isFlagged(flags: string | null): boolean {
 }
 
 /**
- * Parse a comma-separated list of RFC 2822 addresses into a readable format.
- * Handles both "Display Name <email@example.com>" and bare "email@example.com".
- * Returns a cleaned, comma-separated string of display names (with email as fallback).
+ * Parse an address field into individual address strings.
+ * Handles two storage formats:
+ *  - JSON array: `["alice@test.com","bob@test.com"]` (from IMAP sync)
+ *  - Comma-separated: `alice@test.com, bob@test.com` (from send route, demo data)
+ */
+export function parseAddressField(raw: string | null): string[] {
+	if (!raw) return [];
+	const trimmed = raw.trim();
+	if (trimmed.startsWith("[")) {
+		try {
+			const parsed = JSON.parse(trimmed);
+			if (Array.isArray(parsed)) return parsed.filter(Boolean);
+		} catch {
+			// Not valid JSON — fall through to comma-split
+		}
+	}
+	return trimmed
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+}
+
+/**
+ * Format an address field for display. Handles both JSON array and comma-separated
+ * storage formats. Extracts display names from "Name <email>" format.
  */
 export function formatAddressList(raw: string | null): string {
 	if (!raw) return "";
-	return raw
-		.split(",")
+	return parseAddressField(raw)
 		.map((addr) => {
-			const trimmed = addr.trim();
-			if (!trimmed) return "";
 			// Match "Display Name <email>" or bare "<email>" pattern
-			const match = trimmed.match(/^(.*?)\s*<([^>]+)>$/);
+			const match = addr.match(/^(.*?)\s*<([^>]+)>$/);
 			if (match) {
 				const name = (match[1] ?? "").replace(/^["']|["']$/g, "").trim();
-				return name || match[2] || trimmed;
+				return name || match[2] || addr;
 			}
-			return trimmed;
+			return addr;
 		})
 		.filter(Boolean)
 		.join(", ");

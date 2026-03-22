@@ -20,6 +20,7 @@ interface ThreadMessageProps {
 	expanded: boolean;
 	showHtml: boolean;
 	imagesAllowed: boolean;
+	dark?: boolean;
 	onToggleExpanded: (id: number) => void;
 	onToggleShowHtml: () => void;
 	onAllowImages: (id: number) => void;
@@ -38,6 +39,7 @@ export function ThreadMessage({
 	expanded,
 	showHtml,
 	imagesAllowed,
+	dark,
 	onToggleExpanded,
 	onToggleShowHtml,
 	onAllowImages,
@@ -129,9 +131,11 @@ export function ThreadMessage({
 						<SandboxedEmail
 							html={sanitizeEmailHtml(msg.html_body, {
 								blockRemoteImages: !imagesAllowed,
+								messageId: msg.id,
 							})}
 							className="email-content"
 							allowRemoteImages={imagesAllowed}
+							dark={dark}
 						/>
 					) : (
 						<pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 font-sans">

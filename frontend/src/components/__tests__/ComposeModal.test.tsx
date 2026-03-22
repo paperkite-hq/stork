@@ -527,6 +527,56 @@ describe("ComposeModal", () => {
 		expect(ccInput.value).toContain("carol@test.com");
 	});
 
+	it("reply-all handles JSON array address format (from IMAP sync)", () => {
+		const msg = makeMessage({
+			from_address: "alice@test.com",
+			to_addresses: '["me@test.com","bob@test.com"]',
+			cc_addresses: '["carol@test.com"]',
+		});
+		render(
+			<ComposeModal
+				mode={{ type: "reply-all", original: msg }}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		const ccInput = screen.getByPlaceholderText("cc@example.com") as HTMLInputElement;
+		expect(ccInput.value).toContain("bob@test.com");
+		expect(ccInput.value).toContain("carol@test.com");
+		// Should NOT contain garbled JSON brackets
+		expect(ccInput.value).not.toContain("[");
+		expect(ccInput.value).not.toContain("]");
+	});
+
+	it("reply-all excludes the current user's email from CC", () => {
+		const msg = makeMessage({
+			from_address: "alice@test.com",
+			to_addresses: '["me@myaccount.com","bob@test.com"]',
+			cc_addresses: null,
+		});
+		render(
+			<ComposeModal
+				mode={{ type: "reply-all", original: msg }}
+				accounts={[
+					{
+						id: 1,
+						name: "Me",
+						email: "me@myaccount.com",
+						imap_host: "",
+						smtp_host: null,
+						created_at: "",
+					},
+				]}
+				selectedAccountId={1}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		const ccInput = screen.getByPlaceholderText("cc@example.com") as HTMLInputElement;
+		expect(ccInput.value).toContain("bob@test.com");
+		expect(ccInput.value).not.toContain("me@myaccount.com");
+	});
+
 	it("shows Bcc field when Bcc button is clicked", async () => {
 		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
 		expect(screen.queryByPlaceholderText("bcc@example.com")).not.toBeInTheDocument();
