@@ -843,7 +843,7 @@ describe("Settings — Connection testing", () => {
 		await waitFor(() =>
 			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
 		);
-		const testBtn = screen.getByText("Test Connection");
+		const testBtn = screen.getByText("Test IMAP");
 		expect(testBtn).toBeDisabled();
 	});
 
@@ -873,11 +873,13 @@ describe("Settings — Connection testing", () => {
 				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
 		);
 		if (imapPassField) await userEvent.type(imapPassField, "password123");
-		const testBtn = screen.getByText("Test Connection");
+		const testBtn = screen.getByText("Test IMAP");
 		expect(testBtn).toBeEnabled();
 		await userEvent.click(testBtn);
 		await waitFor(() =>
-			expect(screen.getByText(/Connection successful — 12 mailboxes found/)).toBeInTheDocument(),
+			expect(
+				screen.getByText(/IMAP connection successful — 12 mailboxes found/),
+			).toBeInTheDocument(),
 		);
 	});
 
@@ -906,9 +908,9 @@ describe("Settings — Connection testing", () => {
 				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
 		);
 		if (imapPassField) await userEvent.type(imapPassField, "wrongpass");
-		await userEvent.click(screen.getByText("Test Connection"));
+		await userEvent.click(screen.getByText("Test IMAP"));
 		await waitFor(() =>
-			expect(screen.getByText(/Connection failed: Authentication failed/)).toBeInTheDocument(),
+			expect(screen.getByText(/IMAP connection failed: Authentication failed/)).toBeInTheDocument(),
 		);
 	});
 
@@ -936,9 +938,9 @@ describe("Settings — Connection testing", () => {
 				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
 		);
 		if (imapPassField) await userEvent.type(imapPassField, "somepass");
-		await userEvent.click(screen.getByText("Test Connection"));
+		await userEvent.click(screen.getByText("Test IMAP"));
 		await waitFor(() =>
-			expect(screen.getByText(/Connection failed: Network error/)).toBeInTheDocument(),
+			expect(screen.getByText(/IMAP connection failed: Network error/)).toBeInTheDocument(),
 		);
 	});
 });
