@@ -289,7 +289,7 @@ export function useBulkSelection(opts: {
 	const archive = useCallback(async () => {
 		const ids = [...selectedIds];
 		if (ids.length === 0) return;
-		// Label-based archive: remove the current label from selected messages
+		// Archive = remove the Inbox label from selected messages. Only available from Inbox view.
 		if (effectiveLabelId && effectiveLabelId > 0 && !isAllMail) {
 			try {
 				await api.messages.bulk(ids, "remove_label", { label_id: effectiveLabelId });
@@ -307,7 +307,7 @@ export function useBulkSelection(opts: {
 			}
 			return;
 		}
-		toast("Cannot archive from All Mail view", "error");
+		toast("Archive is only available from Inbox", "error");
 	}, [
 		selectedIds,
 		selectedMessageId,
@@ -421,12 +421,11 @@ export function useMessageActions(opts: {
 		const msg = messages[messageListIndex];
 		if (!msg) return;
 
-		// Archive = remove the current label from the message. The message stays in "All Mail".
-		// Archive is only available when viewing a label (typically Inbox). In views without
-		// a label context (All Mail, Unread), the archive action is disabled at the UI level.
+		// Archive = remove the Inbox label from the message. Only available from the Inbox view.
+		// In other views (All Mail, Unread, other labels), the archive action is disabled.
 		const currentLabel = labels?.find((l) => l.id === effectiveLabelId);
 		if (!currentLabel || isAllMail) {
-			toast("Archive is only available from a label view", "error");
+			toast("Archive is only available from Inbox", "error");
 			return;
 		}
 

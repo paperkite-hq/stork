@@ -172,7 +172,7 @@ describe("useMessageActions", () => {
 		});
 		await act(() => result.current.archive());
 		expect(mockMove).not.toHaveBeenCalled();
-		expect(mockToast).toHaveBeenCalledWith("Archive is only available from a label view", "error");
+		expect(mockToast).toHaveBeenCalledWith("Archive is only available from Inbox", "error");
 	});
 
 	it("archive reverts on label removal failure", async () => {
@@ -192,7 +192,7 @@ describe("useMessageActions", () => {
 		});
 		await act(() => result.current.archive());
 		expect(mockMove).not.toHaveBeenCalled();
-		expect(mockToast).toHaveBeenCalledWith("Archive is only available from a label view", "error");
+		expect(mockToast).toHaveBeenCalledWith("Archive is only available from Inbox", "error");
 	});
 
 	it("confirmDelete does nothing when pendingDelete is null", async () => {

@@ -150,10 +150,10 @@ Stork uses a **labels, not folders** model inspired by Gmail. Every IMAP folder 
 
 #### Archive workflow
 
-Archiving removes the **Inbox** label from a message. The message remains accessible in All Mail and any other labels it has. This mirrors Gmail's archive behavior.
+Archiving removes the **Inbox** label from a message. The message remains accessible in All Mail and any other labels it has. This mirrors Gmail's archive behavior — "archive" means "I'm done with this, get it out of my inbox."
 
-- The **Archive** action (`e` key) is only available when viewing a label — typically Inbox.
-- When viewing All Mail or Unread, archive is disabled because there is no single label to remove.
+- The **Archive** action (`e` key) is **only available when viewing the Inbox**. It always removes the Inbox label, regardless of what other labels the message has.
+- When viewing All Mail, Unread, or any other label, archive is disabled — these are read-only views where the concept of "archiving" does not apply. To manage labels on messages in these views, use the label picker (tag icon).
 - Archiving is purely local — Stork does not move messages on your IMAP server.
 
 #### Labels
