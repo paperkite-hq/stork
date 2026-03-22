@@ -243,10 +243,9 @@ export function App() {
 		[allMessages, setAllMessages, refetchMessages],
 	);
 
-	// Resolve the real label ID for archive operations — only Inbox supports archive
-	const archiveLabelId = isInbox ? inboxLabelId : effectiveLabelId;
-	// Archive is only available when viewing a specific label (not All Mail or Unread)
-	const archiveDisabled = isAllMail || isUnread;
+	// Archive = remove Inbox label. Only available when viewing the Inbox.
+	const archiveLabelId = inboxLabelId;
+	const archiveDisabled = !isInbox;
 
 	// Bulk selection (state + action handlers extracted to hook)
 	const bulk = useBulkSelection({
