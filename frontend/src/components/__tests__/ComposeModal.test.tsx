@@ -298,9 +298,9 @@ describe("ComposeModal", () => {
 		expect(localStorage.getItem(draftKey)).toBeNull();
 	});
 
-	it("clears draft from localStorage when message is sent", async () => {
-		// Use a mock onSend that unmounts the component (simulating real App behavior)
-		const onSend = vi.fn();
+	it("clears draft from localStorage when message is sent successfully", async () => {
+		// onSend resolves — simulates successful send
+		const onSend = vi.fn().mockResolvedValue(undefined);
 		const onClose = vi.fn();
 		const { unmount } = render(
 			<ComposeModal mode={{ type: "new" }} onClose={onClose} onSend={onSend} />,
@@ -310,9 +310,32 @@ describe("ComposeModal", () => {
 		await userEvent.click(screen.getByText("Send"));
 
 		expect(onSend).toHaveBeenCalled();
-		// Unmount to prevent auto-save from re-writing the draft
+		// Wait for the async onSend to resolve + draft to be cleared
+		await vi.waitFor(() => {
+			expect(localStorage.getItem("stork-compose-draft")).toBeNull();
+		});
 		unmount();
-		expect(localStorage.getItem("stork-compose-draft")).toBeNull();
+	});
+
+	it("preserves draft when send fails", async () => {
+		// onSend rejects — simulates SMTP not available
+		const onSend = vi.fn().mockRejectedValue(new Error("Sending is not yet available"));
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={onSend} />);
+
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "bob@test.com");
+		await userEvent.type(screen.getByLabelText("Subj"), "Important");
+		await userEvent.click(screen.getByText("Send"));
+
+		// Error should appear inline
+		await vi.waitFor(() => {
+			expect(screen.getByText("Sending is not yet available")).toBeInTheDocument();
+		});
+		// Draft should still be in localStorage
+		const draft = JSON.parse(localStorage.getItem("stork-compose-draft") ?? "{}");
+		expect(draft.to).toContain("bob@test.com");
+		expect(draft.subject).toBe("Important");
+		// Send button should be re-enabled for retry
+		expect(screen.getByText("Send")).not.toBeDisabled();
 	});
 
 	it("clears draft from localStorage when Discard is clicked", async () => {
