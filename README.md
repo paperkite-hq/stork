@@ -8,6 +8,8 @@
 
 > Self-host the client, not the edge.
 
+**[Try the read-only demo →](https://stork-demo.paperkite.sh)** — no install needed, sample data pre-loaded.
+
 ![Stork inbox](docs/screenshots/inbox.png)
 
 Stork syncs your email from any IMAP server, stores it locally with **AES-256 encryption at rest**, full-text search, and a modern web interface. Keep using your existing mail server for sending and receiving — Stork handles storage, search, and the UI.
