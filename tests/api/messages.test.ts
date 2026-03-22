@@ -339,6 +339,31 @@ describe("Messages API", () => {
 			expect(body.length).toBeGreaterThanOrEqual(3);
 		});
 
+		test("thread with JSON array references (IMAP sync format) returns all related messages", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+
+			createTestMessage(db, accountId, folderId, 1, {
+				messageId: "<json-root@test.local>",
+				subject: "JSON thread start",
+			});
+			createTestMessage(db, accountId, folderId, 2, {
+				messageId: "<json-reply@test.local>",
+				inReplyTo: "<json-root@test.local>",
+				references: '["<json-root@test.local>"]',
+				subject: "Re: JSON thread start",
+			});
+			const msg3Id = createTestMessage(db, accountId, folderId, 3, {
+				messageId: "<json-reply2@test.local>",
+				inReplyTo: "<json-reply@test.local>",
+				references: '["<json-root@test.local>","<json-reply@test.local>"]',
+				subject: "Re: Re: JSON thread start",
+			});
+
+			const { body } = await jsonRequest(`/api/messages/${msg3Id}/thread`);
+			expect(body.length).toBeGreaterThanOrEqual(3);
+		});
+
 		test("thread does not leak messages from other accounts", async () => {
 			const accountA = createTestAccount(db, { name: "A", email: "a@test.com" });
 			const accountB = createTestAccount(db, { name: "B", email: "b@test.com" });
