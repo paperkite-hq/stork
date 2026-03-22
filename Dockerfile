@@ -7,12 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install backend dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci 2>/dev/null || npm install
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Install frontend dependencies
-COPY frontend/package.json frontend/package-lock.json* frontend/
-RUN cd frontend && (npm ci 2>/dev/null || npm install)
+COPY frontend/package.json frontend/package-lock.json frontend/
+RUN cd frontend && npm ci
 
 # Copy source
 COPY . .
