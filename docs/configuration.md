@@ -79,7 +79,7 @@ Additional endpoints for monitoring:
 
 ## Database
 
-Stork uses SQLite via SQLCipher (`@signalapp/better-sqlite3`) for transparent encryption at rest. The following PRAGMA settings are applied at startup:
+Stork uses SQLite via `better-sqlite3-multiple-ciphers` for encrypted local storage. The following PRAGMA settings are applied at startup:
 
 | PRAGMA | Value | Purpose |
 |--------|-------|---------|

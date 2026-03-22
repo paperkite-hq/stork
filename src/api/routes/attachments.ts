@@ -1,4 +1,4 @@
-import type Database from "@signalapp/better-sqlite3";
+import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
 
 export function attachmentRoutes(getDb: () => Database.Database): Hono {

@@ -1,7 +1,7 @@
 FROM node:22-slim AS base
 WORKDIR /app
 
-# Install build tools required to compile @signalapp/better-sqlite3 native addon
+# Install build tools required to compile better-sqlite3-multiple-ciphers native addon
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ gcc \
     && rm -rf /var/lib/apt/lists/*

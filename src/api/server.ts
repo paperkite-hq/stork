@@ -1,5 +1,5 @@
 import { serveStatic } from "@hono/node-server/serve-static";
-import type Database from "@signalapp/better-sqlite3";
+import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { ContainerContext } from "../crypto/lifecycle.js";

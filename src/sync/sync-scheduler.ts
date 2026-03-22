@@ -1,4 +1,4 @@
-import type Database from "@signalapp/better-sqlite3";
+import type Database from "better-sqlite3-multiple-ciphers";
 import { ConnectionPool, type ConnectionPoolOptions } from "./connection-pool.js";
 import type { ImapConfig, SyncAllResult, SyncProgress } from "./imap-sync.js";
 
