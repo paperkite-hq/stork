@@ -172,6 +172,64 @@ describe("Drafts API", () => {
 			expect(status).toBe(400);
 		});
 
+		test("returns 400 on update with no fields", async () => {
+			const { body: created } = await jsonRequest("/api/drafts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					account_id: accountId,
+					subject: "Original",
+					compose_mode: "new",
+				}),
+			});
+
+			const { status, body } = await jsonRequest(`/api/drafts/${created.id}`, {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({}),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toContain("No fields");
+		});
+
+		test("returns 404 on update non-existent draft", async () => {
+			const { status } = await jsonRequest("/api/drafts/99999", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ subject: "Updated" }),
+			});
+			expect(status).toBe(404);
+		});
+
+		test("returns 404 on delete non-existent draft", async () => {
+			const { status } = await jsonRequest("/api/drafts/99999", { method: "DELETE" });
+			expect(status).toBe(404);
+		});
+
+		test("updates the references field (quoted column name)", async () => {
+			const { body: created } = await jsonRequest("/api/drafts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					account_id: accountId,
+					subject: "Thread draft",
+					compose_mode: "reply",
+				}),
+			});
+
+			const { status } = await jsonRequest(`/api/drafts/${created.id}`, {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					references: "<orig@example.com> <reply@example.com>",
+				}),
+			});
+			expect(status).toBe(200);
+
+			const { body: fetched } = await jsonRequest(`/api/drafts/${created.id}`);
+			expect(fetched.references).toBe("<orig@example.com> <reply@example.com>");
+		});
+
 		test("creates reply draft with original message reference", async () => {
 			const folderId = createTestFolder(db, accountId, "INBOX");
 			const msgId = createTestMessage(db, accountId, folderId, 1, {
