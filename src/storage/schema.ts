@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -182,5 +182,29 @@ export const MIGRATIONS = [
 
 	CREATE INDEX IF NOT EXISTS idx_sync_errors_account ON sync_errors(account_id);
 	CREATE INDEX IF NOT EXISTS idx_sync_errors_unresolved ON sync_errors(account_id, resolved);
+	`,
+	// Version 5: Add drafts table for server-side draft persistence.
+	// Drafts store compose state (to, cc, bcc, subject, body) so they survive
+	// across browser sessions and devices. Each draft belongs to an account and
+	// optionally references an original message (for reply/forward).
+	`
+	CREATE TABLE IF NOT EXISTS drafts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+		to_addresses TEXT,
+		cc_addresses TEXT,
+		bcc_addresses TEXT,
+		subject TEXT,
+		text_body TEXT,
+		html_body TEXT,
+		in_reply_to TEXT,
+		"references" TEXT,
+		original_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+		compose_mode TEXT NOT NULL DEFAULT 'new',
+		created_at TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_drafts_account ON drafts(account_id);
 	`,
 ];

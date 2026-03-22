@@ -164,6 +164,35 @@ export interface GlobalSyncStatus {
 	};
 }
 
+export interface DraftSummary {
+	id: number;
+	account_id: number;
+	to_addresses: string | null;
+	subject: string | null;
+	preview: string | null;
+	compose_mode: string;
+	original_message_id: number | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface Draft {
+	id: number;
+	account_id: number;
+	to_addresses: string | null;
+	cc_addresses: string | null;
+	bcc_addresses: string | null;
+	subject: string | null;
+	text_body: string | null;
+	html_body: string | null;
+	in_reply_to: string | null;
+	references: string | null;
+	original_message_id: number | null;
+	compose_mode: string;
+	created_at: string;
+	updated_at: string;
+}
+
 export type ContainerState = "setup" | "locked" | "unlocked";
 
 // API calls
@@ -324,5 +353,47 @@ export const api = {
 		status: () => fetchJSON<GlobalSyncStatus>("/sync/status"),
 		trigger: (accountId: number) =>
 			fetchJSON<Record<string, unknown>>(`/accounts/${accountId}/sync`, { method: "POST" }),
+	},
+	send: (data: {
+		account_id: number;
+		to: string[];
+		cc?: string[];
+		bcc?: string[];
+		subject: string;
+		text_body?: string;
+		html_body?: string;
+		in_reply_to?: string;
+		references?: string[];
+		attachments?: { filename: string; content_type: string; content_base64: string }[];
+	}) =>
+		fetchJSON<{
+			ok: boolean;
+			message_id: string;
+			accepted: string[];
+			rejected: string[];
+			stored_message_id: number;
+		}>("/send", {
+			method: "POST",
+			body: JSON.stringify(data),
+		}),
+	testSmtp: (data: Record<string, unknown>) =>
+		fetchJSON<{ ok: boolean; error?: string }>("/send/test-smtp", {
+			method: "POST",
+			body: JSON.stringify(data),
+		}),
+	drafts: {
+		list: (accountId: number) => fetchJSON<DraftSummary[]>(`/drafts?account_id=${accountId}`),
+		get: (id: number) => fetchJSON<Draft>(`/drafts/${id}`),
+		create: (data: Partial<Draft> & { account_id: number }) =>
+			fetchJSON<{ id: number }>("/drafts", {
+				method: "POST",
+				body: JSON.stringify(data),
+			}),
+		update: (id: number, data: Partial<Draft>) =>
+			fetchJSON<{ ok: boolean }>(`/drafts/${id}`, {
+				method: "PUT",
+				body: JSON.stringify(data),
+			}),
+		delete: (id: number) => fetchJSON<{ ok: boolean }>(`/drafts/${id}`, { method: "DELETE" }),
 	},
 };

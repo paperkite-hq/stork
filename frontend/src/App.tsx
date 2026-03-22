@@ -278,7 +278,7 @@ export function App() {
 	}, []);
 
 	const handleSend = useCallback(
-		async (_data: {
+		async (data: {
 			accountId?: number;
 			to: string;
 			cc: string;
@@ -286,11 +286,40 @@ export function App() {
 			subject: string;
 			body: string;
 		}) => {
-			// SMTP sending not yet available — requires #491
-			// Throw so ComposeModal keeps the draft and shows the error inline
-			throw new Error("Sending is not yet available — SMTP integration coming soon");
+			const sendAccountId = data.accountId ?? selectedAccountId;
+			if (!sendAccountId) throw new Error("No account selected");
+
+			const parseAddresses = (raw: string): string[] =>
+				raw
+					.split(",")
+					.map((s) => s.trim())
+					.filter(Boolean);
+
+			// Build threading headers for replies/forwards
+			let inReplyTo: string | undefined;
+			let references: string[] | undefined;
+			if (composeMode && composeMode.type !== "new" && composeMode.original.message_id) {
+				inReplyTo = composeMode.original.message_id;
+				const existingRefs = composeMode.original.references
+					? composeMode.original.references.split(/\s+/).filter(Boolean)
+					: [];
+				references = [...existingRefs, composeMode.original.message_id];
+			}
+
+			await api.send({
+				account_id: sendAccountId,
+				to: parseAddresses(data.to),
+				cc: data.cc ? parseAddresses(data.cc) : undefined,
+				bcc: data.bcc ? parseAddresses(data.bcc) : undefined,
+				subject: data.subject,
+				text_body: data.body,
+				in_reply_to: inReplyTo,
+				references,
+			});
+
+			setComposeMode(null);
 		},
-		[],
+		[selectedAccountId, composeMode],
 	);
 
 	// Per-message keyboard action handlers (star, mark read/unread, archive, delete)

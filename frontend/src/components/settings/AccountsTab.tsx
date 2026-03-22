@@ -265,6 +265,11 @@ function AccountForm({
 		error?: string;
 		mailboxes?: number;
 	} | null>(null);
+	const [testingSmtp, setTestingSmtp] = useState(false);
+	const [smtpTestResult, setSmtpTestResult] = useState<{
+		ok: boolean;
+		error?: string;
+	} | null>(null);
 
 	// Load existing account data
 	const loadAccount = useCallback(async () => {
@@ -341,6 +346,25 @@ function AccountForm({
 			setTestResult({ ok: false, error: (err as Error).message });
 		} finally {
 			setTesting(false);
+		}
+	};
+
+	const handleTestSmtp = async () => {
+		setTestingSmtp(true);
+		setSmtpTestResult(null);
+		try {
+			const result = await api.testSmtp({
+				smtp_host: form.smtp_host,
+				smtp_port: form.smtp_port,
+				smtp_tls: form.smtp_tls,
+				smtp_user: form.smtp_user || form.imap_user,
+				smtp_pass: form.smtp_pass || form.imap_pass,
+			});
+			setSmtpTestResult(result);
+		} catch (err) {
+			setSmtpTestResult({ ok: false, error: (err as Error).message });
+		} finally {
+			setTestingSmtp(false);
 		}
 	};
 
@@ -522,7 +546,7 @@ function AccountForm({
 				</label>
 			</fieldset>
 
-			{/* Test connection */}
+			{/* Test connection results */}
 			{testResult && (
 				<div
 					className={`text-sm px-3 py-2 rounded ${
@@ -532,8 +556,21 @@ function AccountForm({
 					}`}
 				>
 					{testResult.ok
-						? `Connection successful — ${testResult.mailboxes} mailboxes found`
-						: `Connection failed: ${testResult.error}`}
+						? `IMAP connection successful — ${testResult.mailboxes} mailboxes found`
+						: `IMAP connection failed: ${testResult.error}`}
+				</div>
+			)}
+			{smtpTestResult && (
+				<div
+					className={`text-sm px-3 py-2 rounded ${
+						smtpTestResult.ok
+							? "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
+							: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20"
+					}`}
+				>
+					{smtpTestResult.ok
+						? "SMTP connection successful — ready to send"
+						: `SMTP connection failed: ${smtpTestResult.error}`}
 				</div>
 			)}
 
@@ -552,8 +589,18 @@ function AccountForm({
 					disabled={testing || !form.imap_host || !form.imap_user || !form.imap_pass}
 					className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
 				>
-					{testing ? "Testing..." : "Test Connection"}
+					{testing ? "Testing..." : "Test IMAP"}
 				</button>
+				{form.smtp_host && (
+					<button
+						type="button"
+						onClick={handleTestSmtp}
+						disabled={testingSmtp || !form.smtp_host}
+						className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+					>
+						{testingSmtp ? "Testing..." : "Test SMTP"}
+					</button>
+				)}
 				<button
 					type="submit"
 					disabled={loading}
