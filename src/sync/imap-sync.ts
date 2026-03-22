@@ -12,13 +12,25 @@ export interface ImapConfig {
 	};
 }
 
+/** Classification of sync errors for retriability assessment */
+export type SyncErrorType = "connection" | "folder" | "message" | "flags";
+
+export interface SyncError {
+	folderPath: string | null;
+	uid: number | null;
+	errorType: SyncErrorType;
+	message: string;
+	/** Whether this error is likely to succeed on retry */
+	retriable: boolean;
+}
+
 export interface SyncResult {
 	folder: string;
 	newMessages: number;
 	updatedFlags: number;
 	deletedFolders: number;
 	attachmentsSaved: number;
-	errors: string[];
+	errors: SyncError[];
 }
 
 export interface SyncAllResult {
@@ -38,6 +50,8 @@ export interface SyncProgress {
 	totalFolders: number;
 	/** Total new messages synced so far */
 	messagesNew: number;
+	/** Total errors encountered so far */
+	errors: number;
 }
 
 /** Special-use folder mapping from IMAP attributes */
@@ -73,6 +87,8 @@ export class ImapSync {
 	private config: ImapConfig;
 	private subBatchLabelSize: number;
 
+	private insertSyncError: Database.Statement | null = null;
+
 	constructor(
 		config: ImapConfig,
 		db: Database.Database,
@@ -87,6 +103,47 @@ export class ImapSync {
 		this.db = db;
 		this.accountId = accountId;
 		this.subBatchLabelSize = subBatchLabelSize;
+
+		// Prepare statement for persisting errors (table may not exist in tests
+		// that use an older schema — check first)
+		const hasTable = this.db
+			.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sync_errors'")
+			.get();
+		if (hasTable) {
+			this.insertSyncError = this.db.prepare(`
+				INSERT INTO sync_errors (account_id, folder_path, uid, error_type, message, retriable)
+				VALUES (?, ?, ?, ?, ?, ?)
+			`);
+		}
+	}
+
+	/**
+	 * Records a sync error both in the result array and in the database.
+	 */
+	private recordError(result: SyncResult, error: SyncError): void {
+		result.errors.push(error);
+		this.insertSyncError?.run(
+			this.accountId,
+			error.folderPath,
+			error.uid,
+			error.errorType,
+			error.message,
+			error.retriable ? 1 : 0,
+		);
+	}
+
+	/**
+	 * Marks all unresolved errors for this account as resolved.
+	 * Called at the start of each sync cycle so stale errors don't accumulate.
+	 */
+	private resolveStaleErrors(): void {
+		if (!this.insertSyncError) return;
+		this.db
+			.prepare(
+				`UPDATE sync_errors SET resolved = 1, resolved_at = datetime('now')
+				 WHERE account_id = ? AND resolved = 0`,
+			)
+			.run(this.accountId);
 	}
 
 	async connect(): Promise<void> {
@@ -150,6 +207,9 @@ export class ImapSync {
 
 		if (signal?.aborted) return result;
 
+		// Mark previous errors as resolved — they'll be re-recorded if they recur
+		this.resolveStaleErrors();
+
 		// When the abort signal fires, force-close the IMAP connection to
 		// immediately unblock any `for await` loops waiting on server data.
 		// Without this, the loop only checks `signal.aborted` between messages,
@@ -163,6 +223,7 @@ export class ImapSync {
 				foldersCompleted: 0,
 				totalFolders: 0,
 				messagesNew: 0,
+				errors: 0,
 			});
 
 			const folders = await this.syncFolders();
@@ -182,6 +243,7 @@ export class ImapSync {
 					foldersCompleted,
 					totalFolders,
 					messagesNew: result.totalNew,
+					errors: result.totalErrors,
 				});
 
 				const folderResult = await this.syncFolder(folderPath, signal);
@@ -202,6 +264,7 @@ export class ImapSync {
 					foldersCompleted,
 					totalFolders,
 					messagesNew: result.totalNew,
+					errors: result.totalErrors,
 				});
 			}
 
@@ -210,6 +273,7 @@ export class ImapSync {
 				foldersCompleted,
 				totalFolders,
 				messagesNew: result.totalNew,
+				errors: result.totalErrors,
 			});
 
 			// Final pass: catch any messages that may have been missed
@@ -310,7 +374,13 @@ export class ImapSync {
 			.get(this.accountId, folderPath) as { id: number; uid_validity: number | null } | undefined;
 
 		if (!folder) {
-			result.errors.push(`Folder not found in database: ${folderPath}`);
+			this.recordError(result, {
+				folderPath,
+				uid: null,
+				errorType: "folder",
+				message: `Folder not found in database: ${folderPath}`,
+				retriable: true,
+			});
 			return result;
 		}
 
@@ -318,14 +388,26 @@ export class ImapSync {
 		try {
 			lock = await withRetry(() => this.client.getMailboxLock(folderPath), `lock ${folderPath}`);
 		} catch (err) {
-			result.errors.push(`Could not lock mailbox ${folderPath}: ${err}`);
+			this.recordError(result, {
+				folderPath,
+				uid: null,
+				errorType: "folder",
+				message: `Could not lock mailbox ${folderPath}: ${err}`,
+				retriable: true,
+			});
 			return result;
 		}
 
 		try {
 			const mailboxStatus = this.client.mailbox;
 			if (!mailboxStatus) {
-				result.errors.push(`Could not open mailbox: ${folderPath}`);
+				this.recordError(result, {
+					folderPath,
+					uid: null,
+					errorType: "folder",
+					message: `Could not open mailbox: ${folderPath}`,
+					retriable: true,
+				});
 				return result;
 			}
 
@@ -357,7 +439,13 @@ export class ImapSync {
 				// Don't let a single folder FETCH failure kill the entire sync —
 				// record the error and continue to the next folder
 				if (signal?.aborted) throw err;
-				result.errors.push(`Fetch failed for ${folderPath}: ${formatImapError(err)}`);
+				this.recordError(result, {
+					folderPath,
+					uid: null,
+					errorType: "folder",
+					message: `Fetch failed for ${folderPath}: ${formatImapError(err)}`,
+					retriable: true,
+				});
 			}
 
 			// Phase 2: Sync flags on existing messages (skip if aborted)
@@ -423,7 +511,13 @@ export class ImapSync {
 				try {
 					const source = message.source;
 					if (!source) {
-						result.errors.push(`UID ${message.uid}: no source available`);
+						this.recordError(result, {
+							folderPath: result.folder,
+							uid: message.uid,
+							errorType: "message",
+							message: `UID ${message.uid}: no source available`,
+							retriable: true,
+						});
 						continue;
 					}
 
@@ -432,7 +526,13 @@ export class ImapSync {
 
 					const envelope = message.envelope;
 					if (!envelope) {
-						result.errors.push(`UID ${message.uid}: no envelope available`);
+						this.recordError(result, {
+							folderPath: result.folder,
+							uid: message.uid,
+							errorType: "message",
+							message: `UID ${message.uid}: no envelope available`,
+							retriable: true,
+						});
 						continue;
 					}
 					const fromAddr = envelope.from?.[0];
@@ -492,7 +592,13 @@ export class ImapSync {
 						this.applyFolderLabelsToMessages();
 					}
 				} catch (err) {
-					result.errors.push(`Failed to process UID ${message.uid}: ${err}`);
+					this.recordError(result, {
+						folderPath: result.folder,
+						uid: message.uid,
+						errorType: "message",
+						message: `Failed to process UID ${message.uid}: ${err}`,
+						retriable: false,
+					});
 				}
 			}
 		} catch (err) {
@@ -567,7 +673,13 @@ export class ImapSync {
 			} catch (err) {
 				// Connection force-closed during shutdown — treat as normal abort
 				if (signal?.aborted) break;
-				result.errors.push(`Flag sync batch error: ${err}`);
+				this.recordError(result, {
+					folderPath: null,
+					uid: null,
+					errorType: "flags",
+					message: `Flag sync batch error: ${err}`,
+					retriable: true,
+				});
 			}
 		}
 
