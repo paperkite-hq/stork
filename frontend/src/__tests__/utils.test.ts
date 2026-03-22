@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { formatAddressList, getPageSize, isFlagged, isUnread, parseFlags } from "../utils.js";
+import {
+	formatAddressList,
+	getPageSize,
+	isFlagged,
+	isUnread,
+	parseAddressField,
+	parseFlags,
+} from "../utils.js";
 
 describe("isUnread", () => {
 	test("null flags → unread", () => {
@@ -73,6 +80,49 @@ describe("parseFlags", () => {
 	});
 });
 
+describe("parseAddressField", () => {
+	test("null → empty array", () => {
+		expect(parseAddressField(null)).toEqual([]);
+	});
+
+	test("empty string → empty array", () => {
+		expect(parseAddressField("")).toEqual([]);
+	});
+
+	test("JSON array format (from IMAP sync)", () => {
+		expect(parseAddressField('["alice@test.com","bob@test.com"]')).toEqual([
+			"alice@test.com",
+			"bob@test.com",
+		]);
+	});
+
+	test("single-element JSON array", () => {
+		expect(parseAddressField('["alice@test.com"]')).toEqual(["alice@test.com"]);
+	});
+
+	test("comma-separated format (from demo/legacy data)", () => {
+		expect(parseAddressField("alice@test.com, bob@test.com")).toEqual([
+			"alice@test.com",
+			"bob@test.com",
+		]);
+	});
+
+	test("single bare email", () => {
+		expect(parseAddressField("alice@test.com")).toEqual(["alice@test.com"]);
+	});
+
+	test("invalid JSON falls back to comma-split", () => {
+		expect(parseAddressField("[broken")).toEqual(["[broken"]);
+	});
+
+	test("JSON array with null entries filters them out", () => {
+		expect(parseAddressField('["alice@test.com",null,"bob@test.com"]')).toEqual([
+			"alice@test.com",
+			"bob@test.com",
+		]);
+	});
+});
+
 describe("formatAddressList", () => {
 	test("null → empty string", () => {
 		expect(formatAddressList(null)).toBe("");
@@ -107,6 +157,18 @@ describe("formatAddressList", () => {
 	test("skips empty segments from trailing commas", () => {
 		expect(formatAddressList("alice@example.com, , bob@example.com")).toBe(
 			"alice@example.com, bob@example.com",
+		);
+	});
+
+	test("JSON array format → correctly parsed and formatted", () => {
+		expect(formatAddressList('["alice@example.com","bob@example.com"]')).toBe(
+			"alice@example.com, bob@example.com",
+		);
+	});
+
+	test("JSON array with display names → extracts names", () => {
+		expect(formatAddressList('["Alice <alice@example.com>","bob@example.com"]')).toBe(
+			"Alice, bob@example.com",
 		);
 	});
 });

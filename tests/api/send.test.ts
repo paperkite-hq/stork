@@ -108,8 +108,8 @@ describe("Send API", () => {
 
 			expect(stored).toBeTruthy();
 			expect(stored.subject).toBe("Saved message test");
-			expect(stored.to_addresses).toBe("alice@example.com");
-			expect(stored.cc_addresses).toBe("bob@example.com");
+			expect(stored.to_addresses).toBe('["alice@example.com"]');
+			expect(stored.cc_addresses).toBe('["bob@example.com"]');
 			expect(stored.text_body).toBe("Body text");
 			expect(stored.flags).toContain("\\Seen");
 		});

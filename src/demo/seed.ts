@@ -396,7 +396,7 @@ Thank you for using Backblaze B2!`,
 		subject: "Sprint retro notes — March 20",
 		from_address: "priya@acme-corp.com",
 		from_name: "Priya Sharma",
-		to_addresses: "alex@example.com, jordan@acme-corp.com, sam@acme-corp.com",
+		to_addresses: '["alex@example.com","jordan@acme-corp.com","sam@acme-corp.com"]',
 		date: "2026-03-20T17:45:00Z",
 		text_body: `Team,
 

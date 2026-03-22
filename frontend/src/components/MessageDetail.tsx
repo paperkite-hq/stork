@@ -12,6 +12,7 @@ interface MessageDetailProps {
 	thread: Message[];
 	loading: boolean;
 	error?: string | null;
+	dark?: boolean;
 	onReply: (msg: Message) => void;
 	onReplyAll: (msg: Message) => void;
 	onForward: (msg: Message) => void;
@@ -37,6 +38,7 @@ export function MessageDetail({
 	accountId,
 	onLabelsChanged,
 	error,
+	dark,
 }: MessageDetailProps) {
 	const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 	const [showHtml, setShowHtml] = useState(true);
@@ -222,6 +224,7 @@ export function MessageDetail({
 							expanded={expanded}
 							showHtml={showHtml}
 							imagesAllowed={imagesAllowed.has(msg.id)}
+							dark={dark}
 							onToggleExpanded={toggleExpanded}
 							onToggleShowHtml={() => setShowHtml((h) => !h)}
 							onAllowImages={handleAllowImages}

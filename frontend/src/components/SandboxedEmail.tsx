@@ -18,9 +18,11 @@ interface SandboxedEmailProps {
 	className?: string;
 	/** When true, the iframe's CSP allows loading remote images (http/https). */
 	allowRemoteImages?: boolean;
+	/** When true, applies dark-mode-friendly colors inside the iframe. */
+	dark?: boolean;
 }
 
-export function SandboxedEmail({ html, className, allowRemoteImages }: SandboxedEmailProps) {
+export function SandboxedEmail({ html, className, allowRemoteImages, dark }: SandboxedEmailProps) {
 	const iframeRef = useRef<HTMLIFrameElement>(null);
 
 	const adjustHeight = useCallback(() => {
@@ -65,7 +67,7 @@ export function SandboxedEmail({ html, className, allowRemoteImages }: Sandboxed
 <html>
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: cid:${allowRemoteImages ? " https: http:" : ""};">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: ${allowRemoteImages ? "https: http: " : ""}${`${window.location.origin}/api/`};">
 <style>
   body {
     margin: 0;
@@ -73,12 +75,13 @@ export function SandboxedEmail({ html, className, allowRemoteImages }: Sandboxed
     font-family: system-ui, -apple-system, sans-serif;
     font-size: 14px;
     line-height: 1.6;
-    color: inherit;
+    color: ${dark ? "#e5e7eb" : "#1f2937"};
+    background: ${dark ? "#111827" : "transparent"};
     word-wrap: break-word;
     overflow-wrap: break-word;
   }
   img { max-width: 100%; height: auto; }
-  a { color: #2563eb; }
+  a { color: ${dark ? "#93c5fd" : "#2563eb"}; }
   table { max-width: 100%; }
   pre, code { white-space: pre-wrap; }
 </style>

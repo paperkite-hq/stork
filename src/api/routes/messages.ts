@@ -58,7 +58,7 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 		const placeholders = [...threadIds].map(() => "?").join(",");
 		const thread = db
 			.prepare(`
-				SELECT m.*, f.path as folder_path, f.name as folder_name
+				SELECT DISTINCT m.*, f.path as folder_path, f.name as folder_name
 				FROM messages m
 				JOIN folders f ON f.id = m.folder_id
 				WHERE m.account_id = ?

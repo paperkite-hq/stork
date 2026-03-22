@@ -25,21 +25,35 @@ describe("SandboxedEmail", () => {
 	it("CSP blocks remote images by default", () => {
 		render(<SandboxedEmail html="<p>Hello</p>" />);
 		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
-		// CSP should only allow data: and cid: — no https: or http:
-		expect(iframe.srcdoc).toContain("img-src data: cid:;");
-		expect(iframe.srcdoc).not.toContain("img-src data: cid: https:");
+		// CSP should only allow data: and the API origin — no https: or http: for general remote images
+		expect(iframe.srcdoc).toContain("img-src data:");
+		expect(iframe.srcdoc).not.toContain("https: http:");
 	});
 
 	it("CSP allows remote images when allowRemoteImages is true", () => {
 		render(<SandboxedEmail html='<img src="https://example.com/img.png">' allowRemoteImages />);
 		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
-		expect(iframe.srcdoc).toContain("img-src data: cid: https: http:;");
+		expect(iframe.srcdoc).toContain("https: http:");
 	});
 
-	it("always allows data: and cid: images regardless of allowRemoteImages", () => {
+	it("always allows data: images regardless of allowRemoteImages", () => {
 		render(<SandboxedEmail html='<img src="data:image/png;base64,abc">' />);
 		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
-		expect(iframe.srcdoc).toContain("img-src data: cid:");
+		expect(iframe.srcdoc).toContain("img-src data:");
+	});
+
+	it("applies dark mode colors when dark prop is true", () => {
+		render(<SandboxedEmail html="<p>Dark mode</p>" dark />);
+		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
+		expect(iframe.srcdoc).toContain("color: #e5e7eb");
+		expect(iframe.srcdoc).toContain("background: #111827");
+	});
+
+	it("applies light mode colors when dark is false", () => {
+		render(<SandboxedEmail html="<p>Light mode</p>" dark={false} />);
+		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
+		expect(iframe.srcdoc).toContain("color: #1f2937");
+		expect(iframe.srcdoc).toContain("background: transparent");
 	});
 
 	it("blocks scripts via sandbox attribute (no allow-scripts)", () => {
