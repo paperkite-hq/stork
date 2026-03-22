@@ -5,6 +5,7 @@ import {
 	ComposeIcon,
 	DraftIcon,
 	InboxIcon,
+	MailAllIcon,
 	MoonIcon,
 	RefreshIcon,
 	SearchIcon,
@@ -14,6 +15,7 @@ import {
 	StarIcon,
 	SunIcon,
 	TrashIcon,
+	UnreadIcon,
 } from "./Icons";
 import { LabelManager } from "./LabelManager";
 
@@ -50,6 +52,10 @@ function labelIcon(label: Label): ReactNode {
 
 /** Sentinel label ID for the "All Mail" virtual view */
 export const ALL_MAIL_LABEL_ID = -1;
+/** Sentinel label ID for the "Unread" virtual view */
+export const UNREAD_LABEL_ID = -2;
+/** Sentinel label ID for the promoted "Inbox" virtual view */
+export const INBOX_LABEL_ID = -3;
 
 interface SidebarProps {
 	accounts: Account[];
@@ -65,9 +71,12 @@ interface SidebarProps {
 	dark: boolean;
 	onToggleDark: () => void;
 	syncing?: boolean;
+	syncError?: string | null;
 	syncStatus?: GlobalSyncStatus | null;
 	onLabelsChanged?: () => void;
 	allMailCount?: { total: number; unread: number } | null;
+	unreadCount?: { total: number } | null;
+	inboxLabel?: Label | null;
 }
 
 /** Formats a duration in ms as "Xm Ys" or "Xs" */
@@ -184,9 +193,12 @@ export function Sidebar({
 	dark,
 	onToggleDark,
 	syncing,
+	syncError,
 	syncStatus,
 	onLabelsChanged,
 	allMailCount,
+	unreadCount,
+	inboxLabel,
 }: SidebarProps) {
 	const [contextMenu, setContextMenu] = useState<{
 		label: Label;
@@ -297,37 +309,73 @@ export function Sidebar({
 				</div>
 			)}
 
-			{/* Label list */}
+			{/* Sync error indicator — shown when not syncing but last sync failed */}
+			{!syncing && syncError && (
+				<div className="border-b border-gray-200 dark:border-gray-800 px-4 py-2">
+					<div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400">
+						<svg
+							className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="2"
+							role="img"
+							aria-label="Sync error"
+						>
+							<title>Sync error</title>
+							<circle cx="12" cy="12" r="10" />
+							<line x1="12" y1="8" x2="12" y2="12" />
+							<line x1="12" y1="16" x2="12.01" y2="16" />
+						</svg>
+						<div className="flex-1 min-w-0">
+							<span className="font-medium">Sync failed</span>
+							<p className="text-red-500 dark:text-red-500 truncate mt-0.5" title={syncError}>
+								{syncError}
+							</p>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Navigation — promoted views + label list */}
 			<nav className="flex-1 overflow-y-auto px-2 py-3">
-				{labels.map((label) => {
-					const active = label.id === selectedLabelId;
-					return (
+				{/* Promoted views: Inbox, Unread, All Mail — always at top */}
+				{labels.length > 0 && (
+					<>
 						<button
-							key={label.id}
 							type="button"
-							onClick={() => onSelectLabel(label.id)}
-							onContextMenu={(e) => handleLabelContextMenu(e, label)}
+							onClick={() => onSelectLabel(INBOX_LABEL_ID)}
 							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-								active
+								selectedLabelId === INBOX_LABEL_ID
 									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
 									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
 							}`}
 						>
-							{labelIcon(label)}
-							<span className="truncate">{label.name}</span>
-							{label.unread_count > 0 && (
+							<InboxIcon className="w-4 h-4 flex-shrink-0" />
+							<span className="truncate">Inbox</span>
+							{inboxLabel && inboxLabel.unread_count > 0 && (
 								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
-									{label.unread_count}
+									{inboxLabel.unread_count}
 								</span>
 							)}
 						</button>
-					);
-				})}
-
-				{/* All Mail virtual entry — shows all messages regardless of labels */}
-				{labels.length > 0 && (
-					<>
-						<div className="my-2 mx-3 border-t border-gray-200 dark:border-gray-700" />
+						<button
+							type="button"
+							onClick={() => onSelectLabel(UNREAD_LABEL_ID)}
+							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+								selectedLabelId === UNREAD_LABEL_ID
+									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
+									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+							}`}
+						>
+							<UnreadIcon className="w-4 h-4 flex-shrink-0" />
+							<span className="truncate">Unread</span>
+							{unreadCount && unreadCount.total > 0 && (
+								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
+									{unreadCount.total}
+								</span>
+							)}
+						</button>
 						<button
 							type="button"
 							onClick={() => onSelectLabel(ALL_MAIL_LABEL_ID)}
@@ -337,7 +385,7 @@ export function Sidebar({
 									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
 							}`}
 						>
-							<ArchiveIcon className="w-4 h-4 flex-shrink-0" />
+							<MailAllIcon className="w-4 h-4 flex-shrink-0" />
 							<span className="truncate">All Mail</span>
 							{allMailCount && allMailCount.unread > 0 && (
 								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
@@ -345,8 +393,37 @@ export function Sidebar({
 								</span>
 							)}
 						</button>
+						<div className="my-2 mx-3 border-t border-gray-200 dark:border-gray-700" />
 					</>
 				)}
+
+				{/* Regular labels — Inbox is excluded since it's promoted above */}
+				{labels
+					.filter((l) => l.name.toLowerCase() !== "inbox")
+					.map((label) => {
+						const active = label.id === selectedLabelId;
+						return (
+							<button
+								key={label.id}
+								type="button"
+								onClick={() => onSelectLabel(label.id)}
+								onContextMenu={(e) => handleLabelContextMenu(e, label)}
+								className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+									active
+										? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
+										: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+								}`}
+							>
+								{labelIcon(label)}
+								<span className="truncate">{label.name}</span>
+								{label.unread_count > 0 && (
+									<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
+										{label.unread_count}
+									</span>
+								)}
+							</button>
+						);
+					})}
 
 				{labels.length === 0 && (
 					<p className="text-xs text-gray-400 px-3 py-2">

@@ -350,8 +350,15 @@ export class ImapSync {
 				.run(mailboxStatus.uidValidity, mailboxStatus.uidNext, mailboxStatus.exists, folder.id);
 
 			// Phase 1: Fetch new messages
-			const newCount = await this.fetchNewMessages(folder.id, result, signal);
-			result.newMessages = newCount;
+			try {
+				const newCount = await this.fetchNewMessages(folder.id, result, signal);
+				result.newMessages = newCount;
+			} catch (err) {
+				// Don't let a single folder FETCH failure kill the entire sync —
+				// record the error and continue to the next folder
+				if (signal?.aborted) throw err;
+				result.errors.push(`Fetch failed for ${folderPath}: ${formatImapError(err)}`);
+			}
 
 			// Phase 2: Sync flags on existing messages (skip if aborted)
 			if (!signal?.aborted) {
@@ -754,5 +761,20 @@ async function withRetry<T>(
 			}
 		}
 	}
-	throw new Error(`${label} failed after ${retries} attempts: ${lastError}`);
+	throw new Error(`${label} failed after ${retries} attempts: ${formatImapError(lastError)}`);
+}
+
+/**
+ * Extracts a useful error message from ImapFlow errors.
+ * ImapFlow sets error.message to "Command failed" but puts the actual
+ * IMAP server response in error.responseText and the status (NO/BAD)
+ * in error.responseStatus. This function combines them.
+ */
+function formatImapError(err: unknown): string {
+	if (!(err instanceof Error)) return String(err);
+	const imapErr = err as Error & { responseText?: string; responseStatus?: string };
+	if (imapErr.responseText) {
+		return `${imapErr.responseStatus ?? "ERROR"}: ${imapErr.responseText}`;
+	}
+	return imapErr.message;
 }
