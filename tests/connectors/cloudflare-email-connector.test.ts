@@ -221,6 +221,61 @@ describe("CloudflareEmailIngestConnector", () => {
 		expect(connector.validateSecret("test-secret-12")).toBe(false);
 	});
 
+	test("pushMessage handles email with no from/to/cc headers", async () => {
+		const connector = createConnector();
+		// Build a minimal email with no From, To, or CC headers
+		const raw = buildRawEmail({
+			subject: "Header-less email",
+			body: "No sender or recipient headers",
+		});
+
+		const uid = await connector.pushMessage({
+			from: "",
+			to: "",
+			raw,
+			rawSize: Buffer.from(raw, "base64").length,
+		});
+
+		const messages: { from?: { address: string }; to?: unknown[]; cc?: unknown[] }[] = [];
+		for await (const msg of connector.fetchMessages("INBOX", uid - 1)) {
+			messages.push(msg);
+		}
+		expect(messages).toHaveLength(1);
+		// from should be undefined when no From header is present
+		expect(messages[0].from).toBeUndefined();
+		// to should be undefined when no To header is present
+		expect(messages[0].to).toBeUndefined();
+		// cc should be undefined when no CC header is present
+		expect(messages[0].cc).toBeUndefined();
+	});
+
+	test("pushMessage handles email with HTML body (false-y html)", async () => {
+		const connector = createConnector();
+		// A plain text email — parsed.html will be false, not a string
+		const raw = buildRawEmail({
+			from: "alice@example.com",
+			to: "bob@example.com",
+			subject: "Plain text only",
+			body: "No HTML content here",
+		});
+
+		await connector.pushMessage({
+			from: "alice@example.com",
+			to: "bob@example.com",
+			raw,
+			rawSize: Buffer.from(raw, "base64").length,
+		});
+
+		const messages: { htmlBody?: string; textBody?: string }[] = [];
+		for await (const msg of connector.fetchMessages("INBOX", 0)) {
+			messages.push(msg);
+		}
+		expect(messages).toHaveLength(1);
+		// htmlBody should be undefined for plain-text-only emails
+		expect(messages[0].htmlBody).toBeUndefined();
+		expect(messages[0].textBody).toBeDefined();
+	});
+
 	test("pushMessage extracts inReplyTo for threading", async () => {
 		const connector = createConnector();
 		const raw = buildRawEmail({

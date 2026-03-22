@@ -125,7 +125,7 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 					(text_body ?? "").length + (html_body ?? "").length,
 					attachments ? 1 : 0,
 					in_reply_to ?? null,
-					references?.join(" ") ?? null,
+					references ? JSON.stringify(references) : null,
 				);
 
 			// Save attachments if present
