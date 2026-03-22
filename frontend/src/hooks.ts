@@ -191,6 +191,7 @@ export function useBulkSelection(opts: {
 	effectiveLabelId?: number | null;
 	isAllMail?: boolean;
 	refetchAllMailCount?: () => void;
+	refetchUnreadCount?: () => void;
 }) {
 	const {
 		messages,
@@ -201,6 +202,7 @@ export function useBulkSelection(opts: {
 		effectiveLabelId,
 		isAllMail,
 		refetchAllMailCount,
+		refetchUnreadCount,
 	} = opts;
 	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
@@ -230,11 +232,19 @@ export function useBulkSelection(opts: {
 			if (ids.includes(selectedMessageId ?? -1)) setSelectedMessageId(null);
 			refetchMessages();
 			refetchLabels();
+			refetchUnreadCount?.();
 			toast(`Deleted ${ids.length} message${ids.length !== 1 ? "s" : ""}`, "success");
 		} catch (err) {
 			toast(`Failed to delete: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
 		}
-	}, [selectedIds, selectedMessageId, setSelectedMessageId, refetchMessages, refetchLabels]);
+	}, [
+		selectedIds,
+		selectedMessageId,
+		setSelectedMessageId,
+		refetchMessages,
+		refetchLabels,
+		refetchUnreadCount,
+	]);
 
 	const markRead = useCallback(async () => {
 		const ids = [...selectedIds];
@@ -243,6 +253,8 @@ export function useBulkSelection(opts: {
 			await api.messages.bulk(ids, "flag", { add: ["\\Seen"] });
 			setSelectedIds(new Set());
 			refetchMessages();
+			refetchLabels();
+			refetchUnreadCount?.();
 			toast(`Marked ${ids.length} message${ids.length !== 1 ? "s" : ""} as read`, "success");
 		} catch (err) {
 			toast(
@@ -250,7 +262,7 @@ export function useBulkSelection(opts: {
 				"error",
 			);
 		}
-	}, [selectedIds, refetchMessages]);
+	}, [selectedIds, refetchMessages, refetchLabels, refetchUnreadCount]);
 
 	const markUnread = useCallback(async () => {
 		const ids = [...selectedIds];
@@ -259,6 +271,8 @@ export function useBulkSelection(opts: {
 			await api.messages.bulk(ids, "flag", { remove: ["\\Seen"] });
 			setSelectedIds(new Set());
 			refetchMessages();
+			refetchLabels();
+			refetchUnreadCount?.();
 			toast(`Marked ${ids.length} message${ids.length !== 1 ? "s" : ""} as unread`, "success");
 		} catch (err) {
 			toast(
@@ -266,7 +280,7 @@ export function useBulkSelection(opts: {
 				"error",
 			);
 		}
-	}, [selectedIds, refetchMessages]);
+	}, [selectedIds, refetchMessages, refetchLabels, refetchUnreadCount]);
 
 	const move = useCallback(
 		async (folderId: number) => {
@@ -278,12 +292,20 @@ export function useBulkSelection(opts: {
 				if (ids.includes(selectedMessageId ?? -1)) setSelectedMessageId(null);
 				refetchMessages();
 				refetchLabels();
+				refetchUnreadCount?.();
 				toast(`Moved ${ids.length} message${ids.length !== 1 ? "s" : ""}`, "success");
 			} catch (err) {
 				toast(`Failed to move: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
 			}
 		},
-		[selectedIds, selectedMessageId, setSelectedMessageId, refetchMessages, refetchLabels],
+		[
+			selectedIds,
+			selectedMessageId,
+			setSelectedMessageId,
+			refetchMessages,
+			refetchLabels,
+			refetchUnreadCount,
+		],
 	);
 
 	const archive = useCallback(async () => {
@@ -298,6 +320,7 @@ export function useBulkSelection(opts: {
 				refetchMessages();
 				refetchLabels();
 				refetchAllMailCount?.();
+				refetchUnreadCount?.();
 				toast(`Archived ${ids.length} message${ids.length !== 1 ? "s" : ""}`, "success");
 			} catch (err) {
 				toast(
@@ -315,6 +338,7 @@ export function useBulkSelection(opts: {
 		refetchMessages,
 		refetchLabels,
 		refetchAllMailCount,
+		refetchUnreadCount,
 		effectiveLabelId,
 		isAllMail,
 	]);
@@ -351,6 +375,7 @@ export function useMessageActions(opts: {
 	refetchMessages: () => void;
 	refetchLabels: () => void;
 	refetchAllMailCount: () => void;
+	refetchUnreadCount?: () => void;
 }) {
 	const {
 		messages,
@@ -364,6 +389,7 @@ export function useMessageActions(opts: {
 		refetchMessages,
 		refetchLabels,
 		refetchAllMailCount,
+		refetchUnreadCount,
 	} = opts;
 
 	const [pendingDelete, setPendingDelete] = useState<number | null>(null);
@@ -411,11 +437,20 @@ export function useMessageActions(opts: {
 		toast(unread ? "Marked as read" : "Marked as unread", "success");
 		try {
 			await api.messages.updateFlags(msg.id, flagsUpdate);
+			refetchLabels();
+			refetchUnreadCount?.();
 		} catch (err) {
 			refetchMessages(); // Revert on failure
 			toast(`Failed to update: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
 		}
-	}, [messages, messageListIndex, optimisticFlagUpdate, refetchMessages]);
+	}, [
+		messages,
+		messageListIndex,
+		optimisticFlagUpdate,
+		refetchMessages,
+		refetchLabels,
+		refetchUnreadCount,
+	]);
 
 	const archive = useCallback(async () => {
 		const msg = messages[messageListIndex];
@@ -436,6 +471,7 @@ export function useMessageActions(opts: {
 			await api.messages.removeLabel(msg.id, currentLabel.id);
 			refetchLabels();
 			refetchAllMailCount();
+			refetchUnreadCount?.();
 			toast("Archived", "success", {
 				label: "Undo",
 				onClick: () => {
@@ -445,6 +481,7 @@ export function useMessageActions(opts: {
 							refetchMessages();
 							refetchLabels();
 							refetchAllMailCount();
+							refetchUnreadCount?.();
 						})
 						.catch(() => toast("Failed to undo", "error"));
 				},
@@ -465,6 +502,7 @@ export function useMessageActions(opts: {
 		refetchMessages,
 		refetchLabels,
 		refetchAllMailCount,
+		refetchUnreadCount,
 	]);
 
 	const confirmDelete = useCallback(async () => {
@@ -476,11 +514,19 @@ export function useMessageActions(opts: {
 			if (selectedMessageId === id) setSelectedMessageId(null);
 			refetchMessages();
 			refetchLabels();
+			refetchUnreadCount?.();
 			toast("Message deleted", "success");
 		} catch (err) {
 			toast(`Failed to delete: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
 		}
-	}, [pendingDelete, selectedMessageId, setSelectedMessageId, refetchMessages, refetchLabels]);
+	}, [
+		pendingDelete,
+		selectedMessageId,
+		setSelectedMessageId,
+		refetchMessages,
+		refetchLabels,
+		refetchUnreadCount,
+	]);
 
 	return {
 		focusedMessage,

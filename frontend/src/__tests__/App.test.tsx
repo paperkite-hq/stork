@@ -1544,11 +1544,12 @@ describe("App — Send email", () => {
 		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "test@test.com");
 		// Click Send
 		await userEvent.click(screen.getByRole("button", { name: /send/i }));
-		// Modal should close after successful send
+		// Modal should close after successful send + toast confirmation
 		await waitFor(() => {
 			expect(screen.queryByPlaceholderText("recipient@example.com")).not.toBeInTheDocument();
 		});
 		expect(api.send).toHaveBeenCalled();
+		expect(screen.getByText("Message sent")).toBeInTheDocument();
 	});
 
 	it("shows error inline when send fails", async () => {

@@ -41,12 +41,14 @@ describe("useBulkSelection", () => {
 	let setSelectedMessageId: (id: number | null) => void;
 	let refetchMessages: () => void;
 	let refetchLabels: () => void;
+	let refetchUnreadCount: () => void;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 		setSelectedMessageId = vi.fn();
 		refetchMessages = vi.fn();
 		refetchLabels = vi.fn();
+		refetchUnreadCount = vi.fn();
 	});
 
 	function renderBulk(overrides: Partial<Parameters<typeof useBulkSelection>[0]> = {}) {
@@ -57,6 +59,7 @@ describe("useBulkSelection", () => {
 				setSelectedMessageId,
 				refetchMessages,
 				refetchLabels,
+				refetchUnreadCount,
 				...overrides,
 			}),
 		);
@@ -135,12 +138,13 @@ describe("useBulkSelection", () => {
 		expect(result.current.selectedIds.size).toBe(0);
 	});
 
-	it("bulkDelete refetches messages and labels on success", async () => {
+	it("bulkDelete refetches messages, labels, and unread count on success", async () => {
 		const { result } = renderBulk();
 		act(() => result.current.toggle(1));
 		await act(async () => result.current.bulkDelete());
 		expect(refetchMessages).toHaveBeenCalledOnce();
 		expect(refetchLabels).toHaveBeenCalledOnce();
+		expect(refetchUnreadCount).toHaveBeenCalledOnce();
 	});
 
 	it("bulkDelete shows success toast", async () => {
@@ -195,12 +199,14 @@ describe("useBulkSelection", () => {
 		expect(mockBulk).toHaveBeenCalledWith([2], "flag", { add: ["\\Seen"] });
 	});
 
-	it("markRead clears selection and refetches messages on success", async () => {
+	it("markRead clears selection and refetches messages, labels, and unread count", async () => {
 		const { result } = renderBulk();
 		act(() => result.current.toggle(1));
 		await act(async () => result.current.markRead());
 		expect(result.current.selectedIds.size).toBe(0);
 		expect(refetchMessages).toHaveBeenCalledOnce();
+		expect(refetchLabels).toHaveBeenCalledOnce();
+		expect(refetchUnreadCount).toHaveBeenCalledOnce();
 	});
 
 	it("markRead shows success toast", async () => {
@@ -234,12 +240,14 @@ describe("useBulkSelection", () => {
 		expect(mockBulk).toHaveBeenCalledWith([3], "flag", { remove: ["\\Seen"] });
 	});
 
-	it("markUnread clears selection and refetches on success", async () => {
+	it("markUnread clears selection and refetches messages, labels, and unread count", async () => {
 		const { result } = renderBulk();
 		act(() => result.current.toggle(1));
 		await act(async () => result.current.markUnread());
 		expect(result.current.selectedIds.size).toBe(0);
 		expect(refetchMessages).toHaveBeenCalledOnce();
+		expect(refetchLabels).toHaveBeenCalledOnce();
+		expect(refetchUnreadCount).toHaveBeenCalledOnce();
 	});
 
 	it("markUnread shows error toast on failure", async () => {

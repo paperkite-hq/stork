@@ -258,6 +258,7 @@ export function App() {
 		effectiveLabelId: archiveLabelId,
 		isAllMail: archiveDisabled,
 		refetchAllMailCount,
+		refetchUnreadCount,
 	});
 
 	// Compose handlers
@@ -318,8 +319,11 @@ export function App() {
 			});
 
 			setComposeMode(null);
+			toast("Message sent", "success");
+			refetchMessages();
+			refetchLabels();
 		},
-		[selectedAccountId, composeMode],
+		[selectedAccountId, composeMode, refetchMessages, refetchLabels],
 	);
 
 	// Per-message keyboard action handlers (star, mark read/unread, archive, delete)
@@ -336,6 +340,7 @@ export function App() {
 		refetchMessages,
 		refetchLabels,
 		refetchAllMailCount,
+		refetchUnreadCount,
 	});
 	const { focusedMessage } = msgActions;
 
@@ -642,11 +647,13 @@ export function App() {
 								refetchMessage();
 								refetchMessages();
 								refetchLabels();
+								refetchUnreadCount();
 							}}
 							onMessageDeleted={() => {
 								setSelectedMessageId(null);
 								refetchMessages();
 								refetchLabels();
+								refetchUnreadCount();
 							}}
 							folders={folders ?? []}
 							accountId={effectiveAccountId}
