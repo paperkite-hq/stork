@@ -1,6 +1,8 @@
 services:
   stork:
-    build: .
+    image: ghcr.io/paperkite-hq/stork:latest
+    # To build from source instead of pulling the pre-built image:
+    # build: .
     init: true
     ports:
       - "127.0.0.1:3100:3100"

@@ -9,15 +9,15 @@
 
 ## Docker Compose
 
-The default `docker-compose.yml`:
+The default `docker-compose.yml` pulls the pre-built image from GitHub Container Registry:
 
 ```yaml
 services:
   stork:
-    build: .
+    image: ghcr.io/paperkite-hq/stork:latest
     init: true
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     volumes:
       - stork-data:/app/data
     environment:
@@ -27,6 +27,8 @@ services:
 volumes:
   stork-data:
 ```
+
+To build from source instead, replace the `image:` line with `build: .`.
 
 ### Using a bind mount instead of a volume
 
@@ -63,6 +65,17 @@ For security, bind to `127.0.0.1` so Stork is not accessible from the network:
     ports:
       - "127.0.0.1:3100:3100"
 ```
+
+## Health Check
+
+The Docker image includes a built-in `HEALTHCHECK` that polls `GET /api/health` every 30 seconds. Docker marks the container as `healthy` once the endpoint returns 200.
+
+Additional endpoints for monitoring:
+
+| Endpoint | Auth | Response |
+|----------|------|----------|
+| `GET /api/health` | None | `{"status":"ok","version":"0.1.0"}` |
+| `GET /api/status` | None | `{"state":"setup\|locked\|unlocked"}` |
 
 ## Database
 
