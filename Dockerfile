@@ -1,4 +1,4 @@
-FROM node:22-slim AS base
+FROM docker.io/library/node:22-slim AS base
 WORKDIR /app
 
 # Install build tools required to compile better-sqlite3-multiple-ciphers native addon
