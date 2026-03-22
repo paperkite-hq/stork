@@ -51,7 +51,7 @@ export function createApp(context: ContainerContext): { app: Hono } {
 	api.route("/labels", labelRoutes(getDb));
 	api.route("/attachments", attachmentRoutes(getDb));
 	api.route("/search", searchRoutes(getDb));
-	api.route("/sync", syncRoutes(getScheduler));
+	api.route("/sync", syncRoutes(getScheduler, getDb));
 
 	app.route("/api", api);
 

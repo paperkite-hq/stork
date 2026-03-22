@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -159,5 +159,28 @@ export const MIGRATIONS = [
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_message_labels_label ON message_labels(label_id);
+	`,
+	// Version 4: Add sync_errors table for persistent error tracking.
+	// Each row records a single error that occurred during sync — per-message
+	// parse failures, folder-level IMAP errors, etc. Errors are classified
+	// so the UI can distinguish retriable (transient) from permanent failures,
+	// and include enough context (folder, UID) for automatic retry.
+	`
+	CREATE TABLE IF NOT EXISTS sync_errors (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+		folder_path TEXT,
+		uid INTEGER,
+		error_type TEXT NOT NULL,
+		message TEXT NOT NULL,
+		retriable INTEGER NOT NULL DEFAULT 1,
+		resolved INTEGER NOT NULL DEFAULT 0,
+		retry_count INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL DEFAULT (datetime('now')),
+		resolved_at TEXT
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_sync_errors_account ON sync_errors(account_id);
+	CREATE INDEX IF NOT EXISTS idx_sync_errors_unresolved ON sync_errors(account_id, resolved);
 	`,
 ];

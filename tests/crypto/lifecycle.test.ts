@@ -180,12 +180,48 @@ describe("transitionToUnlocked — scheduler callbacks", () => {
 		transitionToUnlocked(context, Buffer.alloc(32));
 
 		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-		mockCapturedOnSyncComplete?.(42, { totalNew: 7, totalErrors: 2 });
+		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		mockCapturedOnSyncComplete?.(42, {
+			totalNew: 7,
+			totalErrors: 2,
+			folders: [
+				{
+					folder: "INBOX",
+					newMessages: 7,
+					updatedFlags: 0,
+					deletedFolders: 0,
+					attachmentsSaved: 0,
+					errors: [
+						{
+							folderPath: "INBOX",
+							uid: 100,
+							errorType: "message",
+							message: "UID 100: no source available",
+							retriable: true,
+						},
+						{
+							folderPath: "INBOX",
+							uid: 101,
+							errorType: "message",
+							message: "Failed to process UID 101: parse error",
+							retriable: false,
+						},
+					],
+				},
+			],
+		});
 
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("account 42"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("7 new"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("2 errors"));
+		// Individual errors are logged to stderr with classification
+		expect(consoleErrorSpy).toHaveBeenCalledWith(
+			expect.stringContaining("UID 100: no source available"),
+		);
+		expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("(will retry)"));
+		expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("(permanent)"));
 		consoleSpy.mockRestore();
+		consoleErrorSpy.mockRestore();
 	});
 
 	test("onSyncError callback logs account id and error message", () => {
