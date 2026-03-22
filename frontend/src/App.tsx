@@ -10,7 +10,7 @@ import { Settings } from "./components/Settings";
 import { SetupScreen } from "./components/SetupScreen";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
 import { ALL_MAIL_LABEL_ID, Sidebar } from "./components/Sidebar";
-import { ToastContainer } from "./components/Toast";
+import { ToastContainer, toast } from "./components/Toast";
 import { UnlockScreen } from "./components/UnlockScreen";
 import { Welcome } from "./components/Welcome";
 import {
@@ -253,7 +253,8 @@ export function App() {
 			subject: string;
 			body: string;
 		}) => {
-			// TODO: Integrate with SMTP sending API when #491 is done
+			// SMTP sending not yet available — requires #491
+			toast("Sending is not yet available — SMTP integration coming soon", "error");
 			setComposeMode(null);
 		},
 		[],
