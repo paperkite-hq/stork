@@ -77,6 +77,7 @@ describe("useMessageActions", () => {
 	let refetchMessages: ReturnType<typeof vi.fn>;
 	let refetchLabels: ReturnType<typeof vi.fn>;
 	let refetchAllMailCount: ReturnType<typeof vi.fn>;
+	let refetchUnreadCount: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -87,6 +88,7 @@ describe("useMessageActions", () => {
 		refetchMessages = vi.fn();
 		refetchLabels = vi.fn();
 		refetchAllMailCount = vi.fn();
+		refetchUnreadCount = vi.fn();
 	});
 
 	function renderActions(overrides: Partial<Parameters<typeof useMessageActions>[0]> = {}) {
@@ -104,6 +106,7 @@ describe("useMessageActions", () => {
 				refetchMessages,
 				refetchLabels,
 				refetchAllMailCount,
+				refetchUnreadCount,
 				...overrides,
 			}),
 		);
@@ -137,6 +140,8 @@ describe("useMessageActions", () => {
 		await act(() => result.current.toggleRead());
 		expect(mockUpdateFlags).toHaveBeenCalledWith(1, { add: ["\\Seen"] });
 		expect(mockToast).toHaveBeenCalledWith("Marked as read", "success");
+		expect(refetchLabels).toHaveBeenCalled();
+		expect(refetchUnreadCount).toHaveBeenCalled();
 	});
 
 	it("toggleRead marks read message as unread", async () => {
@@ -161,6 +166,7 @@ describe("useMessageActions", () => {
 		expect(mockRemoveLabel).toHaveBeenCalledWith(1, 1);
 		expect(refetchLabels).toHaveBeenCalled();
 		expect(refetchAllMailCount).toHaveBeenCalled();
+		expect(refetchUnreadCount).toHaveBeenCalled();
 	});
 
 	it("archive shows error in All Mail view", async () => {
@@ -208,6 +214,7 @@ describe("useMessageActions", () => {
 		await act(() => result.current.confirmDelete());
 		expect(mockDelete).toHaveBeenCalledWith(1);
 		expect(refetchMessages).toHaveBeenCalled();
+		expect(refetchUnreadCount).toHaveBeenCalled();
 		expect(mockToast).toHaveBeenCalledWith("Message deleted", "success");
 	});
 
