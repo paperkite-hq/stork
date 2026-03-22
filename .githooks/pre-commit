@@ -26,4 +26,8 @@ echo "=== Pre-commit: running frontend build (tsc + vite) ==="
 cd frontend && npm run build && cd ..
 echo "=== Pre-commit: frontend build passed ==="
 
+echo "=== Pre-commit: running e2e tests ==="
+npx playwright test
+echo "=== Pre-commit: e2e tests passed ==="
+
 echo "=== Pre-commit: all checks passed ==="
