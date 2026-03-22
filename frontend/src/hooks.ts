@@ -628,6 +628,74 @@ export function useMessagePagination(opts: {
 }
 
 /**
+ * Navigation state tracked in browser history. Enables back/forward buttons.
+ */
+interface NavState {
+	accountId: number | null;
+	labelId: number | null;
+	messageId: number | null;
+}
+
+/**
+ * Syncs navigation state (account, label, message) with the browser history API.
+ * Pushes state on navigation changes, restores state on back/forward (popstate).
+ */
+export function useHistoryNavigation(opts: {
+	accountId: number | null;
+	labelId: number | null;
+	messageId: number | null;
+	onNavigate: (state: NavState) => void;
+}) {
+	const { accountId, labelId, messageId, onNavigate } = opts;
+	const isPopstateRef = useRef(false);
+	const initializedRef = useRef(false);
+	const onNavigateRef = useRef(onNavigate);
+	onNavigateRef.current = onNavigate;
+
+	// Replace the initial history entry with the current state
+	useEffect(() => {
+		if (initializedRef.current) return;
+		if (accountId === null) return; // Wait until accounts are loaded
+		initializedRef.current = true;
+		const state: NavState = { accountId, labelId, messageId };
+		history.replaceState(state, "");
+	}, [accountId, labelId, messageId]);
+
+	// Push state when navigation changes (but not when handling popstate)
+	useEffect(() => {
+		if (!initializedRef.current) return;
+		if (isPopstateRef.current) {
+			isPopstateRef.current = false;
+			return;
+		}
+		const state: NavState = { accountId, labelId, messageId };
+		const current = history.state as NavState | null;
+		// Don't push if the state hasn't actually changed
+		if (
+			current &&
+			current.accountId === state.accountId &&
+			current.labelId === state.labelId &&
+			current.messageId === state.messageId
+		) {
+			return;
+		}
+		history.pushState(state, "");
+	}, [accountId, labelId, messageId]);
+
+	// Listen for popstate (back/forward) and restore navigation state
+	useEffect(() => {
+		function handlePopstate(e: PopStateEvent) {
+			const state = e.state as NavState | null;
+			if (!state) return;
+			isPopstateRef.current = true;
+			onNavigateRef.current(state);
+		}
+		window.addEventListener("popstate", handlePopstate);
+		return () => window.removeEventListener("popstate", handlePopstate);
+	}, []);
+}
+
+/**
  * Traps keyboard focus within a container element — Tab and Shift+Tab cycle
  * through focusable elements without escaping the modal. Also restores focus
  * to the previously-focused element on unmount.
