@@ -109,7 +109,7 @@ const MessageListItem = memo(function MessageListItem({
 						e.stopPropagation();
 						onToggleStar(msg.id);
 					}}
-					className={`absolute right-2 top-1/2 -translate-y-1/2 z-10 transition-opacity ${
+					className={`absolute right-2 top-1/2 -translate-y-1/2 z-10 transition-opacity duration-200 ${
 						starred ? "opacity-100" : "opacity-0 group-hover:opacity-100"
 					}`}
 				>
@@ -129,8 +129,8 @@ const MessageListItem = memo(function MessageListItem({
 						e.stopPropagation();
 						onToggleSelect(msg.id);
 					}}
-					className={`absolute left-2 top-1/2 -translate-y-1/2 z-10 transition-opacity ${
-						hasBulk || bulkSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+					className={`absolute left-2 top-1/2 -translate-y-1/2 z-10 transition-opacity duration-150 ${
+						hasBulk || bulkSelected ? "opacity-100" : "opacity-30 group-hover:opacity-100"
 					}`}
 				>
 					<div
