@@ -190,14 +190,6 @@ export function App() {
 		[allMessages],
 	);
 
-	const handleSelectLabel = useCallback((id: number) => {
-		setSelectedLabelId(id);
-		setSelectedMessageId(null);
-		setMessageListIndex(0);
-		setSidebarOpen(false);
-		bulk.clear();
-	}, []);
-
 	const handleSelectAccount = useCallback((id: number) => {
 		setSelectedAccountId(id);
 		setSelectedLabelId(null);
@@ -274,6 +266,17 @@ export function App() {
 		refetchAllMailCount,
 		refetchUnreadCount,
 	});
+
+	const handleSelectLabel = useCallback(
+		(id: number) => {
+			setSelectedLabelId(id);
+			setSelectedMessageId(null);
+			setMessageListIndex(0);
+			setSidebarOpen(false);
+			bulk.clear();
+		},
+		[bulk],
+	);
 
 	// Compose handlers
 	const handleCompose = useCallback(() => {
