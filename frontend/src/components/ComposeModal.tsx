@@ -63,7 +63,7 @@ interface ComposeModalProps {
 		bcc: string;
 		subject: string;
 		body: string;
-	}) => void;
+	}) => void | Promise<void>;
 }
 
 /** Validate a comma-separated list of email addresses.
@@ -214,7 +214,7 @@ export function ComposeModal({
 		saveDraft(currentDraftKey, { to, cc, bcc, subject, body });
 	}, [currentDraftKey, to, cc, bcc, subject, body]);
 
-	const handleSend = useCallback(() => {
+	const handleSend = useCallback(async () => {
 		const toErr = validateEmails(to);
 		if (toErr) {
 			setValidationError(toErr);
@@ -236,15 +236,21 @@ export function ComposeModal({
 		}
 		setValidationError(null);
 		setSending(true);
-		clearDraft(currentDraftKey);
-		onSend({
-			accountId: fromAccountId,
-			to: to.trim(),
-			cc: cc.trim(),
-			bcc: bcc.trim(),
-			subject,
-			body,
-		});
+		try {
+			await onSend({
+				accountId: fromAccountId,
+				to: to.trim(),
+				cc: cc.trim(),
+				bcc: bcc.trim(),
+				subject,
+				body,
+			});
+			clearDraft(currentDraftKey);
+		} catch (err) {
+			// Send failed — keep the draft and let the user retry
+			setSending(false);
+			setValidationError(err instanceof Error ? err.message : "Failed to send message");
+		}
 	}, [to, cc, bcc, subject, body, fromAccountId, onSend, currentDraftKey]);
 
 	const handleDiscard = useCallback(() => {

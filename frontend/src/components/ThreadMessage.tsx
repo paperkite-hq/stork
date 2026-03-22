@@ -131,6 +131,7 @@ export function ThreadMessage({
 								blockRemoteImages: !imagesAllowed,
 							})}
 							className="email-content"
+							allowRemoteImages={imagesAllowed}
 						/>
 					) : (
 						<pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 font-sans">
