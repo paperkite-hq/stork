@@ -1,8 +1,12 @@
 import { Hono } from "hono";
 import {
+	cancelRecoveryKeyRotation,
 	changePassword,
+	confirmRecoveryKeyRotation,
+	hasPendingRecoveryRotation,
 	initializeEncryption,
-	rotateRecoveryKey,
+	prepareRecoveryKeyRotation,
+	setPasswordFromVaultKey,
 	unlockWithPassword,
 	unlockWithRecovery,
 } from "../../crypto/keys.js";
@@ -70,9 +74,7 @@ export function encryptionRoutes(context: ContainerContext): Hono {
 				if (!body.newPassword || typeof body.newPassword !== "string") {
 					return c.json({ error: "newPassword is required when using recovery mnemonic" }, 400);
 				}
-				changePassword(context.dataDir, body.newPassword, body.newPassword);
-				vaultKey.fill(0);
-				vaultKey = unlockWithPassword(context.dataDir, body.newPassword);
+				setPasswordFromVaultKey(context.dataDir, vaultKey, body.newPassword);
 			} else if (body.password) {
 				vaultKey = unlockWithPassword(context.dataDir, body.password);
 			} else {
@@ -117,11 +119,46 @@ export function encryptionRoutes(context: ContainerContext): Hono {
 			return c.json({ error: "password is required to authorize recovery key rotation" }, 400);
 		}
 		try {
-			const newMnemonic = rotateRecoveryKey(context.dataDir, body.password);
-			return c.json({ recoveryMnemonic: newMnemonic });
+			const newMnemonic = prepareRecoveryKeyRotation(context.dataDir, body.password);
+			return c.json({ recoveryMnemonic: newMnemonic, pending: true });
 		} catch {
 			return c.json({ error: "Password is incorrect" }, 401);
 		}
+	});
+
+	api.post("/confirm-recovery-rotation", async (c) => {
+		if (context.state !== "unlocked") {
+			return c.json({ error: "Container is locked", state: context.state }, 423);
+		}
+		const body = await c.req.json();
+		if (!body.password) {
+			return c.json({ error: "password is required to confirm recovery key rotation" }, 400);
+		}
+		try {
+			confirmRecoveryKeyRotation(context.dataDir, body.password);
+			return c.json({ ok: true });
+		} catch (e) {
+			const msg = (e as Error).message;
+			if (msg.includes("No pending")) {
+				return c.json({ error: msg }, 409);
+			}
+			return c.json({ error: "Password is incorrect" }, 401);
+		}
+	});
+
+	api.post("/cancel-recovery-rotation", async (c) => {
+		if (context.state !== "unlocked") {
+			return c.json({ error: "Container is locked", state: context.state }, 423);
+		}
+		cancelRecoveryKeyRotation(context.dataDir);
+		return c.json({ ok: true });
+	});
+
+	api.get("/recovery-rotation-status", (c) => {
+		if (context.state !== "unlocked") {
+			return c.json({ error: "Container is locked", state: context.state }, 423);
+		}
+		return c.json({ pending: hasPendingRecoveryRotation(context.dataDir) });
 	});
 
 	return api;

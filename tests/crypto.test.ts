@@ -3,9 +3,13 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
+	cancelRecoveryKeyRotation,
 	changePassword,
+	confirmRecoveryKeyRotation,
+	hasPendingRecoveryRotation,
 	initializeEncryption,
 	keysFileExists,
+	prepareRecoveryKeyRotation,
 	rotateRecoveryKey,
 	unlockWithPassword,
 	unlockWithRecovery,
@@ -147,6 +151,101 @@ describe("rotateRecoveryKey", () => {
 		initializeEncryption(dataDir, "pass123!abc");
 		rotateRecoveryKey(dataDir, "pass123!abc");
 		const vaultKey = unlockWithPassword(dataDir, "pass123!abc");
+		expect(vaultKey).toBeInstanceOf(Buffer);
+		vaultKey.fill(0);
+	});
+});
+
+describe("two-phase recovery key rotation", () => {
+	const PASSWORD = "pass123!abc";
+
+	test("prepare returns a new 24-word mnemonic", () => {
+		initializeEncryption(dataDir, PASSWORD);
+		const newMnemonic = prepareRecoveryKeyRotation(dataDir, PASSWORD);
+		expect(newMnemonic.trim().split(/\s+/)).toHaveLength(24);
+	});
+
+	test("old mnemonic still works after prepare (before confirm)", () => {
+		const oldMnemonic = initializeEncryption(dataDir, PASSWORD);
+		prepareRecoveryKeyRotation(dataDir, PASSWORD);
+		const vaultKey = unlockWithRecovery(dataDir, oldMnemonic);
+		expect(vaultKey).toBeInstanceOf(Buffer);
+		vaultKey.fill(0);
+	});
+
+	test("new mnemonic works after prepare (before confirm)", () => {
+		initializeEncryption(dataDir, PASSWORD);
+		const newMnemonic = prepareRecoveryKeyRotation(dataDir, PASSWORD);
+		const vaultKey = unlockWithRecovery(dataDir, newMnemonic);
+		expect(vaultKey).toBeInstanceOf(Buffer);
+		vaultKey.fill(0);
+	});
+
+	test("hasPendingRecoveryRotation returns true after prepare", () => {
+		initializeEncryption(dataDir, PASSWORD);
+		expect(hasPendingRecoveryRotation(dataDir)).toBe(false);
+		prepareRecoveryKeyRotation(dataDir, PASSWORD);
+		expect(hasPendingRecoveryRotation(dataDir)).toBe(true);
+	});
+
+	test("confirm promotes pending key and invalidates old mnemonic", () => {
+		const oldMnemonic = initializeEncryption(dataDir, PASSWORD);
+		const newMnemonic = prepareRecoveryKeyRotation(dataDir, PASSWORD);
+		confirmRecoveryKeyRotation(dataDir, PASSWORD);
+
+		expect(hasPendingRecoveryRotation(dataDir)).toBe(false);
+
+		// New mnemonic works
+		const vaultKey = unlockWithRecovery(dataDir, newMnemonic);
+		expect(vaultKey).toBeInstanceOf(Buffer);
+		vaultKey.fill(0);
+
+		// Old mnemonic fails
+		expect(() => unlockWithRecovery(dataDir, oldMnemonic)).toThrow();
+	});
+
+	test("cancel removes pending key and keeps old mnemonic", () => {
+		const oldMnemonic = initializeEncryption(dataDir, PASSWORD);
+		const newMnemonic = prepareRecoveryKeyRotation(dataDir, PASSWORD);
+		cancelRecoveryKeyRotation(dataDir);
+
+		expect(hasPendingRecoveryRotation(dataDir)).toBe(false);
+
+		// Old mnemonic still works
+		const vaultKey = unlockWithRecovery(dataDir, oldMnemonic);
+		expect(vaultKey).toBeInstanceOf(Buffer);
+		vaultKey.fill(0);
+
+		// New mnemonic fails (was removed)
+		expect(() => unlockWithRecovery(dataDir, newMnemonic)).toThrow();
+	});
+
+	test("confirm throws when no rotation is pending", () => {
+		initializeEncryption(dataDir, PASSWORD);
+		expect(() => confirmRecoveryKeyRotation(dataDir, PASSWORD)).toThrow(/No pending/);
+	});
+
+	test("cancel is a no-op when no rotation is pending", () => {
+		initializeEncryption(dataDir, PASSWORD);
+		expect(() => cancelRecoveryKeyRotation(dataDir)).not.toThrow();
+	});
+
+	test("vault key unchanged through prepare + confirm cycle", () => {
+		initializeEncryption(dataDir, PASSWORD);
+		const vaultKeyBefore = unlockWithPassword(dataDir, PASSWORD);
+		const newMnemonic = prepareRecoveryKeyRotation(dataDir, PASSWORD);
+		confirmRecoveryKeyRotation(dataDir, PASSWORD);
+		const vaultKeyAfter = unlockWithRecovery(dataDir, newMnemonic);
+		expect(vaultKeyBefore.toString("hex")).toBe(vaultKeyAfter.toString("hex"));
+		vaultKeyBefore.fill(0);
+		vaultKeyAfter.fill(0);
+	});
+
+	test("password still works through entire rotation cycle", () => {
+		initializeEncryption(dataDir, PASSWORD);
+		prepareRecoveryKeyRotation(dataDir, PASSWORD);
+		confirmRecoveryKeyRotation(dataDir, PASSWORD);
+		const vaultKey = unlockWithPassword(dataDir, PASSWORD);
 		expect(vaultKey).toBeInstanceOf(Buffer);
 		vaultKey.fill(0);
 	});

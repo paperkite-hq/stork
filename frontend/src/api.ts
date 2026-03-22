@@ -186,10 +186,21 @@ export const api = {
 				body: JSON.stringify({ currentPassword, newPassword }),
 			}),
 		rotateRecoveryKey: (password: string) =>
-			fetchJSON<{ recoveryMnemonic: string }>("/rotate-recovery-key", {
+			fetchJSON<{ recoveryMnemonic: string; pending: boolean }>("/rotate-recovery-key", {
 				method: "POST",
 				body: JSON.stringify({ password }),
 			}),
+		confirmRecoveryRotation: (password: string) =>
+			fetchJSON<{ ok: boolean }>("/confirm-recovery-rotation", {
+				method: "POST",
+				body: JSON.stringify({ password }),
+			}),
+		cancelRecoveryRotation: () =>
+			fetchJSON<{ ok: boolean }>("/cancel-recovery-rotation", {
+				method: "POST",
+				body: JSON.stringify({}),
+			}),
+		recoveryRotationStatus: () => fetchJSON<{ pending: boolean }>("/recovery-rotation-status"),
 	},
 	accounts: {
 		list: () => fetchJSON<Account[]>("/accounts"),
