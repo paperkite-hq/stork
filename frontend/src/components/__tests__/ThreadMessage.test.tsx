@@ -224,8 +224,10 @@ describe("ThreadMessage", () => {
 				})}
 			/>,
 		);
-		expect(screen.getByText("Images are hidden to protect your privacy.")).toBeInTheDocument();
-		expect(screen.getByText("Show images")).toBeInTheDocument();
+		expect(
+			screen.getByText(/Remote images are hidden to protect your privacy/),
+		).toBeInTheDocument();
+		expect(screen.getByText("Show for this message")).toBeInTheDocument();
 	});
 
 	it("calls onAllowImages when Show images clicked", () => {
@@ -243,7 +245,7 @@ describe("ThreadMessage", () => {
 				})}
 			/>,
 		);
-		fireEvent.click(screen.getByText("Show images"));
+		fireEvent.click(screen.getByText("Show for this message"));
 		expect(onAllowImages).toHaveBeenCalledWith(1);
 	});
 
@@ -261,7 +263,7 @@ describe("ThreadMessage", () => {
 			/>,
 		);
 		expect(
-			screen.queryByText("Images are hidden to protect your privacy."),
+			screen.queryByText(/Remote images are hidden to protect your privacy/),
 		).not.toBeInTheDocument();
 	});
 });
