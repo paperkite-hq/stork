@@ -151,6 +151,7 @@ Open `http://localhost:3100` — the setup wizard will guide you through creatin
 ## Documentation
 
 - **[Getting Started](docs/getting-started.md)** — first launch, encryption setup, adding an account, search, labels
+- **[Use Cases](docs/use-cases.md)** — encrypted Gmail backup, Mailcow webmail replacement, VPN-based private access
 - **[User Guide](docs/user-guide.md)** — installation, account setup, search tips, backups, reverse proxy
 - **[Configuration](docs/configuration.md)** — environment variables, Docker options, database settings
 - **[API Reference](docs/api.md)** — full REST API documentation with examples
@@ -185,23 +186,25 @@ npm run lint
 
 ## How Stork Compares
 
-| | Stork | Roundcube | Cypht | Thunderbird |
+| | Stork | Roundcube | Bichon | Mailu |
 |---|---|---|---|---|
-| **Deployment** | Docker (single container) | PHP + web server + DB | PHP | Desktop app |
+| **What it is** | Email client | Webmail client | Email archiver | Full mail server |
+| **Deployment** | Docker (single container) | PHP + web server + DB | Docker / binary | Docker (multi-container) |
 | **Encryption at rest** | ✅ AES-256 SQLCipher | ❌ | ❌ | ❌ |
-| **Local storage** | ✅ SQLite on your host | ✅ MySQL/PostgreSQL | ❌ (stateless) | ✅ local files |
-| **Full-text search** | ✅ FTS5 (fast, indexed) | ⚠️ basic | ⚠️ basic | ✅ |
-| **Web UI** | ✅ | ✅ | ✅ | ❌ |
-| **Label-based org** | ✅ | ❌ (folders only) | ❌ (folders only) | ⚠️ partial |
-| **Compose/send** | ✅ | ✅ | ✅ | ✅ |
+| **Local storage** | ✅ SQLite | ✅ MySQL/PostgreSQL | ✅ EML files + Tantivy | ✅ (full server) |
+| **Full-text search** | ✅ FTS5 (fast, indexed) | ⚠️ basic | ✅ Tantivy | ✅ Solr |
+| **Web UI** | ✅ React | ✅ jQuery | ✅ React | ✅ (Roundcube/Rainloop) |
+| **Label-based org** | ✅ | ❌ (folders only) | ❌ | ❌ (folders only) |
+| **Compose/send** | ✅ SMTP | ✅ | ❌ (read-only) | ✅ (full MTA) |
 | **Recovery key** | ✅ BIP39 mnemonic | ❌ | ❌ | ❌ |
-| **Self-contained** | ✅ (no PHP, no extra DB) | ❌ | ❌ | ✅ |
+| **Self-contained** | ✅ (no PHP, no extra DB) | ❌ | ✅ | ❌ (many services) |
+| **IMAP server needed** | ✅ (BYO server) | ✅ (BYO server) | ✅ (BYO server) | ❌ (IS the server) |
 
 **Roundcube** is the most mature option and has the deepest plugin ecosystem. If you need plugins, calendar integration, or multi-user shared hosting, Roundcube is the better fit. Stork's advantages are its single-container deployment, encryption at rest, and modern React UI.
 
-**Cypht** is stateless and modular — good if you want a lightweight webmail that aggregates multiple accounts without local storage. Stork keeps a local encrypted copy of your mail, enabling offline-capable search and a faster interface.
+**Bichon** is focused on email archiving and search — great for long-term preservation of large mailboxes with deduplication and compression. Stork is a daily-driver email client with compose, reply, and labels. If you need to archive 10+ years of email and never send from the same interface, Bichon is the better fit.
 
-**Thunderbird** is the gold standard for desktop email. If you're happy with a native desktop app, Thunderbird is excellent. Stork is for people who want web-based access to their mail from any device, without sending their data to a cloud provider.
+**Mailu** is a complete mail server stack (SMTP, IMAP, antispam, antivirus, admin panel). It replaces your mail infrastructure entirely. Stork is a client that connects to an existing mail server — if you already run Mailu, you can point Stork at its IMAP endpoint for encrypted local storage and search.
 
 ## FAQ
 
