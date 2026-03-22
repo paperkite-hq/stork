@@ -36,6 +36,14 @@ export function sanitizeEmailHtml(html: string, opts?: { blockRemoteImages?: boo
 		a.setAttribute("rel", "noopener noreferrer");
 	}
 
+	// Strip CSS url() references that could exfiltrate data (e.g. background-image: url('https://evil.com/track'))
+	for (const el of div.querySelectorAll("[style]")) {
+		const style = el.getAttribute("style") ?? "";
+		if (/url\s*\(/i.test(style)) {
+			el.setAttribute("style", style.replace(/url\s*\([^)]*\)/gi, "url()"));
+		}
+	}
+
 	// Handle images: always remove tracking pixels, optionally block all remote images
 	for (const img of div.querySelectorAll("img")) {
 		const w = img.getAttribute("width");

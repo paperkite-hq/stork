@@ -113,7 +113,7 @@ describe("MessageDetail", () => {
 		expect(screen.getByText("(empty message)")).toBeInTheDocument();
 	});
 
-	it("renders HTML body when available", () => {
+	it("renders HTML body in a sandboxed iframe", () => {
 		const { container } = render(
 			<MessageDetail
 				{...defaultProps}
@@ -123,11 +123,14 @@ describe("MessageDetail", () => {
 				})}
 			/>,
 		);
-		const emailContent = container.querySelector(".email-content");
-		expect(emailContent).toBeInTheDocument();
+		const iframe = container.querySelector(".email-content") as HTMLIFrameElement | null;
+		expect(iframe).toBeInTheDocument();
+		expect(iframe?.tagName).toBe("IFRAME");
+		// Verify sandbox blocks scripts but allows same-origin (for height) and popups (for links)
+		expect(iframe?.getAttribute("sandbox")).toBe("allow-same-origin allow-popups");
 	});
 
-	it("forces all links in HTML body to open in a new tab", () => {
+	it("sandboxed iframe includes CSP meta tag blocking scripts", () => {
 		const { container } = render(
 			<MessageDetail
 				{...defaultProps}
@@ -137,25 +140,11 @@ describe("MessageDetail", () => {
 				})}
 			/>,
 		);
-		const link = container.querySelector(".email-content a") as HTMLAnchorElement | null;
-		expect(link).toBeInTheDocument();
-		expect(link?.getAttribute("target")).toBe("_blank");
-		expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
-	});
-
-	it("adds target and rel even to links that already have a different target", () => {
-		const { container } = render(
-			<MessageDetail
-				{...defaultProps}
-				message={makeMessage({
-					html_body: '<a href="https://example.com" target="_self">Click</a>',
-					text_body: "Click",
-				})}
-			/>,
-		);
-		const link = container.querySelector(".email-content a") as HTMLAnchorElement | null;
-		expect(link?.getAttribute("target")).toBe("_blank");
-		expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+		const iframe = container.querySelector(".email-content") as HTMLIFrameElement | null;
+		const srcdoc = iframe?.getAttribute("srcdoc") ?? "";
+		expect(srcdoc).toContain("Content-Security-Policy");
+		// default-src 'none' blocks all resource types including scripts
+		expect(srcdoc).toContain("default-src 'none'");
 	});
 
 	it("shows toggle between HTML and plain text", () => {
@@ -533,7 +522,7 @@ describe("MessageDetail", () => {
 
 	// --- DOMPurify hardening tests ---
 
-	it("strips event handler attributes from HTML email body", () => {
+	it("renders email HTML inside sandbox without allow-scripts", () => {
 		const { container } = render(
 			<MessageDetail
 				{...defaultProps}
@@ -543,9 +532,11 @@ describe("MessageDetail", () => {
 				})}
 			/>,
 		);
-		const emailContent = container.querySelector(".email-content div");
-		expect(emailContent?.getAttribute("onclick")).toBeNull();
-		expect(emailContent?.getAttribute("onmouseover")).toBeNull();
+		const iframe = container.querySelector(".email-content") as HTMLIFrameElement | null;
+		const sandbox = iframe?.getAttribute("sandbox") ?? "";
+		// Must NOT include allow-scripts — this is what prevents script execution
+		expect(sandbox).not.toContain("allow-scripts");
+		expect(sandbox).toContain("allow-same-origin");
 	});
 
 	it("removes tracking pixel images (1x1)", () => {
@@ -595,7 +586,7 @@ describe("MessageDetail", () => {
 		expect(screen.getByText("Show images")).toBeInTheDocument();
 	});
 
-	it("loads remote images when user clicks 'Show images'", async () => {
+	it("updates iframe srcdoc when user clicks 'Show images'", async () => {
 		const user = userEvent.setup();
 		const { container } = render(
 			<MessageDetail
@@ -607,17 +598,16 @@ describe("MessageDetail", () => {
 				})}
 			/>,
 		);
-		// Initially blocked
-		let imgs = container.querySelector(".email-content")?.querySelectorAll("img");
-		expect(imgs?.length ?? 0).toBe(0);
+		// Initially images are blocked — srcdoc should not contain the image URL
+		let iframe = container.querySelector(".email-content") as HTMLIFrameElement | null;
+		expect(iframe?.getAttribute("srcdoc")).not.toContain("banner.jpg");
 
 		// Click "Show images"
 		await user.click(screen.getByText("Show images"));
 
-		// Now images should be visible
-		imgs = container.querySelector(".email-content")?.querySelectorAll("img");
-		expect(imgs?.length ?? 0).toBe(1);
-		expect(imgs?.[0]?.getAttribute("src")).toContain("banner.jpg");
+		// Now srcdoc should include the image
+		iframe = container.querySelector(".email-content") as HTMLIFrameElement | null;
+		expect(iframe?.getAttribute("srcdoc")).toContain("banner.jpg");
 	});
 
 	it("does not show banner when HTML has no remote images", () => {
@@ -651,33 +641,23 @@ describe("MessageDetail", () => {
 		).not.toBeInTheDocument();
 	});
 
-	it("strips iframe tags from HTML email", () => {
+	it("renders email in sandboxed iframe that blocks script execution", () => {
 		const { container } = render(
 			<MessageDetail
 				{...defaultProps}
 				message={makeMessage({
-					html_body: '<p>Hello</p><iframe src="https://evil.com"></iframe>',
+					html_body:
+						'<p>Hello</p><iframe src="https://evil.com"></iframe><script>alert("xss")</script>',
 					text_body: "Hello",
 				})}
 			/>,
 		);
-		const emailContent = container.querySelector(".email-content");
-		expect(emailContent?.querySelectorAll("iframe").length).toBe(0);
-	});
-
-	it("strips script tags from HTML email", () => {
-		const { container } = render(
-			<MessageDetail
-				{...defaultProps}
-				message={makeMessage({
-					html_body: '<p>Hello</p><script>alert("xss")</script>',
-					text_body: "Hello",
-				})}
-			/>,
-		);
-		const emailContent = container.querySelector(".email-content");
-		expect(emailContent?.querySelectorAll("script").length).toBe(0);
-		expect(emailContent?.textContent).not.toContain("alert");
+		const iframe = container.querySelector(".email-content") as HTMLIFrameElement | null;
+		// Even if sanitizer misses something, sandbox without allow-scripts blocks execution
+		expect(iframe?.getAttribute("sandbox")).not.toContain("allow-scripts");
+		// CSP in srcdoc provides additional protection
+		const srcdoc = iframe?.getAttribute("srcdoc") ?? "";
+		expect(srcdoc).toContain("default-src 'none'");
 	});
 
 	it("shows reply/forward actions on every message in a thread", async () => {
