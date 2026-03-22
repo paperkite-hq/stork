@@ -52,8 +52,9 @@ test.describe("Message interaction", () => {
 		await page.goto("/");
 		// Click on a specific email — use exact match
 		await page.getByText("E2E Test Email #2", { exact: true }).click();
-		// Should see the message body — HTML body is rendered by default
-		await expect(page.getByText(/HTML body.*test email number 2/)).toBeVisible();
+		// Email HTML is rendered inside a sandboxed iframe — use frameLocator to access it
+		const emailFrame = page.frameLocator('iframe[title="Email content"]');
+		await expect(emailFrame.getByText(/HTML body.*test email number 2/)).toBeVisible();
 	});
 
 	test("message detail shows sender info", async ({ page }) => {
