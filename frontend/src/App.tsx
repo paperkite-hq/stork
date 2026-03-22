@@ -554,7 +554,7 @@ export function App() {
 				{/* Message list panel — hidden on mobile when viewing a message */}
 				<div
 					id="message-list"
-					className={`w-full md:w-80 xl:w-96 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col ${
+					className={`w-full md:w-80 xl:w-96 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col min-h-0 ${
 						selectedMessageId !== null ? "hidden md:flex" : "flex"
 					}`}
 				>
