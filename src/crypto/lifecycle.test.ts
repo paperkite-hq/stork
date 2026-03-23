@@ -36,6 +36,9 @@ const mockDbClose = vi.fn();
 let mockCapturedOnSyncComplete:
 	| ((accountId: number, result: { totalNew: number; totalErrors: number }) => void)
 	| undefined;
+let mockCapturedOnSyncRecordError:
+	| ((accountId: number, error: { errorType: string; message: string; retriable: boolean }) => void)
+	| undefined;
 let mockCapturedOnSyncError: ((accountId: number, error: Error) => void) | undefined;
 
 vi.mock("../sync/sync-scheduler.js", () => ({
@@ -48,10 +51,15 @@ vi.mock("../sync/sync-scheduler.js", () => ({
 				accountId: number,
 				result: { totalNew: number; totalErrors: number },
 			) => void;
+			onSyncRecordError?: (
+				accountId: number,
+				error: { errorType: string; message: string; retriable: boolean },
+			) => void;
 			onSyncError?: (accountId: number, error: Error) => void;
 		},
 	) {
 		mockCapturedOnSyncComplete = opts.onSyncComplete;
+		mockCapturedOnSyncRecordError = opts.onSyncRecordError;
 		mockCapturedOnSyncError = opts.onSyncError;
 		// Return a plain object — JS constructor returns this when a non-null object is returned.
 		return {
@@ -180,87 +188,60 @@ describe("transitionToUnlocked — scheduler callbacks", () => {
 		transitionToUnlocked(context, Buffer.alloc(32));
 
 		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		mockCapturedOnSyncComplete?.(42, {
 			totalNew: 7,
 			totalErrors: 2,
 			aborted: false,
-			folders: [
-				{
-					folder: "INBOX",
-					newMessages: 7,
-					updatedFlags: 0,
-					deletedFolders: 0,
-					attachmentsSaved: 0,
-					errors: [
-						{
-							folderPath: "INBOX",
-							uid: 100,
-							errorType: "message",
-							message: "UID 100: no source available",
-							retriable: true,
-						},
-						{
-							folderPath: "INBOX",
-							uid: 101,
-							errorType: "message",
-							message: "Failed to process UID 101: parse error",
-							retriable: false,
-						},
-					],
-				},
-			],
+			folders: [],
 		});
 
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("account 42"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("7 new"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("2 errors"));
-		// Individual errors are logged to stderr with classification
+		consoleSpy.mockRestore();
+	});
+
+	test("onSyncRecordError callback logs errors inline with classification", () => {
+		const context = makeLockedContext();
+		transitionToUnlocked(context, Buffer.alloc(32));
+
+		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		mockCapturedOnSyncRecordError?.(42, {
+			errorType: "message",
+			message: "UID 100: no source available",
+			retriable: true,
+		});
+		mockCapturedOnSyncRecordError?.(42, {
+			errorType: "flags",
+			message: 'Flag sync failed for "INBOX" (UIDs 1–50): NO: access denied',
+			retriable: false,
+		});
+
 		expect(consoleErrorSpy).toHaveBeenCalledWith(
 			expect.stringContaining("UID 100: no source available"),
 		);
 		expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("(will retry)"));
+		expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Flag sync failed"));
 		expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("(permanent)"));
-		consoleSpy.mockRestore();
 		consoleErrorSpy.mockRestore();
 	});
 
-	test("onSyncComplete suppresses error details for aborted syncs", () => {
+	test("onSyncComplete shows interrupted message for aborted syncs", () => {
 		const context = makeLockedContext();
 		transitionToUnlocked(context, Buffer.alloc(32));
 
 		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		mockCapturedOnSyncComplete?.(42, {
 			totalNew: 3,
 			totalErrors: 5,
 			aborted: true,
-			folders: [
-				{
-					folder: "INBOX",
-					newMessages: 3,
-					updatedFlags: 0,
-					deletedFolders: 0,
-					attachmentsSaved: 0,
-					errors: [
-						{
-							folderPath: "INBOX",
-							uid: null,
-							errorType: "flags",
-							message: "Flag sync batch error: Command failed",
-							retriable: true,
-						},
-					],
-				},
-			],
+			folders: [],
 		});
 
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("interrupted"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("aborted"));
-		// Should NOT print individual error details
-		expect(consoleErrorSpy).not.toHaveBeenCalled();
 		consoleSpy.mockRestore();
-		consoleErrorSpy.mockRestore();
 	});
 
 	test("onSyncError callback logs account id and error message", () => {
