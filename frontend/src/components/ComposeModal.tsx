@@ -490,7 +490,7 @@ export function ComposeModal({
 					: "New Message";
 
 	const containerClass = expanded
-		? "w-full h-full bg-white dark:bg-gray-900 sm:rounded-xl shadow-2xl flex flex-col"
+		? "w-full h-full sm:w-[calc(100%-3rem)] sm:h-[calc(100%-3rem)] sm:max-w-6xl bg-white dark:bg-gray-900 sm:rounded-xl shadow-2xl flex flex-col"
 		: "w-full max-w-2xl bg-white dark:bg-gray-900 rounded-t-xl sm:rounded-xl shadow-2xl flex flex-col max-h-[80vh]";
 
 	return (
