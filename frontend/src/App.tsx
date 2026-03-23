@@ -303,6 +303,7 @@ export function App() {
 			bcc: string;
 			subject: string;
 			body: string;
+			htmlBody?: string;
 		}) => {
 			const sendAccountId = data.accountId ?? selectedAccountId;
 			if (!sendAccountId) throw new Error("No account selected");
@@ -345,6 +346,7 @@ export function App() {
 				bcc: data.bcc ? parseAddresses(data.bcc) : undefined,
 				subject: data.subject,
 				text_body: data.body,
+				html_body: data.htmlBody,
 				in_reply_to: inReplyTo,
 				references,
 			});
