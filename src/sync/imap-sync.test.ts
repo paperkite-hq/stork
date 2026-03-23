@@ -2,7 +2,7 @@ import Database from "better-sqlite3-multiple-ciphers";
 import { simpleParser } from "mailparser";
 import { beforeEach, describe, expect, test } from "vitest";
 import { ensureSchema } from "../storage/db.js";
-import { MIGRATIONS } from "../storage/schema.js";
+import { MIGRATIONS, SCHEMA_VERSION } from "../storage/schema.js";
 
 // We test the MIME parsing and helper functions directly since the ImapSync class
 // requires a live IMAP connection. Integration tests with a mock IMAP server
@@ -198,7 +198,7 @@ describe("schema migrations", () => {
 
 		// Verify schema version is set to latest
 		const version = db.prepare("SELECT version FROM schema_version").get() as { version: number };
-		expect(version.version).toBe(6);
+		expect(version.version).toBe(SCHEMA_VERSION);
 
 		db.close();
 	});
