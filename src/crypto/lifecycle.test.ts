@@ -184,6 +184,7 @@ describe("transitionToUnlocked — scheduler callbacks", () => {
 		mockCapturedOnSyncComplete?.(42, {
 			totalNew: 7,
 			totalErrors: 2,
+			aborted: false,
 			folders: [
 				{
 					folder: "INBOX",
@@ -220,6 +221,44 @@ describe("transitionToUnlocked — scheduler callbacks", () => {
 		);
 		expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("(will retry)"));
 		expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("(permanent)"));
+		consoleSpy.mockRestore();
+		consoleErrorSpy.mockRestore();
+	});
+
+	test("onSyncComplete suppresses error details for aborted syncs", () => {
+		const context = makeLockedContext();
+		transitionToUnlocked(context, Buffer.alloc(32));
+
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		mockCapturedOnSyncComplete?.(42, {
+			totalNew: 3,
+			totalErrors: 5,
+			aborted: true,
+			folders: [
+				{
+					folder: "INBOX",
+					newMessages: 3,
+					updatedFlags: 0,
+					deletedFolders: 0,
+					attachmentsSaved: 0,
+					errors: [
+						{
+							folderPath: "INBOX",
+							uid: null,
+							errorType: "flags",
+							message: "Flag sync batch error: Command failed",
+							retriable: true,
+						},
+					],
+				},
+			],
+		});
+
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("interrupted"));
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("aborted"));
+		// Should NOT print individual error details
+		expect(consoleErrorSpy).not.toHaveBeenCalled();
 		consoleSpy.mockRestore();
 		consoleErrorSpy.mockRestore();
 	});
