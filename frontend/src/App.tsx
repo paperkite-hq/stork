@@ -3,7 +3,6 @@ import { type ContainerState, type Message, type SearchResult, api } from "./api
 import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { DemoBanner } from "./components/DemoBanner";
-import { AlertCircleIcon } from "./components/Icons";
 import { MessageDetail } from "./components/MessageDetail";
 import { MessageList } from "./components/MessageList";
 import { SearchPanel } from "./components/SearchPanel";
@@ -532,6 +531,33 @@ export function App() {
 
 	useKeyboardShortcuts(shortcuts);
 
+	// Auto-recover when server comes back after a connection failure.
+	// Polls /api/status and updates containerState so the correct screen renders.
+	useEffect(() => {
+		if (!accountsError) return;
+		let active = true;
+		async function probe() {
+			if (!active) return;
+			try {
+				const { state } = await api.status();
+				if (!active) return;
+				if (state !== containerState) {
+					setContainerState(state);
+				} else if (state === "unlocked") {
+					refetchAccounts();
+				}
+			} catch {
+				// Still unreachable — keep polling
+			}
+		}
+		const interval = setInterval(probe, 3000);
+		probe();
+		return () => {
+			active = false;
+			clearInterval(interval);
+		};
+	}, [accountsError, containerState, refetchAccounts]);
+
 	// Container state gates — render before any data UI
 	if (containerState === "loading") {
 		return (
@@ -561,21 +587,13 @@ export function App() {
 		);
 	}
 
-	// Fatal error: can't load accounts
 	if (accountsError) {
 		return (
-			<div className="h-screen flex items-center justify-center">
+			<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
 				<div className="text-center space-y-3">
-					<AlertCircleIcon className="w-10 h-10 mx-auto text-red-400" />
-					<p className="text-gray-600 dark:text-gray-400">Failed to connect to server</p>
+					<div className="w-8 h-8 mx-auto border-2 border-stork-600 border-t-transparent rounded-full animate-spin" />
+					<p className="text-gray-600 dark:text-gray-400">Reconnecting to server…</p>
 					<p className="text-sm text-gray-400">{accountsError}</p>
-					<button
-						type="button"
-						onClick={refetchAccounts}
-						className="px-4 py-2 text-sm bg-stork-600 hover:bg-stork-700 text-white rounded-md transition-colors"
-					>
-						Retry
-					</button>
 				</div>
 			</div>
 		);
