@@ -251,6 +251,35 @@ describe("ThreadMessage", () => {
 		expect(onAllowImages).toHaveBeenCalledWith(1);
 	});
 
+	it("handles null date gracefully in collapsed view", () => {
+		render(
+			<ThreadMessage
+				{...defaultProps({
+					msg: makeMessage({ date: null as unknown as string }),
+					expanded: false,
+					isThread: true,
+					isLast: false,
+				})}
+			/>,
+		);
+		// Should not show "Invalid Date"
+		expect(screen.queryByText("Invalid Date")).not.toBeInTheDocument();
+	});
+
+	it("handles invalid date string in collapsed view", () => {
+		render(
+			<ThreadMessage
+				{...defaultProps({
+					msg: makeMessage({ date: "not-a-date" }),
+					expanded: false,
+					isThread: true,
+					isLast: false,
+				})}
+			/>,
+		);
+		expect(screen.queryByText("Invalid Date")).not.toBeInTheDocument();
+	});
+
 	it("does not show remote images banner when images allowed", () => {
 		mockHasRemoteImages.mockReturnValueOnce(true);
 		render(
