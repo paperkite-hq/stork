@@ -61,4 +61,51 @@ describe("SandboxedEmail", () => {
 		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
 		expect(iframe.getAttribute("sandbox")).not.toContain("allow-scripts");
 	});
+
+	it("highlights matching search terms in body text with <mark> elements", () => {
+		render(
+			<SandboxedEmail html="<p>Invoice received from Alice</p>" searchQuery="invoice alice" />,
+		);
+		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
+		expect(iframe.srcdoc).toContain("<mark>");
+		expect(iframe.srcdoc.toLowerCase()).toContain("invoice");
+		expect(iframe.srcdoc.toLowerCase()).toContain("alice");
+	});
+
+	it("does not add mark elements when searchQuery is empty", () => {
+		render(<SandboxedEmail html="<p>Invoice from Alice</p>" searchQuery="" />);
+		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
+		expect(iframe.srcdoc).not.toContain("<mark>");
+	});
+
+	it("does not add mark elements when searchQuery is undefined", () => {
+		render(<SandboxedEmail html="<p>Invoice from Alice</p>" />);
+		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
+		expect(iframe.srcdoc).not.toContain("<mark>");
+	});
+
+	it("strips search operators before highlighting — only plain terms are highlighted", () => {
+		render(
+			<SandboxedEmail
+				html="<p>Invoice from alice@test.com</p>"
+				searchQuery="from:alice@test.com invoice"
+			/>,
+		);
+		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
+		// "invoice" (length > 1) should be highlighted
+		expect(iframe.srcdoc).toContain("<mark>");
+		// The "from:" operator itself should not be wrapped in a mark tag
+		expect(iframe.srcdoc).not.toContain("<mark>from</mark>");
+	});
+
+	it("applies operator-only query without highlighting anything", () => {
+		render(
+			<SandboxedEmail
+				html="<p>Some email body</p>"
+				searchQuery="from:alice is:unread has:attachment"
+			/>,
+		);
+		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
+		expect(iframe.srcdoc).not.toContain("<mark>");
+	});
 });
