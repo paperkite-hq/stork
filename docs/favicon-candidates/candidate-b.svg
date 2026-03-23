@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#4338CA"/>
+  <!-- Best v1: Big friendly face + hint of neck. Duolingo energy + stork identity -->
+  <path d="M16,58 C14,48 16,40 20,34" stroke="white" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <circle cx="28" cy="28" r="18" fill="white"/>
+  <polygon points="42,20 64,26 42,34" fill="#F97316"/>
+  <circle cx="22" cy="22" r="5.5" fill="#4338CA"/>
+  <circle cx="24" cy="20" r="2" fill="white"/>
+</svg>
