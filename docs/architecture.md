@@ -165,6 +165,12 @@ Stork uses a pluggable connector architecture to abstract mail transport. Two in
 
 **Barrel export** (`index.ts`) — re-exports all types, implementations, and factory functions.
 
+**Account configuration** — each account stores its `ingest_connector_type` and `send_connector_type` in the database alongside connector-specific configuration columns. The sync scheduler only polls IMAP accounts; push-based connectors (Cloudflare Email) receive messages via webhook without polling. The send route uses the registry to create the appropriate send connector based on the account's configuration.
+
+**Health checks** — `GET /api/accounts/:accountId/connector-health` tests both ingest and send connectors, returning structured status with error details and sync scheduler state.
+
+See [Writing Custom Connectors](./writing-connectors.md) for a guide on implementing new connectors.
+
 ### SQLite Storage (`src/storage/`)
 
 **Database initialization** (`db.ts`):
