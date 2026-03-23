@@ -1,6 +1,8 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="Stork" width="280">
+  <img src="docs/logo.svg" alt="Stork" width="128">
 </p>
+
+<h1 align="center">Stork</h1>
 
 <p align="center">
   <a href="https://github.com/paperkite-hq/stork/actions/workflows/ci.yml"><img src="https://github.com/paperkite-hq/stork/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
