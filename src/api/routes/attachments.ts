@@ -1,11 +1,13 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
+import { parseIntParam } from "../validation.js";
 
 export function attachmentRoutes(getDb: () => Database.Database): Hono {
 	const api = new Hono();
 
 	api.get("/:attachmentId", (c) => {
-		const attachmentId = Number(c.req.param("attachmentId"));
+		const attachmentId = parseIntParam(c, "attachmentId", c.req.param("attachmentId"));
+		if (attachmentId instanceof Response) return attachmentId;
 		const attachment = getDb()
 			.prepare("SELECT filename, content_type, data FROM attachments WHERE id = ?")
 			.get(attachmentId) as
@@ -29,7 +31,8 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 
 	// Serve inline images by Content-ID (for cid: URL resolution in HTML emails)
 	api.get("/by-cid/:messageId/:contentId", (c) => {
-		const messageId = Number(c.req.param("messageId"));
+		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
+		if (messageId instanceof Response) return messageId;
 		const contentId = c.req.param("contentId");
 		const attachment = getDb()
 			.prepare("SELECT content_type, data FROM attachments WHERE message_id = ? AND content_id = ?")

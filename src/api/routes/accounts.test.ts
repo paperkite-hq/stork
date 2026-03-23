@@ -631,6 +631,46 @@ describe("Accounts API", () => {
 		});
 	});
 
+	// ─── Route parameter validation ──────────────────────────
+	describe("Route parameter validation", () => {
+		test("GET /api/accounts/abc returns 400 for non-numeric accountId", async () => {
+			const { status, body } = await jsonRequest("/api/accounts/abc");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/accountId/);
+		});
+
+		test("GET /api/accounts/abc/labels returns 400", async () => {
+			const { status, body } = await jsonRequest("/api/accounts/abc/labels");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/accountId/);
+		});
+
+		test("GET /api/accounts/1/folders/abc/messages returns 400 for non-numeric folderId", async () => {
+			const { status, body } = await jsonRequest("/api/accounts/1/folders/abc/messages");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/folderId/);
+		});
+
+		test("GET /api/accounts/1/all-messages?limit=-1 returns 400", async () => {
+			const { status, body } = await jsonRequest("/api/accounts/1/all-messages?limit=-1");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/limit/);
+		});
+
+		test("GET /api/accounts/1/all-messages?offset=abc returns 400", async () => {
+			const { status, body } = await jsonRequest("/api/accounts/1/all-messages?offset=abc");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/offset/);
+		});
+
+		test("GET /api/accounts/1/all-messages?limit=500 clamps to 200", async () => {
+			const accountId = createTestAccount(db);
+			const { status } = await jsonRequest(`/api/accounts/${accountId}/all-messages?limit=500`);
+			expect(status).toBe(200);
+			// Just verify it doesn't crash — limit is silently clamped
+		});
+	});
+
 	// ─── Unread messages ───────────────────────────────────
 	describe("Unread Messages", () => {
 		test("GET /api/accounts/:id/unread-messages returns only unread", async () => {

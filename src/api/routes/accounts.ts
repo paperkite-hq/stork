@@ -8,6 +8,7 @@ import {
 	createSendConnector,
 } from "../../connectors/registry.js";
 import type { SyncScheduler } from "../../sync/sync-scheduler.js";
+import { parseIntParam, parsePagination } from "../validation.js";
 
 const VALID_INGEST_TYPES: IngestConnectorType[] = ["imap", "cloudflare-email"];
 const VALID_SEND_TYPES: SendConnectorType[] = ["smtp", "ses"];
@@ -140,7 +141,8 @@ export function accountRoutes(
 	});
 
 	api.get("/:accountId", (c) => {
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const account = getDb()
 			.prepare(`
 			SELECT id, name, email,
@@ -159,7 +161,8 @@ export function accountRoutes(
 
 	api.put("/:accountId", async (c) => {
 		const db = getDb();
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const body = await c.req.json();
 
 		const allowedFields = [
@@ -203,14 +206,16 @@ export function accountRoutes(
 	});
 
 	api.delete("/:accountId", (c) => {
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const result = getDb().prepare("DELETE FROM accounts WHERE id = ?").run(accountId);
 		if (result.changes === 0) return c.json({ error: "Account not found" }, 404);
 		return c.json({ ok: true });
 	});
 
 	api.get("/:accountId/sync-status", (c) => {
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const folders = getDb()
 			.prepare(`
 			SELECT f.id, f.name, f.path, f.message_count, f.unread_count, f.last_synced_at,
@@ -225,7 +230,8 @@ export function accountRoutes(
 	});
 
 	api.get("/:accountId/folders", (c) => {
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const folders = getDb()
 			.prepare(
 				"SELECT id, path, name, special_use, message_count, unread_count, last_synced_at FROM folders WHERE account_id = ? ORDER BY path",
@@ -235,9 +241,11 @@ export function accountRoutes(
 	});
 
 	api.get("/:accountId/folders/:folderId/messages", (c) => {
-		const folderId = Number(c.req.param("folderId"));
-		const limit = Number(c.req.query("limit") ?? 50);
-		const offset = Number(c.req.query("offset") ?? 0);
+		const folderId = parseIntParam(c, "folderId", c.req.param("folderId"));
+		if (folderId instanceof Response) return folderId;
+		const pagination = parsePagination(c);
+		if (pagination instanceof Response) return pagination;
+		const { limit, offset } = pagination;
 
 		const messages = getDb()
 			.prepare(`
@@ -255,7 +263,8 @@ export function accountRoutes(
 	});
 
 	api.get("/:accountId/labels", (c) => {
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const labels = getDb()
 			.prepare(`
 				SELECT l.id, l.name, l.color, l.source, l.created_at,
@@ -276,7 +285,8 @@ export function accountRoutes(
 
 	api.post("/:accountId/labels", async (c) => {
 		const db = getDb();
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const body = await c.req.json();
 		if (!body.name) return c.json({ error: "name is required" }, 400);
 
@@ -295,9 +305,11 @@ export function accountRoutes(
 
 	// All messages for an account (regardless of labels) — used by "All Mail" view
 	api.get("/:accountId/all-messages", (c) => {
-		const accountId = Number(c.req.param("accountId"));
-		const limit = Number(c.req.query("limit") ?? 50);
-		const offset = Number(c.req.query("offset") ?? 0);
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
+		const pagination = parsePagination(c);
+		if (pagination instanceof Response) return pagination;
+		const { limit, offset } = pagination;
 		const db = getDb();
 
 		const messages = db
@@ -317,9 +329,11 @@ export function accountRoutes(
 
 	// Unread messages for an account (messages without \Seen flag) — used by "Unread" view
 	api.get("/:accountId/unread-messages", (c) => {
-		const accountId = Number(c.req.param("accountId"));
-		const limit = Number(c.req.query("limit") ?? 50);
-		const offset = Number(c.req.query("offset") ?? 0);
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
+		const pagination = parsePagination(c);
+		if (pagination instanceof Response) return pagination;
+		const { limit, offset } = pagination;
 		const db = getDb();
 
 		const messages = db
@@ -340,7 +354,8 @@ export function accountRoutes(
 
 	// Count of unread messages for an account (for "Unread" badge)
 	api.get("/:accountId/unread-messages/count", (c) => {
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const db = getDb();
 
 		const row = db
@@ -356,7 +371,8 @@ export function accountRoutes(
 
 	// Total message count for an account (for "All Mail" badge)
 	api.get("/:accountId/all-messages/count", (c) => {
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const db = getDb();
 
 		const row = db
@@ -371,7 +387,8 @@ export function accountRoutes(
 	});
 
 	api.post("/:accountId/sync", async (c) => {
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		try {
 			const result = await getScheduler().syncNow(accountId);
 			return c.json(result);
@@ -383,7 +400,8 @@ export function accountRoutes(
 
 	api.get("/:accountId/connector-health", async (c) => {
 		const db = getDb();
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const account = db
 			.prepare(
 				`SELECT id, ingest_connector_type, send_connector_type,
