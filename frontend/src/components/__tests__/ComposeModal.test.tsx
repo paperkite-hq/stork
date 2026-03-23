@@ -91,7 +91,7 @@ describe("ComposeModal", () => {
 		);
 		expect(screen.getByText("Forward")).toBeInTheDocument();
 		// Subject should have Fwd: prefix
-		const subjectInput = screen.getByLabelText("Subj");
+		const subjectInput = screen.getByLabelText("Subject");
 		expect(subjectInput).toHaveValue("Fwd: Important");
 	});
 
@@ -124,7 +124,7 @@ describe("ComposeModal", () => {
 		);
 
 		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "bob@test.com");
-		const subjectInput = screen.getByLabelText("Subj");
+		const subjectInput = screen.getByLabelText("Subject");
 		await userEvent.type(subjectInput, "Hello");
 		await userEvent.type(screen.getByPlaceholderText("Write your message…"), "Hi Bob!");
 
@@ -136,6 +136,7 @@ describe("ComposeModal", () => {
 			bcc: "",
 			subject: "Hello",
 			body: "Hi Bob!",
+			htmlBody: undefined,
 		});
 	});
 
@@ -152,7 +153,7 @@ describe("ComposeModal", () => {
 				onSend={vi.fn()}
 			/>,
 		);
-		const subjectInput = screen.getByLabelText("Subj");
+		const subjectInput = screen.getByLabelText("Subject");
 		expect(subjectInput).toHaveValue("Re: Already replied");
 	});
 
@@ -164,7 +165,7 @@ describe("ComposeModal", () => {
 				onSend={vi.fn()}
 			/>,
 		);
-		const subjectInput = screen.getByLabelText("Subj");
+		const subjectInput = screen.getByLabelText("Subject");
 		expect(subjectInput).toHaveValue("Fwd: Already forwarded");
 	});
 
@@ -202,7 +203,7 @@ describe("ComposeModal", () => {
 		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
 
 		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "draft@test.com");
-		const subjectInput = screen.getByLabelText("Subj");
+		const subjectInput = screen.getByLabelText("Subject");
 		await userEvent.type(subjectInput, "Draft subject");
 
 		const draft = JSON.parse(localStorage.getItem("stork-compose-draft") ?? "{}");
@@ -218,7 +219,7 @@ describe("ComposeModal", () => {
 		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
 
 		expect(screen.getByPlaceholderText("recipient@example.com")).toHaveValue("saved@test.com");
-		expect(screen.getByLabelText("Subj")).toHaveValue("Saved draft");
+		expect(screen.getByLabelText("Subject")).toHaveValue("Saved draft");
 	});
 
 	it("does not restore new-message draft for reply mode", () => {
@@ -323,7 +324,7 @@ describe("ComposeModal", () => {
 		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={onSend} />);
 
 		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "bob@test.com");
-		await userEvent.type(screen.getByLabelText("Subj"), "Important");
+		await userEvent.type(screen.getByLabelText("Subject"), "Important");
 		await userEvent.click(screen.getByText("Send"));
 
 		// Error should appear inline
@@ -449,7 +450,7 @@ describe("ComposeModal", () => {
 		render(
 			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
 		);
-		expect(screen.getByLabelText("Subj")).toHaveValue("Re: (no subject)");
+		expect(screen.getByLabelText("Subject")).toHaveValue("Re: (no subject)");
 	});
 
 	it("shows Fwd: for forward with null subject", () => {
@@ -457,7 +458,7 @@ describe("ComposeModal", () => {
 		render(
 			<ComposeModal mode={{ type: "forward", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
 		);
-		expect(screen.getByLabelText("Subj")).toHaveValue("Fwd: (no subject)");
+		expect(screen.getByLabelText("Subject")).toHaveValue("Fwd: (no subject)");
 	});
 
 	it("shows validation error for invalid email in To field", async () => {
@@ -623,5 +624,59 @@ describe("ComposeModal", () => {
 		// Restore — Bcc field should auto-show when draft has bcc
 		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
 		expect(screen.getByPlaceholderText("bcc@example.com")).toHaveValue("secret@test.com");
+	});
+
+	it("defaults to plain text for new messages", () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		// Should show textarea (plain text mode)
+		expect(screen.getByPlaceholderText("Write your message…")).toBeInTheDocument();
+		// Should show "Rich text" toggle button (indicating we're in plain text mode)
+		expect(screen.getByText("Rich text")).toBeInTheDocument();
+	});
+
+	it("defaults to HTML mode when replying to HTML email", () => {
+		const msg = makeMessage({ html_body: "<p>Hello</p>" });
+		render(
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		// Should show "Plain text" toggle (indicating we're in HTML mode)
+		expect(screen.getByText("Plain text")).toBeInTheDocument();
+		// Should show contentEditable editor
+		expect(screen.getByRole("textbox", { name: "Message body" })).toBeInTheDocument();
+	});
+
+	it("defaults to plain text when replying to plain text email", () => {
+		const msg = makeMessage({ html_body: null });
+		render(
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		expect(screen.getByText("Rich text")).toBeInTheDocument();
+		expect(screen.getByPlaceholderText("Write your message…")).toBeInTheDocument();
+	});
+
+	it("shows expand/collapse button in header", () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		expect(screen.getByTitle("Expand")).toBeInTheDocument();
+	});
+
+	it("toggles expanded state when expand button is clicked", async () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		expect(screen.getByTitle("Expand")).toBeInTheDocument();
+		await userEvent.click(screen.getByTitle("Expand"));
+		expect(screen.getByTitle("Collapse")).toBeInTheDocument();
+	});
+
+	it("shows formatting toolbar", () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		expect(screen.getByTitle("Bold")).toBeInTheDocument();
+		expect(screen.getByTitle("Italic")).toBeInTheDocument();
+		expect(screen.getByTitle("Underline")).toBeInTheDocument();
+		expect(screen.getByTitle("Insert link")).toBeInTheDocument();
+	});
+
+	it("shows subject label as 'Subject' not 'Subj'", () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		expect(screen.getByLabelText("Subject")).toBeInTheDocument();
+		expect(screen.queryByText("Subj")).not.toBeInTheDocument();
 	});
 });
