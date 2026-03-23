@@ -190,6 +190,39 @@ describe("Labels API", () => {
 		});
 	});
 
+	// ─── Route parameter validation ────────────────────────
+	describe("Route parameter validation", () => {
+		test("PUT /api/labels/abc returns 400 for non-numeric labelId", async () => {
+			const { status, body } = await jsonRequest("/api/labels/abc", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ name: "Test" }),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/labelId/);
+		});
+
+		test("DELETE /api/labels/abc returns 400 for non-numeric labelId", async () => {
+			const { status, body } = await jsonRequest("/api/labels/abc", {
+				method: "DELETE",
+			});
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/labelId/);
+		});
+
+		test("GET /api/labels/abc/messages returns 400 for non-numeric labelId", async () => {
+			const { status, body } = await jsonRequest("/api/labels/abc/messages");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/labelId/);
+		});
+
+		test("GET /api/labels/1/messages?limit=-1 returns 400 for invalid pagination", async () => {
+			const { status, body } = await jsonRequest("/api/labels/1/messages?limit=-1");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/limit/);
+		});
+	});
+
 	// ─── Message Labels ──────────────────────────────────────
 	describe("Message labels", () => {
 		let accountId: number;
