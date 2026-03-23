@@ -14,6 +14,7 @@ import { messageRoutes } from "./routes/messages.js";
 import { searchRoutes } from "./routes/search.js";
 import { sendRoutes } from "./routes/send.js";
 import { syncRoutes } from "./routes/sync.js";
+import { trustedSenderRoutes } from "./routes/trusted-senders.js";
 
 export function createApp(context: ContainerContext): { app: Hono } {
 	const app = new Hono();
@@ -98,6 +99,7 @@ export function createApp(context: ContainerContext): { app: Hono } {
 	api.route("/sync", syncRoutes(getScheduler, getDb));
 	api.route("/send", sendRoutes(getDb));
 	api.route("/drafts", draftRoutes(getDb));
+	api.route("/", trustedSenderRoutes(getDb));
 
 	app.route("/api", api);
 

@@ -52,9 +52,11 @@ function defaultProps(overrides: Record<string, unknown> = {}) {
 		expanded: true,
 		showHtml: false,
 		imagesAllowed: false,
+		senderTrusted: false,
 		onToggleExpanded: vi.fn(),
 		onToggleShowHtml: vi.fn(),
 		onAllowImages: vi.fn(),
+		onTrustSender: vi.fn(),
 		onReply: vi.fn(),
 		onReplyAll: vi.fn(),
 		onForward: vi.fn(),
@@ -227,7 +229,7 @@ describe("ThreadMessage", () => {
 		expect(
 			screen.getByText(/Remote images are hidden to protect your privacy/),
 		).toBeInTheDocument();
-		expect(screen.getByText("Show for this message")).toBeInTheDocument();
+		expect(screen.getByText("Show once")).toBeInTheDocument();
 	});
 
 	it("calls onAllowImages when Show images clicked", () => {
@@ -245,7 +247,7 @@ describe("ThreadMessage", () => {
 				})}
 			/>,
 		);
-		fireEvent.click(screen.getByText("Show for this message"));
+		fireEvent.click(screen.getByText("Show once"));
 		expect(onAllowImages).toHaveBeenCalledWith(1);
 	});
 
