@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <rect width="64" height="64" rx="14" fill="#4338CA"/>
-  <!-- Stork head profile — bold teardrop head filling canvas, prominent beak -->
-  <path d="M6,56 C0,40 6,20 22,14 C32,10 42,14 44,26 C46,38 36,54 16,56 Z" fill="white"/>
-  <polygon points="38,8 64,18 38,26" fill="#F97316"/>
-  <circle cx="24" cy="22" r="6" fill="#4338CA"/>
-  <circle cx="26" cy="20" r="2.5" fill="white"/>
+  <!-- Stork head: white circle on indigo, long orange beak, expressive eye -->
+  <circle cx="22" cy="32" r="22" fill="white"/>
+  <path d="M40,26 L62,32 L40,38 Z" fill="#F97316"/>
+  <circle cx="24" cy="25" r="5.5" fill="#4338CA"/>
+  <circle cx="26" cy="23.5" r="2" fill="white"/>
 </svg>
