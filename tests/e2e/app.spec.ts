@@ -150,15 +150,15 @@ test.describe("Compose", () => {
 });
 
 test.describe("Search", () => {
-	test("search input is visible in sidebar", async ({ page }) => {
+	test("search button is visible in sidebar", async ({ page }) => {
 		await page.goto("/");
-		// Search is an input with placeholder "Search mail…"
-		await expect(page.getByPlaceholder("Search mail…")).toBeVisible();
+		// Search trigger is a button with "Search mail…" text
+		await expect(page.getByRole("button", { name: /search mail/i })).toBeVisible();
 	});
 
-	test("clicking search input opens search panel", async ({ page }) => {
+	test("clicking search button opens search panel", async ({ page }) => {
 		await page.goto("/");
-		await page.getByPlaceholder("Search mail…").click();
+		await page.getByRole("button", { name: /search mail/i }).click();
 		// Search panel should open with an input field
 		await expect(page.getByPlaceholder("Search messages…")).toBeVisible();
 	});

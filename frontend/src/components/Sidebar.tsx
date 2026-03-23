@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { Account, GlobalSyncStatus, Label } from "../api";
 import {
 	ArchiveIcon,
@@ -66,7 +66,6 @@ interface SidebarProps {
 	onSelectLabel: (id: number) => void;
 	onCompose: () => void;
 	onSearch: (query: string) => void;
-	searchActive?: boolean;
 	onSettings: () => void;
 	onSyncNow?: () => void;
 	dark: boolean;
@@ -189,7 +188,6 @@ export function Sidebar({
 	onSelectLabel,
 	onCompose,
 	onSearch,
-	searchActive,
 	onSettings,
 	onSyncNow,
 	dark,
@@ -207,13 +205,6 @@ export function Sidebar({
 		position: { x: number; y: number };
 	} | null>(null);
 	const [syncDetailOpen, setSyncDetailOpen] = useState(false);
-	const [searchInputValue, setSearchInputValue] = useState("");
-	const searchInputRef = useRef<HTMLInputElement>(null);
-
-	// Reset sidebar search input when search panel closes
-	useEffect(() => {
-		if (!searchActive) setSearchInputValue("");
-	}, [searchActive]);
 
 	const handleLabelContextMenu = useCallback((e: React.MouseEvent, label: Label) => {
 		if (label.source !== "user") return;
@@ -239,26 +230,17 @@ export function Sidebar({
 				</button>
 			</div>
 
-			{/* Search input */}
+			{/* Search button — opens the search panel */}
 			<div className="px-4 pt-3">
-				<div className="relative">
-					<SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-					<input
-						ref={searchInputRef}
-						type="text"
-						value={searchInputValue}
-						onChange={(e) => {
-							setSearchInputValue(e.target.value);
-							onSearch(e.target.value);
-						}}
-						onFocus={() => onSearch(searchInputValue)}
-						placeholder="Search mail…"
-						className="w-full py-1.5 pl-8 pr-8 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 focus:bg-white dark:focus:bg-gray-900 focus:outline-none focus:ring-1 focus:ring-stork-500 rounded-md text-sm text-gray-700 dark:text-gray-300 placeholder:text-gray-400 transition-colors"
-					/>
-					<kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 bg-gray-200 dark:bg-gray-700 px-1 rounded pointer-events-none">
-						/
-					</kbd>
-				</div>
+				<button
+					type="button"
+					onClick={() => onSearch("")}
+					className="w-full flex items-center gap-2 py-1.5 pl-3 pr-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md text-sm text-gray-400 transition-colors"
+				>
+					<SearchIcon className="w-3.5 h-3.5 flex-shrink-0" />
+					<span className="flex-1 text-left">Search mail…</span>
+					<kbd className="text-xs bg-gray-200 dark:bg-gray-700 px-1 rounded">/</kbd>
+				</button>
 			</div>
 
 			{/* Account selector */}

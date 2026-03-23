@@ -178,9 +178,9 @@ function setupWithAccounts(
 
 /** Wait for the main app layout (not Welcome screen) to be ready */
 async function waitForAppLayout() {
-	// Search input placeholder is unique to the sidebar — unambiguous signal that layout loaded
+	// Compose button is unique to the sidebar — unambiguous signal that layout loaded
 	await waitFor(() => {
-		expect(screen.getByPlaceholderText("Search mail…")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /compose/i })).toBeInTheDocument();
 	});
 }
 
@@ -243,8 +243,8 @@ describe("App — Welcome screen", () => {
 		await waitFor(() => {
 			expect(screen.getByText("Welcome to Stork")).toBeInTheDocument();
 		});
-		// Sidebar search input should not be present in Welcome mode
-		expect(screen.queryByPlaceholderText("Search mail…")).not.toBeInTheDocument();
+		// Sidebar search button should not be present in Welcome mode
+		expect(screen.queryByRole("button", { name: /search mail/i })).not.toBeInTheDocument();
 	});
 });
 
@@ -444,7 +444,7 @@ describe("App — Search panel", () => {
 		setupWithAccounts();
 		render(<App />);
 		await waitForAppLayout();
-		await userEvent.click(screen.getByPlaceholderText("Search mail…"));
+		await userEvent.click(screen.getByRole("button", { name: /search mail/i }));
 		await waitFor(() => {
 			expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument();
 		});
@@ -1956,7 +1956,7 @@ describe("App — Search result navigation", () => {
 			expect(screen.queryByPlaceholderText("Search messages…")).not.toBeInTheDocument(),
 		);
 		// Main layout should still be intact
-		expect(screen.getByPlaceholderText("Search mail…")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /search mail/i })).toBeInTheDocument();
 	});
 });
 
