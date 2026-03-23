@@ -155,10 +155,18 @@ export class ImapSync {
 			// Close the previous client first to release the underlying TCP socket
 			// before creating a new one.
 			suppressImapFlowErrors(this.client);
+			const oldSocket = getImapSocket(this.client);
 			try {
 				this.client.close();
 			} catch {
 				// Ignore — client may not be connected yet on the first attempt
+			}
+			// Re-add error suppression: close() strips handlers before destroying
+			// the socket (possibly via setImmediate), leaving a window where
+			// ECONNRESET can fire unhandled.
+			suppressSocketErrors(oldSocket);
+			if (oldSocket && typeof oldSocket.destroy === "function") {
+				oldSocket.destroy();
 			}
 			this.client = new ImapFlow({
 				...this.config,
@@ -184,10 +192,21 @@ export class ImapSync {
 	 */
 	forceClose(): void {
 		suppressImapFlowErrors(this.client);
+		const socket = getImapSocket(this.client);
 		try {
 			this.client.close();
 		} catch {
 			// Ignore errors — connection may already be closed
+		}
+		// Re-add error suppression: close() strips handlers before destroying
+		// the socket (possibly via setImmediate), leaving a window where
+		// ECONNRESET can fire unhandled.
+		suppressSocketErrors(socket);
+		// Destroy the socket synchronously to prevent ImapFlow's deferred
+		// close from stripping our error handlers and leaving an orphaned
+		// socket that can receive ECONNRESET with no listener.
+		if (socket && typeof socket.destroy === "function") {
+			socket.destroy();
 		}
 	}
 
@@ -869,6 +888,22 @@ function suppressImapFlowErrors(client: ImapFlow): void {
 	).socket;
 	if (socket && typeof socket.on === "function") {
 		socket.on("error", noop);
+	}
+}
+
+type ImapSocket =
+	| { on?: (event: string, fn: () => void) => void; destroy?: () => void }
+	| undefined;
+
+/** Extract the internal socket from an ImapFlow client (private field). */
+function getImapSocket(client: ImapFlow): ImapSocket {
+	return (client as unknown as { socket?: ImapSocket }).socket;
+}
+
+/** Add a noop error handler to a raw socket if it exists. */
+function suppressSocketErrors(socket: ImapSocket): void {
+	if (socket && typeof socket.on === "function") {
+		socket.on("error", () => {});
 	}
 }
 

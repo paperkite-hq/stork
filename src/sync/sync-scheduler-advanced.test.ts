@@ -64,6 +64,9 @@ beforeEach(() => {
 
 afterEach(async () => {
 	if (scheduler) await scheduler.stop();
+	// Allow deferred socket destruction (ImapFlow uses setImmediate in close)
+	// to complete before tearing down the mock server, preventing ECONNRESET.
+	await new Promise((r) => setImmediate(r));
 	if (mockServer) await mockServer.stop();
 	db.close();
 });
