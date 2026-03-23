@@ -39,6 +39,13 @@ export function App() {
 			.catch(() => setContainerState("unlocked")); // server error — let data routes surface it
 	}, []);
 
+	// Listen for 423 responses — container restarted and is now locked
+	useEffect(() => {
+		const handler = () => setContainerState("locked");
+		window.addEventListener("stork-container-locked", handler);
+		return () => window.removeEventListener("stork-container-locked", handler);
+	}, []);
+
 	// Data state
 	const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 	const [selectedLabelId, setSelectedLabelId] = useState<number | null>(null);
