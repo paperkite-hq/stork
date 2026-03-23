@@ -692,6 +692,7 @@ export function App() {
 							onReply={handleReply}
 							onReplyAll={handleReplyAll}
 							onForward={handleForward}
+							openedFromSearch={openedFromSearch}
 							onBack={() => {
 								setSelectedMessageId(null);
 								if (openedFromSearch) {
