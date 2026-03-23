@@ -308,6 +308,7 @@ export function App() {
 			setSelectedMessageId(null);
 			setMessageListIndex(0);
 			setSidebarOpen(false);
+			setShowSearch(false);
 			setOpenedFromSearch(false);
 			bulk.clear();
 		},
@@ -683,46 +684,58 @@ export function App() {
 						</button>
 					</div>
 
-					{/* Message list panel — hidden on mobile when viewing a message */}
+					{/* Message list panel — hidden on mobile when viewing a message (unless search is active) */}
 					<div
 						id="message-list"
 						className={`w-full md:w-80 xl:w-96 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col min-h-0 ${
-							selectedMessageId !== null ? "hidden md:flex" : "flex"
+							selectedMessageId !== null && !showSearch ? "hidden md:flex" : "flex"
 						}`}
 					>
-						<MessageList
-							messages={allMessages}
-							selectedId={selectedMessageId}
-							focusedId={focusedMessage?.id ?? null}
-							onSelect={handleSelectMessage}
-							loading={messagesLoading}
-							error={messagesError}
-							folderName={currentLabelName}
-							onRefresh={refetchMessages}
-							hasMore={hasMore}
-							onLoadMore={handleLoadMore}
-							loadingMore={loadingMore}
-							onToggleStar={handleToggleStar}
-							totalCount={
-								isAllMail
-									? allMailCount?.total
-									: isUnread
-										? unreadCount?.total
-										: isInbox
-											? inboxLabel?.message_count
-											: labels?.find((l) => l.id === effectiveLabelId)?.message_count
-							}
-							selectedIds={bulk.selectedIds}
-							onToggleSelect={bulk.toggle}
-							onSelectAll={bulk.selectAll}
-							onClearSelection={bulk.clear}
-							onBulkDelete={bulk.bulkDelete}
-							onBulkMarkRead={bulk.markRead}
-							onBulkMarkUnread={bulk.markUnread}
-							onBulkMove={bulk.move}
-							onBulkArchive={!archiveDisabled ? bulk.archive : undefined}
-							folders={folders ?? []}
-						/>
+						{showSearch ? (
+							<SearchPanel
+								onClose={() => setShowSearch(false)}
+								onSelectMessage={(id) => {
+									setSelectedMessageId(id);
+									setOpenedFromSearch(true);
+								}}
+								accountId={effectiveAccountId}
+								onResultsChange={setSearchResults}
+							/>
+						) : (
+							<MessageList
+								messages={allMessages}
+								selectedId={selectedMessageId}
+								focusedId={focusedMessage?.id ?? null}
+								onSelect={handleSelectMessage}
+								loading={messagesLoading}
+								error={messagesError}
+								folderName={currentLabelName}
+								onRefresh={refetchMessages}
+								hasMore={hasMore}
+								onLoadMore={handleLoadMore}
+								loadingMore={loadingMore}
+								onToggleStar={handleToggleStar}
+								totalCount={
+									isAllMail
+										? allMailCount?.total
+										: isUnread
+											? unreadCount?.total
+											: isInbox
+												? inboxLabel?.message_count
+												: labels?.find((l) => l.id === effectiveLabelId)?.message_count
+								}
+								selectedIds={bulk.selectedIds}
+								onToggleSelect={bulk.toggle}
+								onSelectAll={bulk.selectAll}
+								onClearSelection={bulk.clear}
+								onBulkDelete={bulk.bulkDelete}
+								onBulkMarkRead={bulk.markRead}
+								onBulkMarkUnread={bulk.markUnread}
+								onBulkMove={bulk.move}
+								onBulkArchive={!archiveDisabled ? bulk.archive : undefined}
+								folders={folders ?? []}
+							/>
+						)}
 					</div>
 
 					{/* Message detail / thread view — hidden on mobile when no message selected */}
@@ -786,17 +799,6 @@ export function App() {
 						onSend={handleSend}
 					/>
 				)}
-				<SearchPanel
-					visible={showSearch}
-					onClose={() => setShowSearch(false)}
-					onSelectMessage={(id) => {
-						setSelectedMessageId(id);
-						setShowSearch(false);
-						setOpenedFromSearch(true);
-					}}
-					accountId={effectiveAccountId}
-					onResultsChange={setSearchResults}
-				/>
 				{showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
 				{showSettings && <Settings onClose={() => setShowSettings(false)} />}
 				{msgActions.pendingDelete !== null && (
