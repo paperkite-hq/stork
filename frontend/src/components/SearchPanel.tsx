@@ -404,6 +404,23 @@ export function SearchPanel({
 				</div>
 			)}
 
+			{/* Search tips — shown near the input before any search has been run */}
+			{!searched && !loading && (
+				<div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800 text-xs text-gray-400">
+					Tip: <kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">↑</kbd>/
+					<kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">↓</kbd> to navigate,{" "}
+					<kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">Enter</kbd> to select,{" "}
+					<kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">Esc</kbd> to exit.{" "}
+					<span className="text-gray-300 dark:text-gray-600">|</span>{" "}
+					<code className="text-gray-500">from:</code> <code className="text-gray-500">to:</code>{" "}
+					<code className="text-gray-500">subject:</code>{" "}
+					<code className="text-gray-500">has:attachment</code>{" "}
+					<code className="text-gray-500">is:unread</code>{" "}
+					<code className="text-gray-500">before:</code>{" "}
+					<code className="text-gray-500">after:</code>
+				</div>
+			)}
+
 			{/* Results */}
 			<div className="flex-1 overflow-y-auto">
 				{loading && results.length === 0 && (
@@ -484,20 +501,6 @@ export function SearchPanel({
 						</button>
 					</div>
 				)}
-			</div>
-
-			{/* Hint */}
-			<div className="px-4 py-2 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-400">
-				Tip: <kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">↑</kbd>/
-				<kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">↓</kbd> to navigate,{" "}
-				<kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">Enter</kbd> to select,{" "}
-				<kbd className="bg-gray-200 dark:bg-gray-700 px-1 rounded">Esc</kbd> to exit search.{" "}
-				<span className="text-gray-300 dark:text-gray-600">|</span>{" "}
-				<code className="text-gray-500">from:</code> <code className="text-gray-500">to:</code>{" "}
-				<code className="text-gray-500">subject:</code>{" "}
-				<code className="text-gray-500">has:attachment</code>{" "}
-				<code className="text-gray-500">is:unread</code>{" "}
-				<code className="text-gray-500">before:</code> <code className="text-gray-500">after:</code>
 			</div>
 		</div>
 	);

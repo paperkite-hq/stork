@@ -469,19 +469,20 @@ describe("MessageDetail", () => {
 		const msg2 = makeMessage({ id: 2, from_name: "Bob", text_body: "Reply message" });
 		render(<MessageDetail {...defaultProps} message={msg1} thread={[msg1, msg2]} />);
 
-		// First message in thread is collapsed by default (not the last)
-		expect(screen.queryByText("First message")).not.toBeInTheDocument();
+		// Selected message (msg1/Alice) is auto-expanded on mount
+		expect(screen.getByText("First message")).toBeInTheDocument();
 		// Last message is always expanded
 		expect(screen.getByText("Reply message")).toBeInTheDocument();
 
-		// Click to expand the first message
+		// Click to collapse the first message (it's now expanded, so button label is "Collapse")
+		const collapseBtn = screen.getByLabelText("Collapse message from Alice");
+		await userEvent.click(collapseBtn);
+		expect(screen.queryByText("First message")).not.toBeInTheDocument();
+
+		// Click again to re-expand
 		const expandBtn = screen.getByLabelText("Expand message from Alice");
 		await userEvent.click(expandBtn);
 		expect(screen.getByText("First message")).toBeInTheDocument();
-
-		// Click again to collapse
-		await userEvent.click(expandBtn);
-		expect(screen.queryByText("First message")).not.toBeInTheDocument();
 	});
 
 	it("auto-marks unread message as read on open", async () => {
@@ -677,11 +678,8 @@ describe("MessageDetail", () => {
 			<MessageDetail {...defaultProps} message={msg1} thread={[msg1, msg2]} onReply={onReply} />,
 		);
 
-		// Expand the first message
-		const expandBtn = screen.getByLabelText("Expand message from Alice");
-		await userEvent.click(expandBtn);
-
-		// Both messages should have Reply buttons
+		// msg1 (the selected message) is auto-expanded on mount; msg2 (last) is always expanded.
+		// Both messages should already have Reply buttons without any extra clicks.
 		const replyBtns = screen
 			.getAllByRole("button")
 			.filter(
@@ -699,8 +697,8 @@ describe("MessageDetail", () => {
 		const msg3 = makeMessage({ id: 3, from_name: "Carol", text_body: "Third message" });
 		render(<MessageDetail {...defaultProps} message={msg1} thread={[msg1, msg2, msg3]} />);
 
-		// Initially only last message (msg3) is expanded
-		expect(screen.queryByText("First message")).not.toBeInTheDocument();
+		// msg1 (selected message) and msg3 (last in thread) are expanded; msg2 is collapsed
+		expect(screen.getByText("First message")).toBeInTheDocument();
 		expect(screen.queryByText("Second message")).not.toBeInTheDocument();
 		expect(screen.getByText("Third message")).toBeInTheDocument();
 
