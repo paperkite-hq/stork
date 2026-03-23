@@ -47,6 +47,7 @@ export function App() {
 	// UI state
 	const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
 	const [showSearch, setShowSearch] = useState(false);
+	const [openedFromSearch, setOpenedFromSearch] = useState(false);
 	const [showShortcuts, setShowShortcuts] = useState(false);
 	const [showSettings, setShowSettings] = useState(false);
 	const [messageListIndex, setMessageListIndex] = useState(0);
@@ -186,6 +187,8 @@ export function App() {
 			setMessageListIndex(idx >= 0 ? idx : 0);
 			// Close sidebar on mobile when selecting a message
 			setSidebarOpen(false);
+			// Clear search origin when selecting from message list
+			setOpenedFromSearch(false);
 		},
 		[allMessages],
 	);
@@ -202,11 +205,16 @@ export function App() {
 		accountId: effectiveAccountId,
 		labelId: effectiveLabelId,
 		messageId: selectedMessageId,
+		searchActive: openedFromSearch,
 		onNavigate: useCallback((state) => {
 			if (state.accountId !== null) setSelectedAccountId(state.accountId);
 			setSelectedLabelId(state.labelId);
 			setSelectedMessageId(state.messageId);
 			setMessageListIndex(0);
+			if (state.searchActive) {
+				setShowSearch(true);
+				setOpenedFromSearch(false);
+			}
 		}, []),
 	});
 
@@ -273,6 +281,7 @@ export function App() {
 			setSelectedMessageId(null);
 			setMessageListIndex(0);
 			setSidebarOpen(false);
+			setOpenedFromSearch(false);
 			bulk.clear();
 		},
 		[bulk],
@@ -410,7 +419,13 @@ export function App() {
 				else if (showShortcuts) setShowShortcuts(false);
 				else if (showSettings) setShowSettings(false);
 				else if (composeMode) setComposeMode(null);
-				else if (selectedMessageId) setSelectedMessageId(null);
+				else if (selectedMessageId) {
+					setSelectedMessageId(null);
+					if (openedFromSearch) {
+						setShowSearch(true);
+						setOpenedFromSearch(false);
+					}
+				}
 			},
 			c: () => {
 				if (!composeMode && !showSearch) handleCompose();
@@ -477,6 +492,7 @@ export function App() {
 			showShortcuts,
 			showSettings,
 			selectedMessageId,
+			openedFromSearch,
 			handleCompose,
 			handleReply,
 			handleReplyAll,
@@ -676,7 +692,13 @@ export function App() {
 							onReply={handleReply}
 							onReplyAll={handleReplyAll}
 							onForward={handleForward}
-							onBack={() => setSelectedMessageId(null)}
+							onBack={() => {
+								setSelectedMessageId(null);
+								if (openedFromSearch) {
+									setShowSearch(true);
+									setOpenedFromSearch(false);
+								}
+							}}
 							onMessageChanged={() => {
 								refetchMessage();
 								refetchMessages();
@@ -712,6 +734,7 @@ export function App() {
 					onSelectMessage={(id) => {
 						setSelectedMessageId(id);
 						setShowSearch(false);
+						setOpenedFromSearch(true);
 					}}
 					accountId={effectiveAccountId}
 				/>
