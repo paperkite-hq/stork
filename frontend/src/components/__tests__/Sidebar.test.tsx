@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Account, GlobalSyncStatus, Label } from "../../api";
-import { INBOX_LABEL_ID, Sidebar } from "../Sidebar";
+import { ALL_MAIL_LABEL_ID, INBOX_LABEL_ID, Sidebar, UNREAD_LABEL_ID } from "../Sidebar";
 
 function makeAccount(overrides: Partial<Account> = {}): Account {
 	return {
@@ -422,6 +422,101 @@ describe("Sidebar", () => {
 	it("does not show sync error indicator when no error", () => {
 		render(<Sidebar {...defaultProps} syncing={false} syncError={null} />);
 		expect(screen.queryByText("Sync failed")).not.toBeInTheDocument();
+	});
+
+	it("shows Unread promoted view with count badge", () => {
+		const labels = [makeLabel({ id: 1, name: "Inbox" })];
+		render(<Sidebar {...defaultProps} labels={labels} unreadCount={{ total: 12 }} />);
+		const unreadSpans = screen.getAllByText("Unread");
+		const unreadLabel = unreadSpans.find((el) => el.tagName === "SPAN");
+		expect(unreadLabel).toBeInTheDocument();
+		expect(screen.getByText("12")).toBeInTheDocument();
+	});
+
+	it("calls onSelectLabel with UNREAD_LABEL_ID when Unread is clicked", async () => {
+		const onSelectLabel = vi.fn();
+		const labels = [makeLabel({ id: 1, name: "Inbox" })];
+		render(<Sidebar {...defaultProps} labels={labels} onSelectLabel={onSelectLabel} />);
+		const unreadSpans = screen.getAllByText("Unread");
+		const unreadLabel = unreadSpans.find((el) => el.tagName === "SPAN") as HTMLElement;
+		await userEvent.click(unreadLabel);
+		expect(onSelectLabel).toHaveBeenCalledWith(UNREAD_LABEL_ID);
+	});
+
+	it("highlights Unread promoted view when selected", () => {
+		const labels = [makeLabel({ id: 1, name: "Inbox" })];
+		const { container } = render(
+			<Sidebar {...defaultProps} labels={labels} selectedLabelId={UNREAD_LABEL_ID} />,
+		);
+		const buttons = container.querySelectorAll("nav button");
+		const unreadBtn = Array.from(buttons).find((b) => b.textContent?.includes("Unread"));
+		expect(unreadBtn?.className).toContain("bg-stork-100");
+	});
+
+	it("shows All Mail promoted view with unread count", () => {
+		const labels = [makeLabel({ id: 1, name: "Inbox" })];
+		render(<Sidebar {...defaultProps} labels={labels} allMailCount={{ total: 500, unread: 7 }} />);
+		const allMailSpans = screen.getAllByText("All Mail");
+		const allMailLabel = allMailSpans.find((el) => el.tagName === "SPAN");
+		expect(allMailLabel).toBeInTheDocument();
+		expect(screen.getByText("7")).toBeInTheDocument();
+	});
+
+	it("calls onSelectLabel with ALL_MAIL_LABEL_ID when All Mail is clicked", async () => {
+		const onSelectLabel = vi.fn();
+		const labels = [makeLabel({ id: 1, name: "Inbox" })];
+		render(<Sidebar {...defaultProps} labels={labels} onSelectLabel={onSelectLabel} />);
+		const allMailSpans = screen.getAllByText("All Mail");
+		const allMailLabel = allMailSpans.find((el) => el.tagName === "SPAN") as HTMLElement;
+		await userEvent.click(allMailLabel);
+		expect(onSelectLabel).toHaveBeenCalledWith(ALL_MAIL_LABEL_ID);
+	});
+
+	it("highlights All Mail promoted view when selected", () => {
+		const labels = [makeLabel({ id: 1, name: "Inbox" })];
+		const { container } = render(
+			<Sidebar {...defaultProps} labels={labels} selectedLabelId={ALL_MAIL_LABEL_ID} />,
+		);
+		const buttons = container.querySelectorAll("nav button");
+		const allMailBtn = Array.from(buttons).find((b) => b.textContent?.includes("All Mail"));
+		expect(allMailBtn?.className).toContain("bg-stork-100");
+	});
+
+	it("hides unread count badges when counts are zero", () => {
+		const inboxLabel = makeLabel({ id: 1, name: "Inbox", unread_count: 0 });
+		const labels = [inboxLabel];
+		render(
+			<Sidebar
+				{...defaultProps}
+				labels={labels}
+				inboxLabel={inboxLabel}
+				unreadCount={{ total: 0 }}
+				allMailCount={{ total: 100, unread: 0 }}
+			/>,
+		);
+		// No count badges should appear (all 0)
+		const badges = document.querySelectorAll(".rounded-full");
+		for (const badge of badges) {
+			expect(badge.textContent).not.toBe("0");
+		}
+	});
+
+	it("shows label unread count in the regular label list", () => {
+		const labels = [
+			makeLabel({ id: 1, name: "Inbox" }),
+			makeLabel({ id: 2, name: "Work", unread_count: 8, source: "user" }),
+		];
+		render(<Sidebar {...defaultProps} labels={labels} />);
+		expect(screen.getByText("8")).toBeInTheDocument();
+	});
+
+	it("renders LabelManager when selectedAccountId and onLabelsChanged are provided", () => {
+		const labels = [makeLabel({ id: 1, name: "Inbox" })];
+		render(
+			<Sidebar {...defaultProps} labels={labels} selectedAccountId={1} onLabelsChanged={vi.fn()} />,
+		);
+		// LabelManager renders a "+ Create label" button
+		expect(screen.getByText("+ Create label")).toBeInTheDocument();
 	});
 
 	it("does not show context menu on right-click for imap labels", async () => {
