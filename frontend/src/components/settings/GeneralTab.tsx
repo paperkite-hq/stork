@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDesktopNotifications } from "../../hooks";
 
 function ShortcutRow({ keys, action }: { keys: string; action: string }) {
 	return (
@@ -15,6 +16,7 @@ export function GeneralTab() {
 	const [notificationsEnabled, setNotificationsEnabled] = useState(
 		() => localStorage.getItem("stork-notifications") !== "false",
 	);
+	const { permission, requestPermission } = useDesktopNotifications();
 	const [messagesPerPage, setMessagesPerPage] = useState(
 		() => Number(localStorage.getItem("stork-messages-per-page")) || 50,
 	);
@@ -75,15 +77,28 @@ export function GeneralTab() {
 				</label>
 
 				{/* Notifications */}
-				<label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-					<input
-						type="checkbox"
-						checked={notificationsEnabled}
-						onChange={(e) => setNotificationsEnabled(e.target.checked)}
-						className="rounded border-gray-300 dark:border-gray-600"
-					/>
-					Enable desktop notifications for new mail
-				</label>
+				<div className="space-y-1">
+					<label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+						<input
+							type="checkbox"
+							checked={notificationsEnabled}
+							onChange={async (e) => {
+								const enabling = e.target.checked;
+								setNotificationsEnabled(enabling);
+								if (enabling && permission === "default") {
+									await requestPermission();
+								}
+							}}
+							className="rounded border-gray-300 dark:border-gray-600"
+						/>
+						Enable desktop notifications for new mail
+					</label>
+					{notificationsEnabled && permission === "denied" && (
+						<p className="text-xs text-amber-600 dark:text-amber-400 ml-6">
+							Browser permission is blocked. Enable notifications in your browser settings.
+						</p>
+					)}
+				</div>
 			</div>
 
 			<div className="pt-2">
