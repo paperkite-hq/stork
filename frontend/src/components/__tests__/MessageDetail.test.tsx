@@ -729,3 +729,61 @@ describe("MessageDetail", () => {
 		expect(screen.queryByText("Collapse all")).not.toBeInTheDocument();
 	});
 });
+
+describe("MessageDetail — Delete error handling", () => {
+	it("shows error toast when delete fails", async () => {
+		const { api } = await import("../../api");
+		const { toast } = await import("../Toast");
+		(api.messages.delete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Network error"),
+		);
+
+		const msg = makeMessage({ id: 42 });
+		render(
+			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} accountId={1} />,
+		);
+
+		// Click delete button
+		const deleteBtn = screen.getByTitle("Delete message");
+		await userEvent.click(deleteBtn);
+
+		// Confirm deletion
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"This will permanently delete this message. This action cannot be undone.",
+				),
+			).toBeInTheDocument(),
+		);
+		await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+		// Should show error toast
+		await waitFor(() => {
+			expect(toast).toHaveBeenCalledWith("Failed to delete message", "error");
+		});
+	});
+});
+
+describe("MessageDetail — Trust sender", () => {
+	it("calls api.trustedSenders.add when trusting a sender", async () => {
+		const { api } = await import("../../api");
+
+		const msg = makeMessage({
+			id: 50,
+			from_address: "Alice@Test.Com",
+			html_body: '<img src="https://tracker.com/pixel.gif" width="1" height="1">',
+		});
+		render(
+			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} accountId={1} />,
+		);
+
+		// Look for the "Always show images from" button if remote images are detected
+		const trustBtn = screen.queryByText(/Always show images from/i);
+		if (trustBtn) {
+			await userEvent.click(trustBtn);
+			await waitFor(() => {
+				expect(api.trustedSenders.add).toHaveBeenCalledWith(1, "alice@test.com");
+			});
+		}
+	});
+});

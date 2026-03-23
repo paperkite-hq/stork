@@ -74,7 +74,8 @@ describe("SearchPanel", () => {
 		await waitFor(() => {
 			expect(screen.getByText("Alice")).toBeInTheDocument();
 		});
-		expect(screen.getByText("Found Email")).toBeInTheDocument();
+		// Subject may be highlighted (text split across elements); check via textContent
+		expect(screen.getByRole("button", { name: /Found Email/ })).toBeInTheDocument();
 	});
 
 	it("calls onSelectMessage but not onClose when result is clicked", async () => {
@@ -94,9 +95,9 @@ describe("SearchPanel", () => {
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "clickable");
 		await waitFor(() => {
-			expect(screen.getByText("Clickable Email")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: /Clickable Email/ })).toBeInTheDocument();
 		});
-		await userEvent.click(screen.getByText("Clickable Email"));
+		await userEvent.click(screen.getByRole("button", { name: /Clickable Email/ }));
 		expect(onSelectMessage).toHaveBeenCalledWith(42);
 		expect(onClose).not.toHaveBeenCalled();
 	});
@@ -511,7 +512,7 @@ describe("SearchPanel", () => {
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "persistent");
 		await waitFor(() => {
-			expect(screen.getByText("Persistent Result")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: /Persistent Result/ })).toBeInTheDocument();
 		});
 		expect(screen.getByPlaceholderText("Search messages…")).toHaveValue("persistent");
 	});

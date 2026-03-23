@@ -53,6 +53,7 @@ export function App() {
 	// UI state
 	const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
 	const [showSearch, setShowSearch] = useState(false);
+	const [initialSearchQuery, setInitialSearchQuery] = useState("");
 	const [openedFromSearch, setOpenedFromSearch] = useState(false);
 	const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 	const [showShortcuts, setShowShortcuts] = useState(false);
@@ -640,7 +641,11 @@ export function App() {
 						onSelectAccount={handleSelectAccount}
 						onSelectLabel={handleSelectLabel}
 						onCompose={handleCompose}
-						onSearch={() => setShowSearch(true)}
+						onSearch={(query) => {
+							setInitialSearchQuery(query);
+							setShowSearch(true);
+						}}
+						searchActive={showSearch}
 						onSettings={() => setShowSettings(true)}
 						onSyncNow={handleSyncNow}
 						dark={dark}
@@ -693,13 +698,17 @@ export function App() {
 					>
 						{showSearch ? (
 							<SearchPanel
-								onClose={() => setShowSearch(false)}
+								onClose={() => {
+									setShowSearch(false);
+									setInitialSearchQuery("");
+								}}
 								onSelectMessage={(id) => {
 									setSelectedMessageId(id);
 									setOpenedFromSearch(true);
 								}}
 								accountId={effectiveAccountId}
 								onResultsChange={setSearchResults}
+								initialQuery={initialSearchQuery}
 							/>
 						) : (
 							<MessageList

@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { type SearchResult, api } from "../api";
 import {
 	CalendarIcon,
@@ -17,6 +17,33 @@ interface SearchPanelProps {
 	onSelectMessage: (id: number) => void;
 	accountId: number | null;
 	onResultsChange?: (results: SearchResult[]) => void;
+	initialQuery?: string;
+}
+
+/**
+ * Highlight search terms in a plain text string, returning a React node.
+ * Strips search operators (from:, to:, etc.) before matching.
+ */
+function highlightText(text: string, query: string): ReactNode {
+	const textOnly = query
+		.replace(/\b(from|to|subject|has|is|before|after|label):((?:"[^"]*")|(?:\S+))/gi, "")
+		.replace(/\s+/g, " ")
+		.trim();
+
+	if (!textOnly) return text;
+
+	const terms = textOnly
+		.split(/\s+/)
+		.filter((t) => t.length > 1)
+		.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+	if (terms.length === 0) return text;
+
+	const regex = new RegExp(`(${terms.join("|")})`, "gi");
+	const parts = text.split(regex);
+
+	// biome-ignore lint/suspicious/noArrayIndexKey: index is stable; parts are positional split segments
+	return <>{parts.map((part, i) => (i % 2 === 1 ? <mark key={`h-${i}`}>{part}</mark> : part))}</>;
 }
 
 interface ActiveFilter {
@@ -66,8 +93,9 @@ export function SearchPanel({
 	onSelectMessage,
 	accountId,
 	onResultsChange,
+	initialQuery = "",
 }: SearchPanelProps) {
-	const [query, setQuery] = useState("");
+	const [query, setQuery] = useState(initialQuery);
 	const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
 	const [results, setResults] = useState<SearchResult[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -87,6 +115,9 @@ export function SearchPanel({
 	useEffect(() => {
 		requestAnimationFrame(() => inputRef.current?.focus());
 	}, []);
+
+	const initialQueryRef = useRef(initialQuery);
+	const initialQueryFiredRef = useRef(false);
 
 	const doSearch = useCallback(
 		(fullQuery: string) => {
@@ -124,6 +155,14 @@ export function SearchPanel({
 		},
 		[doSearch],
 	);
+
+	// Trigger search on mount if an initial query was provided
+	useEffect(() => {
+		if (initialQueryRef.current && !initialQueryFiredRef.current) {
+			initialQueryFiredRef.current = true;
+			triggerSearch(initialQueryRef.current, []);
+		}
+	}, [triggerSearch]);
 
 	const handleLoadMore = useCallback(() => {
 		if (loadingMore || !lastQueryRef.current) return;
@@ -420,7 +459,7 @@ export function SearchPanel({
 							</span>
 						</div>
 						<div className="text-sm text-gray-700 dark:text-gray-300 truncate">
-							{r.subject || "(no subject)"}
+							{highlightText(r.subject || "(no subject)", query)}
 						</div>
 						{r.snippet && (
 							<div
