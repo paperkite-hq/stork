@@ -37,6 +37,8 @@ export interface SyncAllResult {
 	folders: SyncResult[];
 	totalNew: number;
 	totalErrors: number;
+	/** True when the sync was cancelled via abort signal (e.g. shutdown) */
+	aborted: boolean;
 }
 
 export interface SyncProgress {
@@ -203,7 +205,7 @@ export class ImapSync {
 		signal?: AbortSignal,
 		onProgress?: (progress: SyncProgress) => void,
 	): Promise<SyncAllResult> {
-		const result: SyncAllResult = { folders: [], totalNew: 0, totalErrors: 0 };
+		const result: SyncAllResult = { folders: [], totalNew: 0, totalErrors: 0, aborted: false };
 
 		if (signal?.aborted) return result;
 
@@ -278,6 +280,10 @@ export class ImapSync {
 
 			// Final pass: catch any messages that may have been missed
 			this.applyFolderLabelsToMessages();
+
+			if (signal?.aborted) {
+				result.aborted = true;
+			}
 
 			return result;
 		} finally {
@@ -549,20 +555,22 @@ export class ImapSync {
 						this.accountId,
 						folderId,
 						message.uid,
-						envelope.messageId ?? null,
-						envelope.inReplyTo ?? null,
+						toStringOrNull(envelope.messageId),
+						toStringOrNull(envelope.inReplyTo),
 						refs ? JSON.stringify(refs) : null,
-						envelope.subject ?? null,
-						fromAddr?.address ?? null,
-						fromAddr?.name ?? null,
+						toStringOrNull(envelope.subject),
+						toStringOrNull(fromAddr?.address),
+						toStringOrNull(fromAddr?.name),
 						toAddrs ? JSON.stringify(toAddrs) : null,
 						ccAddrs ? JSON.stringify(ccAddrs) : null,
 						bccAddrs ? JSON.stringify(bccAddrs) : null,
-						envelope.date?.toISOString() ?? null,
+						envelope.date instanceof Date && !Number.isNaN(envelope.date.getTime())
+							? envelope.date.toISOString()
+							: null,
 						parsed.text ?? null,
 						typeof parsed.html === "string" ? parsed.html : null,
 						Array.from(message.flags ?? new Set()).join(","),
-						message.size ?? null,
+						typeof message.size === "number" ? message.size : null,
 						parsed.attachments.length > 0 ? 1 : 0,
 						formatHeaders(parsed),
 					);
@@ -574,10 +582,10 @@ export class ImapSync {
 							insertAttachment.run(
 								messageId,
 								att.filename ?? null,
-								att.contentType,
-								att.size,
+								toStringOrNull(att.contentType) ?? "application/octet-stream",
+								typeof att.size === "number" ? att.size : (att.content?.length ?? 0),
 								att.contentId ?? null,
-								att.content,
+								att.content ?? null,
 							);
 							result.attachmentsSaved++;
 						}
@@ -817,6 +825,16 @@ function resolveSpecialUse(mailbox: { specialUse?: string; path: string }): Spec
 /**
  * Formats parsed email headers into a compact string for storage.
  */
+/**
+ * Coerces a value to a string or null for safe SQLite binding.
+ * Malformed emails can produce unexpected types in envelope fields.
+ */
+function toStringOrNull(value: unknown): string | null {
+	if (value == null) return null;
+	if (typeof value === "string") return value;
+	return String(value);
+}
+
 function formatHeaders(parsed: ParsedMail): string | null {
 	if (!parsed.headers) return null;
 	const lines: string[] = [];
