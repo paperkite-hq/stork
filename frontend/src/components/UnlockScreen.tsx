@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { MoonIcon, SunIcon } from "./Icons";
+import { PasswordStrengthMeter } from "./PasswordStrengthMeter";
 
 // Matches the server-side delay progression
 const UNLOCK_DELAYS_SEC = [0, 1, 2, 4, 8, 16, 30];
@@ -149,6 +150,7 @@ export function UnlockScreen({ onUnlocked, dark, onToggleDark }: UnlockScreenPro
 									required
 									className="w-full text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-1.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-stork-500 focus:border-stork-500"
 								/>
+								<PasswordStrengthMeter password={newPassword} />
 							</label>
 
 							<label className="block">
