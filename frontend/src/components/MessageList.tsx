@@ -190,14 +190,18 @@ const MessageListItem = memo(function MessageListItem({
 							</span>
 							<span
 								className="flex-shrink-0 text-xs text-gray-400 ml-auto"
-								title={new Date(msg.date).toLocaleString(undefined, {
-									weekday: "long",
-									year: "numeric",
-									month: "long",
-									day: "numeric",
-									hour: "numeric",
-									minute: "2-digit",
-								})}
+								title={
+									msg.date && !Number.isNaN(new Date(msg.date).getTime())
+										? new Date(msg.date).toLocaleString(undefined, {
+												weekday: "long",
+												year: "numeric",
+												month: "long",
+												day: "numeric",
+												hour: "numeric",
+												minute: "2-digit",
+											})
+										: undefined
+								}
 							>
 								{formatDate(msg.date)}
 							</span>

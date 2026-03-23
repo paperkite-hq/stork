@@ -454,6 +454,297 @@ describe("api client", () => {
 		});
 	});
 
+	describe("allMessages", () => {
+		it("list fetches /api/accounts/:id/all-messages", async () => {
+			const messages = [{ id: 1, subject: "Hello" }];
+			mockFetch.mockResolvedValue(mockJsonResponse(messages));
+
+			const result = await api.allMessages.list(1);
+			expect(result).toEqual(messages);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/accounts/1/all-messages?",
+				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+			);
+		});
+
+		it("list passes limit and offset params", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse([]));
+
+			await api.allMessages.list(1, { limit: 25, offset: 50 });
+			const url = mockFetch.mock.calls[0]?.[0] as string;
+			expect(url).toContain("limit=25");
+			expect(url).toContain("offset=50");
+		});
+
+		it("count fetches /api/accounts/:id/all-messages/count", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ total: 100, unread: 5 }));
+
+			const result = await api.allMessages.count(1);
+			expect(result).toEqual({ total: 100, unread: 5 });
+		});
+	});
+
+	describe("unreadMessages", () => {
+		it("list fetches /api/accounts/:id/unread-messages", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse([{ id: 1 }]));
+
+			const result = await api.unreadMessages.list(2);
+			expect(result).toEqual([{ id: 1 }]);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/accounts/2/unread-messages?",
+				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+			);
+		});
+
+		it("list passes limit and offset params", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse([]));
+
+			await api.unreadMessages.list(1, { limit: 10, offset: 20 });
+			const url = mockFetch.mock.calls[0]?.[0] as string;
+			expect(url).toContain("limit=10");
+			expect(url).toContain("offset=20");
+		});
+
+		it("count fetches /api/accounts/:id/unread-messages/count", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ total: 42 }));
+
+			const result = await api.unreadMessages.count(1);
+			expect(result).toEqual({ total: 42 });
+		});
+	});
+
+	describe("send", () => {
+		it("POSTs to /api/send", async () => {
+			const response = {
+				ok: true,
+				message_id: "<abc@test>",
+				accepted: ["to@test.com"],
+				rejected: [],
+				stored_message_id: 1,
+			};
+			mockFetch.mockResolvedValue(mockJsonResponse(response));
+
+			const data = { account_id: 1, to: ["to@test.com"], subject: "Test", text_body: "Hello" };
+			const result = await api.send(data);
+			expect(result).toEqual(response);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/send",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify(data),
+				}),
+			);
+		});
+	});
+
+	describe("testSmtp", () => {
+		it("POSTs to /api/send/test-smtp", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			const data = { smtp_host: "smtp.test.com", smtp_port: 587 };
+			const result = await api.testSmtp(data);
+			expect(result).toEqual({ ok: true });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/send/test-smtp",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify(data),
+				}),
+			);
+		});
+	});
+
+	describe("drafts", () => {
+		it("list fetches /api/drafts?account_id=:id", async () => {
+			const drafts = [{ id: 1, subject: "Draft" }];
+			mockFetch.mockResolvedValue(mockJsonResponse(drafts));
+
+			const result = await api.drafts.list(1);
+			expect(result).toEqual(drafts);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/drafts?account_id=1",
+				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+			);
+		});
+
+		it("get fetches /api/drafts/:id", async () => {
+			const draft = { id: 5, subject: "My Draft" };
+			mockFetch.mockResolvedValue(mockJsonResponse(draft));
+
+			const result = await api.drafts.get(5);
+			expect(result).toEqual(draft);
+		});
+
+		it("create POSTs to /api/drafts", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ id: 10 }));
+
+			const data = { account_id: 1, subject: "New Draft", text_body: "Content" };
+			const result = await api.drafts.create(data);
+			expect(result).toEqual({ id: 10 });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/drafts",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify(data),
+				}),
+			);
+		});
+
+		it("update PUTs to /api/drafts/:id", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.drafts.update(5, { subject: "Updated" });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/drafts/5",
+				expect.objectContaining({
+					method: "PUT",
+					body: JSON.stringify({ subject: "Updated" }),
+				}),
+			);
+		});
+
+		it("delete DELETEs /api/drafts/:id", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.drafts.delete(5);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/drafts/5",
+				expect.objectContaining({ method: "DELETE" }),
+			);
+		});
+	});
+
+	describe("trustedSenders", () => {
+		it("list fetches /api/accounts/:id/trusted-senders", async () => {
+			const senders = [{ id: 1, sender_address: "alice@test.com" }];
+			mockFetch.mockResolvedValue(mockJsonResponse(senders));
+
+			const result = await api.trustedSenders.list(1);
+			expect(result).toEqual(senders);
+		});
+
+		it("check fetches with encoded sender param", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ trusted: true }));
+
+			const result = await api.trustedSenders.check(1, "alice@test.com");
+			expect(result).toEqual({ trusted: true });
+			const url = mockFetch.mock.calls[0]?.[0] as string;
+			expect(url).toContain("sender=alice%40test.com");
+		});
+
+		it("add POSTs to /api/accounts/:id/trusted-senders", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ id: 5 }));
+
+			const result = await api.trustedSenders.add(1, "alice@test.com");
+			expect(result).toEqual({ id: 5 });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/accounts/1/trusted-senders",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ sender_address: "alice@test.com" }),
+				}),
+			);
+		});
+
+		it("remove DELETEs from /api/accounts/:id/trusted-senders", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.trustedSenders.remove(1, "alice@test.com");
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/accounts/1/trusted-senders",
+				expect.objectContaining({
+					method: "DELETE",
+					body: JSON.stringify({ sender_address: "alice@test.com" }),
+				}),
+			);
+		});
+	});
+
+	describe("encryption — extended", () => {
+		it("changePassword POSTs to /api/change-password", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.encryption.changePassword("old", "new");
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/change-password",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ currentPassword: "old", newPassword: "new" }),
+				}),
+			);
+		});
+
+		it("rotateRecoveryKey POSTs to /api/rotate-recovery-key", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ recoveryMnemonic: "words", pending: true }));
+
+			const result = await api.encryption.rotateRecoveryKey("pass");
+			expect(result).toEqual({ recoveryMnemonic: "words", pending: true });
+		});
+
+		it("confirmRecoveryRotation POSTs to /api/confirm-recovery-rotation", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.encryption.confirmRecoveryRotation("pass");
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/confirm-recovery-rotation",
+				expect.objectContaining({ method: "POST" }),
+			);
+		});
+
+		it("cancelRecoveryRotation POSTs to /api/cancel-recovery-rotation", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+			await api.encryption.cancelRecoveryRotation();
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/cancel-recovery-rotation",
+				expect.objectContaining({ method: "POST" }),
+			);
+		});
+
+		it("recoveryRotationStatus fetches /api/recovery-rotation-status", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ pending: false }));
+
+			const result = await api.encryption.recoveryRotationStatus();
+			expect(result).toEqual({ pending: false });
+		});
+	});
+
+	describe("accounts — extended", () => {
+		it("testConnection POSTs to /api/accounts/test-connection", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, mailboxes: 5 }));
+
+			const data = { imap_host: "imap.test.com", imap_port: 993 };
+			const result = await api.accounts.testConnection(data);
+			expect(result).toEqual({ ok: true, mailboxes: 5 });
+			expect(mockFetch).toHaveBeenCalledWith(
+				"/api/accounts/test-connection",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify(data),
+				}),
+			);
+		});
+	});
+
+	describe("demo", () => {
+		it("fetches /api/demo", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse({ demo: true }));
+
+			const result = await api.demo();
+			expect(result).toEqual({ demo: true });
+		});
+	});
+
+	describe("search — extended", () => {
+		it("passes offset option", async () => {
+			mockFetch.mockResolvedValue(mockJsonResponse([]));
+
+			await api.search("test", { offset: 30 });
+			const url = mockFetch.mock.calls[0]?.[0] as string;
+			expect(url).toContain("offset=30");
+		});
+	});
+
 	describe("error handling", () => {
 		it("throws on non-ok response with error message", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ error: "Not found" }, 404));
