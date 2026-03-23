@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#F97316"/>
+  <!-- Orange background, white stork head, indigo accents — inverted palette -->
+  <path d="M16,58 C14,46 16,36 22,28" stroke="white" stroke-width="12" fill="none" stroke-linecap="round"/>
+  <circle cx="30" cy="24" r="17" fill="white"/>
+  <polygon points="43,14 64,22 43,32" fill="#4338CA"/>
+  <circle cx="23" cy="19" r="5.5" fill="#F97316"/>
+  <circle cx="25" cy="17" r="2" fill="white"/>
+</svg>
