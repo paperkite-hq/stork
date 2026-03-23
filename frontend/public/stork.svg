@@ -1,16 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <rect width="64" height="64" rx="12" fill="#444CE7"/>
-  <!-- Simplified stork silhouette optimized for small favicon rendering -->
-  <!-- Body -->
-  <ellipse cx="30" cy="36" rx="13" ry="9" fill="white"/>
-  <!-- Neck + head as single path for clarity at small sizes -->
-  <path d="M36 30 Q40 20 38 14" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
-  <circle cx="38" cy="13" r="5" fill="white"/>
+  <!-- Bold stork silhouette — optimized for 16x16 favicon clarity -->
+  <!-- Body — large oval, fills most of the space -->
+  <ellipse cx="28" cy="38" rx="16" ry="11" fill="white"/>
+  <!-- Neck+head — thick curved stroke for visibility at small sizes -->
+  <path d="M34 30 Q38 18 34 10" stroke="white" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <!-- Beak — large, prominent triangle pointing right -->
+  <polygon points="37,10 52,8 37,14" fill="#F97316"/>
   <!-- Eye -->
-  <circle cx="39.5" cy="12" r="1.5" fill="#444CE7"/>
-  <!-- Beak — thicker for visibility -->
-  <path d="M42 13 L52 11 L42 15 Z" fill="#F97316"/>
-  <!-- Legs — thicker -->
-  <line x1="27" y1="44" x2="25" y2="54" stroke="#F97316" stroke-width="3" stroke-linecap="round"/>
-  <line x1="34" y1="44" x2="36" y2="54" stroke="#F97316" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="35" cy="10.5" r="2" fill="#444CE7"/>
 </svg>
