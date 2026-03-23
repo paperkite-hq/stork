@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.3.0 (2026-03-23)
+
+First stable release. Promotes v0.3.0-alpha with additional bug fixes:
+
+- **Read-only demo mode** — `STORK_DEMO_MODE=1` with pre-seeded data for hosted demos
+- **Rich text compose** — HTML/plain toggle with expand mode
+- **Browser navigation** — back/forward support, search result prev/next navigation
+- **Sender whitelist** — persistent per-sender remote image loading
+- **Auto-recovery UI** — reconnects automatically when container restarts or goes offline
+- **Entropy-based password strength** — real-time strength meter during setup
+- **Security policy** — vulnerability reporting process documented
+- **Fly.io deployment** — ready-to-use config for hosted demo
+- **Cloudflare Email Workers + AWS SES** — additional connector implementations
+- Numerous bug fixes: CSP image loading, draft preservation on send failure, dark mode email rendering, responsive settings modal, favicon redesign
+
 ## v0.3.0-alpha (2026-03-22)
 
 - **Pluggable connectors** — IMAP and SMTP are now modular connectors behind a common interface, preparing for future transports (Cloudflare Email Workers, SES)
