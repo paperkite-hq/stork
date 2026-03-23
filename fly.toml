@@ -1,7 +1,7 @@
 # Fly.io configuration for stork read-only demo
 # Deployed at stork-demo.paperkite.sh
 app = 'stork-demo'
-primary_region = 'sea'
+primary_region = 'sjc'
 
 [build]
   image = 'ghcr.io/paperkite-hq/stork:latest'
