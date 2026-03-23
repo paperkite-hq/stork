@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -222,5 +222,17 @@ export const MIGRATIONS = [
 
 	CREATE INDEX IF NOT EXISTS idx_image_trusted_senders_account ON image_trusted_senders(account_id);
 	CREATE INDEX IF NOT EXISTS idx_image_trusted_senders_lookup ON image_trusted_senders(account_id, sender_address);
+	`,
+	// Version 7: Add connector type columns for pluggable connector architecture.
+	// Accounts can now use alternative ingest/send connectors (Cloudflare Email Workers,
+	// AWS SES) instead of the default IMAP/SMTP. Connector-specific config is stored
+	// in dedicated columns. Existing accounts default to imap/smtp.
+	`
+	ALTER TABLE accounts ADD COLUMN ingest_connector_type TEXT NOT NULL DEFAULT 'imap';
+	ALTER TABLE accounts ADD COLUMN send_connector_type TEXT NOT NULL DEFAULT 'smtp';
+	ALTER TABLE accounts ADD COLUMN cf_email_webhook_secret TEXT;
+	ALTER TABLE accounts ADD COLUMN ses_region TEXT;
+	ALTER TABLE accounts ADD COLUMN ses_access_key_id TEXT;
+	ALTER TABLE accounts ADD COLUMN ses_secret_access_key TEXT;
 	`,
 ];

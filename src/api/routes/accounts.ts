@@ -1,7 +1,16 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
 import { ImapFlow } from "imapflow";
+import {
+	type IngestConnectorType,
+	type SendConnectorType,
+	createIngestConnector,
+	createSendConnector,
+} from "../../connectors/registry.js";
 import type { SyncScheduler } from "../../sync/sync-scheduler.js";
+
+const VALID_INGEST_TYPES: IngestConnectorType[] = ["imap", "cloudflare-email"];
+const VALID_SEND_TYPES: SendConnectorType[] = ["smtp", "ses"];
 
 export function accountRoutes(
 	getDb: () => Database.Database,
@@ -12,7 +21,9 @@ export function accountRoutes(
 	api.get("/", (c) => {
 		const accounts = getDb()
 			.prepare(
-				"SELECT id, name, email, imap_host, smtp_host, created_at FROM accounts ORDER BY name",
+				`SELECT id, name, email, ingest_connector_type, send_connector_type,
+					imap_host, smtp_host, created_at
+				FROM accounts ORDER BY name`,
 			)
 			.all();
 		return c.json(accounts);
@@ -21,60 +32,109 @@ export function accountRoutes(
 	api.post("/", async (c) => {
 		const db = getDb();
 		const body = await c.req.json();
-		if (!body.name || !body.email || !body.imap_host || !body.imap_user || !body.imap_pass) {
-			return c.json(
-				{ error: "Missing required fields: name, email, imap_host, imap_user, imap_pass" },
-				400,
-			);
+
+		const ingestType: IngestConnectorType = body.ingest_connector_type ?? "imap";
+		const sendType: SendConnectorType = body.send_connector_type ?? "smtp";
+
+		if (!VALID_INGEST_TYPES.includes(ingestType)) {
+			return c.json({ error: `Invalid ingest_connector_type: ${ingestType}` }, 400);
 		}
+		if (!VALID_SEND_TYPES.includes(sendType)) {
+			return c.json({ error: `Invalid send_connector_type: ${sendType}` }, 400);
+		}
+
+		if (!body.name || !body.email) {
+			return c.json({ error: "Missing required fields: name, email" }, 400);
+		}
+
+		// Validate connector-specific required fields
+		if (ingestType === "imap") {
+			if (!body.imap_host || !body.imap_user || !body.imap_pass) {
+				return c.json(
+					{ error: "Missing required IMAP fields: imap_host, imap_user, imap_pass" },
+					400,
+				);
+			}
+		} else if (ingestType === "cloudflare-email") {
+			if (!body.cf_email_webhook_secret) {
+				return c.json({ error: "Missing required field: cf_email_webhook_secret" }, 400);
+			}
+		}
+
+		if (sendType === "ses") {
+			if (!body.ses_region) {
+				return c.json({ error: "Missing required field: ses_region" }, 400);
+			}
+		}
+
 		// Validate email format
 		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
 			return c.json({ error: "Invalid email address format" }, 400);
 		}
-		// Validate port ranges
-		const imapPort = body.imap_port ?? 993;
-		const smtpPort = body.smtp_port ?? 587;
-		if (!Number.isInteger(imapPort) || imapPort < 1 || imapPort > 65535) {
-			return c.json({ error: "IMAP port must be between 1 and 65535" }, 400);
+		// Validate port ranges when applicable
+		if (body.imap_port != null) {
+			const imapPort = body.imap_port;
+			if (!Number.isInteger(imapPort) || imapPort < 1 || imapPort > 65535) {
+				return c.json({ error: "IMAP port must be between 1 and 65535" }, 400);
+			}
 		}
-		if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535) {
-			return c.json({ error: "SMTP port must be between 1 and 65535" }, 400);
+		if (body.smtp_port != null) {
+			const smtpPort = body.smtp_port;
+			if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535) {
+				return c.json({ error: "SMTP port must be between 1 and 65535" }, 400);
+			}
 		}
+
 		const result = db
 			.prepare(`
-			INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
-				smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, sync_delete_from_server)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO accounts (name, email,
+				ingest_connector_type, send_connector_type,
+				imap_host, imap_port, imap_tls, imap_user, imap_pass,
+				smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass,
+				cf_email_webhook_secret,
+				ses_region, ses_access_key_id, ses_secret_access_key,
+				sync_delete_from_server)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`)
 			.run(
 				body.name,
 				body.email,
-				body.imap_host,
+				ingestType,
+				sendType,
+				body.imap_host ?? null,
 				body.imap_port ?? 993,
 				body.imap_tls ?? 1,
-				body.imap_user,
-				body.imap_pass,
+				body.imap_user ?? null,
+				body.imap_pass ?? null,
 				body.smtp_host ?? null,
 				body.smtp_port ?? 587,
 				body.smtp_tls ?? 1,
 				body.smtp_user ?? null,
 				body.smtp_pass ?? null,
+				body.cf_email_webhook_secret ?? null,
+				body.ses_region ?? null,
+				body.ses_access_key_id ?? null,
+				body.ses_secret_access_key ?? null,
 				body.sync_delete_from_server ?? 0,
 			);
 		const accountId = Number(result.lastInsertRowid);
 
-		getScheduler().addAccount({
-			accountId,
-			imapConfig: {
-				host: body.imap_host,
-				port: body.imap_port ?? 993,
-				secure: (body.imap_tls ?? 1) === 1,
-				auth: {
-					user: body.imap_user,
-					pass: body.imap_pass,
+		// Only register IMAP accounts with the sync scheduler — Cloudflare Email
+		// is push-based (webhook) and doesn't need periodic polling
+		if (ingestType === "imap" && body.imap_host) {
+			getScheduler().addAccount({
+				accountId,
+				imapConfig: {
+					host: body.imap_host,
+					port: body.imap_port ?? 993,
+					secure: (body.imap_tls ?? 1) === 1,
+					auth: {
+						user: body.imap_user,
+						pass: body.imap_pass,
+					},
 				},
-			},
-		});
+			});
+		}
 
 		return c.json({ id: accountId }, 201);
 	});
@@ -83,8 +143,12 @@ export function accountRoutes(
 		const accountId = Number(c.req.param("accountId"));
 		const account = getDb()
 			.prepare(`
-			SELECT id, name, email, imap_host, imap_port, imap_tls, imap_user,
+			SELECT id, name, email,
+				ingest_connector_type, send_connector_type,
+				imap_host, imap_port, imap_tls, imap_user,
 				smtp_host, smtp_port, smtp_tls, smtp_user,
+				cf_email_webhook_secret,
+				ses_region, ses_access_key_id,
 				sync_delete_from_server, created_at, updated_at
 			FROM accounts WHERE id = ?
 		`)
@@ -101,6 +165,8 @@ export function accountRoutes(
 		const allowedFields = [
 			"name",
 			"email",
+			"ingest_connector_type",
+			"send_connector_type",
 			"imap_host",
 			"imap_port",
 			"imap_tls",
@@ -111,6 +177,10 @@ export function accountRoutes(
 			"smtp_tls",
 			"smtp_user",
 			"smtp_pass",
+			"cf_email_webhook_secret",
+			"ses_region",
+			"ses_access_key_id",
+			"ses_secret_access_key",
 			"sync_delete_from_server",
 		];
 		const sets: string[] = [];
@@ -309,6 +379,160 @@ export function accountRoutes(
 			const message = err instanceof Error ? err.message : String(err);
 			return c.json({ error: message }, 500);
 		}
+	});
+
+	api.get("/:accountId/connector-health", async (c) => {
+		const db = getDb();
+		const accountId = Number(c.req.param("accountId"));
+		const account = db
+			.prepare(
+				`SELECT id, ingest_connector_type, send_connector_type,
+					imap_host, imap_port, imap_tls, imap_user, imap_pass,
+					smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass,
+					cf_email_webhook_secret,
+					ses_region, ses_access_key_id, ses_secret_access_key
+				FROM accounts WHERE id = ?`,
+			)
+			.get(accountId) as
+			| {
+					id: number;
+					ingest_connector_type: IngestConnectorType;
+					send_connector_type: SendConnectorType;
+					imap_host: string | null;
+					imap_port: number;
+					imap_tls: number;
+					imap_user: string | null;
+					imap_pass: string | null;
+					smtp_host: string | null;
+					smtp_port: number;
+					smtp_tls: number;
+					smtp_user: string | null;
+					smtp_pass: string | null;
+					cf_email_webhook_secret: string | null;
+					ses_region: string | null;
+					ses_access_key_id: string | null;
+					ses_secret_access_key: string | null;
+			  }
+			| undefined;
+
+		if (!account) return c.json({ error: "Account not found" }, 404);
+
+		const ingestType = account.ingest_connector_type ?? "imap";
+		const sendType = account.send_connector_type ?? "smtp";
+
+		const health: {
+			ingest: { type: string; ok: boolean; error?: string; details?: Record<string, unknown> };
+			send: { type: string; ok: boolean; error?: string };
+		} = {
+			ingest: { type: ingestType, ok: false },
+			send: { type: sendType, ok: false },
+		};
+
+		// Check ingest connector health
+		if (ingestType === "imap" && account.imap_host && account.imap_user && account.imap_pass) {
+			try {
+				const connector = createIngestConnector({
+					type: "imap",
+					imap: {
+						host: account.imap_host,
+						port: account.imap_port,
+						secure: account.imap_tls === 1,
+						auth: { user: account.imap_user, pass: account.imap_pass },
+					},
+				});
+				await connector.connect();
+				const folders = await connector.listFolders();
+				await connector.disconnect();
+				health.ingest = { type: "imap", ok: true, details: { folders: folders.length } };
+			} catch (err) {
+				health.ingest = {
+					type: "imap",
+					ok: false,
+					error: err instanceof Error ? err.message : String(err),
+				};
+			}
+		} else if (ingestType === "cloudflare-email") {
+			// Cloudflare Email is push-based — we can only verify the webhook secret is configured
+			health.ingest = {
+				type: "cloudflare-email",
+				ok: !!account.cf_email_webhook_secret,
+				error: account.cf_email_webhook_secret ? undefined : "Webhook secret not configured",
+				details: { mode: "push-based webhook" },
+			};
+		} else {
+			health.ingest = {
+				type: ingestType,
+				ok: false,
+				error: "Ingest connector not configured",
+			};
+		}
+
+		// Check send connector health
+		if (sendType === "smtp" && account.smtp_host && account.smtp_user && account.smtp_pass) {
+			try {
+				const connector = createSendConnector({
+					type: "smtp",
+					smtp: {
+						host: account.smtp_host,
+						port: account.smtp_port,
+						secure: account.smtp_tls === 1,
+						auth: { user: account.smtp_user, pass: account.smtp_pass },
+					},
+				});
+				const ok = await connector.verify();
+				health.send = { type: "smtp", ok, error: ok ? undefined : "SMTP verification failed" };
+			} catch (err) {
+				health.send = {
+					type: "smtp",
+					ok: false,
+					error: err instanceof Error ? err.message : String(err),
+				};
+			}
+		} else if (sendType === "ses" && account.ses_region) {
+			try {
+				const connector = createSendConnector({
+					type: "ses",
+					ses: {
+						region: account.ses_region,
+						credentials:
+							account.ses_access_key_id && account.ses_secret_access_key
+								? {
+										accessKeyId: account.ses_access_key_id,
+										secretAccessKey: account.ses_secret_access_key,
+									}
+								: undefined,
+					},
+				});
+				const ok = await connector.verify();
+				health.send = { type: "ses", ok, error: ok ? undefined : "SES verification failed" };
+			} catch (err) {
+				health.send = {
+					type: "ses",
+					ok: false,
+					error: err instanceof Error ? err.message : String(err),
+				};
+			}
+		} else {
+			health.send = {
+				type: sendType,
+				ok: false,
+				error: "Send connector not configured",
+			};
+		}
+
+		// Include sync status for IMAP accounts
+		const syncStatus = getScheduler().getStatus().get(accountId);
+		return c.json({
+			...health,
+			sync: syncStatus
+				? {
+						running: syncStatus.running,
+						lastSync: syncStatus.lastSync,
+						lastError: syncStatus.lastError,
+						consecutiveErrors: syncStatus.consecutiveErrors,
+					}
+				: null,
+		});
 	});
 
 	api.post("/test-connection", async (c) => {
