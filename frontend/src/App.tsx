@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ContainerState, type Message, type SearchResult, api } from "./api";
 import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
@@ -17,6 +17,7 @@ import {
 	useAsync,
 	useBulkSelection,
 	useDarkMode,
+	useDesktopNotifications,
 	useHistoryNavigation,
 	useKeyboardShortcuts,
 	useMessageActions,
@@ -27,6 +28,7 @@ import { isFlagged, parseFlags } from "./utils";
 
 export function App() {
 	const [dark, toggleDark] = useDarkMode();
+	const { notifyNewMail } = useDesktopNotifications();
 
 	// Container lock state — checked before any data fetching
 	const [containerState, setContainerState] = useState<ContainerState | "loading">("loading");
@@ -174,6 +176,18 @@ export function App() {
 	useEffect(() => {
 		document.title = totalUnread > 0 ? `(${totalUnread}) Stork Mail` : "Stork Mail";
 	}, [totalUnread]);
+
+	// Fire desktop notification when new mail arrives (unread count increases after sync)
+	const prevTotalUnreadRef = useRef<number | null>(null);
+	useEffect(() => {
+		if (labels === null) return;
+		const prev = prevTotalUnreadRef.current;
+		if (prev !== null && totalUnread > prev) {
+			const diff = totalUnread - prev;
+			notifyNewMail(diff, inboxLabel?.name ?? "Inbox");
+		}
+		prevTotalUnreadRef.current = totalUnread;
+	}, [totalUnread, labels, inboxLabel?.name, notifyNewMail]);
 
 	// Auto-refresh when window regains focus
 	useEffect(() => {
