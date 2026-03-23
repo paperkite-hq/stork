@@ -18,6 +18,7 @@ interface SearchPanelProps {
 	onClose: () => void;
 	onSelectMessage: (id: number) => void;
 	accountId: number | null;
+	onResultsChange?: (results: SearchResult[]) => void;
 }
 
 interface ActiveFilter {
@@ -62,7 +63,13 @@ function buildQueryWithFilters(text: string, filters: ActiveFilter[]): string {
 	return parts.filter(Boolean).join(" ");
 }
 
-export function SearchPanel({ visible, onClose, onSelectMessage, accountId }: SearchPanelProps) {
+export function SearchPanel({
+	visible,
+	onClose,
+	onSelectMessage,
+	accountId,
+	onResultsChange,
+}: SearchPanelProps) {
 	const [query, setQuery] = useState("");
 	const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
 	const [results, setResults] = useState<SearchResult[]>([]);
@@ -203,6 +210,11 @@ export function SearchPanel({ visible, onClose, onSelectMessage, accountId }: Se
 		if (debounceRef.current) clearTimeout(debounceRef.current);
 		debounceRef.current = setTimeout(() => triggerSearch(query, newFilters), 150);
 	}, [dateAfter, dateBefore, activeFilters, query, triggerSearch]);
+
+	// Notify parent of results changes for prev/next navigation
+	useEffect(() => {
+		onResultsChange?.(results);
+	}, [results, onResultsChange]);
 
 	// Scroll focused result into view
 	useEffect(() => {
