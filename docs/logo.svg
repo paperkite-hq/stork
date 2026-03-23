@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 80" width="280" height="80">
+  <!-- Icon background -->
+  <rect x="0" y="8" width="64" height="64" rx="12" fill="#444CE7"/>
+  <!-- Body -->
+  <ellipse cx="28" cy="46" rx="16" ry="11" fill="white"/>
+  <!-- Neck+head -->
+  <path d="M34 38 Q38 26 34 18" stroke="white" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <!-- Beak -->
+  <polygon points="37,18 52,16 37,22" fill="#F97316"/>
+  <!-- Eye -->
+  <circle cx="35" cy="18.5" r="2" fill="#444CE7"/>
+  <!-- Project name -->
+  <text x="80" y="55" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="48" font-weight="700" fill="#1a1a2e" letter-spacing="-1">Stork</text>
+</svg>

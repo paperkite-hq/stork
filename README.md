@@ -1,8 +1,12 @@
-[![CI](https://github.com/paperkite-hq/stork/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/paperkite-hq/stork/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/paperkite-hq/stork/badges/coverage.json)](https://paperkite-hq.github.io/stork/)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+<p align="center">
+  <img src="docs/logo.svg" alt="Stork" width="280">
+</p>
 
-# Stork
+<p align="center">
+  <a href="https://github.com/paperkite-hq/stork/actions/workflows/ci.yml"><img src="https://github.com/paperkite-hq/stork/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://paperkite-hq.github.io/stork/"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/paperkite-hq/stork/badges/coverage.json" alt="Coverage"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
+</p>
 
 **Self-hosted email client with encrypted local storage, IMAP sync, and full-text search.**
 
