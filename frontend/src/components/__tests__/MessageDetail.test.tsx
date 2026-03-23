@@ -19,6 +19,11 @@ vi.mock("../../api", () => ({
 		labels: {
 			list: vi.fn().mockResolvedValue([]),
 		},
+		trustedSenders: {
+			list: vi.fn().mockResolvedValue([]),
+			add: vi.fn().mockResolvedValue({ id: 1 }),
+			remove: vi.fn().mockResolvedValue({ ok: true }),
+		},
 	},
 }));
 
@@ -587,7 +592,7 @@ describe("MessageDetail", () => {
 		expect(
 			screen.getByText(/Remote images are hidden to protect your privacy/),
 		).toBeInTheDocument();
-		expect(screen.getByText("Show for this message")).toBeInTheDocument();
+		expect(screen.getByText("Show once")).toBeInTheDocument();
 	});
 
 	it("updates iframe srcdoc when user clicks 'Show images'", async () => {
@@ -607,7 +612,7 @@ describe("MessageDetail", () => {
 		expect(iframe?.getAttribute("srcdoc")).not.toContain("banner.jpg");
 
 		// Click "Show images"
-		await user.click(screen.getByText("Show for this message"));
+		await user.click(screen.getByText("Show once"));
 
 		// Now srcdoc should include the image
 		iframe = container.querySelector(".email-content") as HTMLIFrameElement | null;

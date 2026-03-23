@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -206,5 +206,21 @@ export const MIGRATIONS = [
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_drafts_account ON drafts(account_id);
+	`,
+	// Version 6: Add image_trusted_senders table — persistent per-sender whitelist
+	// for remote image loading. When a sender is trusted, their remote images are
+	// loaded automatically without showing the "images blocked" banner.
+	// Tracking pixels are still stripped regardless of trust status.
+	`
+	CREATE TABLE IF NOT EXISTS image_trusted_senders (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+		sender_address TEXT NOT NULL,
+		created_at TEXT NOT NULL DEFAULT (datetime('now')),
+		UNIQUE(account_id, sender_address)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_image_trusted_senders_account ON image_trusted_senders(account_id);
+	CREATE INDEX IF NOT EXISTS idx_image_trusted_senders_lookup ON image_trusted_senders(account_id, sender_address);
 	`,
 ];

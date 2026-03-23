@@ -193,6 +193,12 @@ export interface Draft {
 	updated_at: string;
 }
 
+export interface TrustedSender {
+	id: number;
+	sender_address: string;
+	created_at: string;
+}
+
 export type ContainerState = "setup" | "locked" | "unlocked";
 
 // API calls
@@ -395,5 +401,23 @@ export const api = {
 				body: JSON.stringify(data),
 			}),
 		delete: (id: number) => fetchJSON<{ ok: boolean }>(`/drafts/${id}`, { method: "DELETE" }),
+	},
+	trustedSenders: {
+		list: (accountId: number) =>
+			fetchJSON<TrustedSender[]>(`/accounts/${accountId}/trusted-senders`),
+		check: (accountId: number, sender: string) =>
+			fetchJSON<{ trusted: boolean }>(
+				`/accounts/${accountId}/trusted-senders/check?sender=${encodeURIComponent(sender)}`,
+			),
+		add: (accountId: number, senderAddress: string) =>
+			fetchJSON<{ id: number }>(`/accounts/${accountId}/trusted-senders`, {
+				method: "POST",
+				body: JSON.stringify({ sender_address: senderAddress }),
+			}),
+		remove: (accountId: number, senderAddress: string) =>
+			fetchJSON<{ ok: boolean }>(`/accounts/${accountId}/trusted-senders`, {
+				method: "DELETE",
+				body: JSON.stringify({ sender_address: senderAddress }),
+			}),
 	},
 };

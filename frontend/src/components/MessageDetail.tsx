@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { type Folder, type Message, api } from "../api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { type Folder, type Message, type TrustedSender, api } from "../api";
 import { isUnread } from "../utils";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MailOpenIcon } from "./Icons";
@@ -45,6 +45,21 @@ export function MessageDetail({
 	const [confirmDelete, setConfirmDelete] = useState<Message | null>(null);
 	// Per-message remote image allow-list — tracks message IDs where user clicked "Show images"
 	const [imagesAllowed, setImagesAllowed] = useState<Set<number>>(new Set());
+	// Per-account sender whitelist for persistent image trust
+	const [trustedSenders, setTrustedSenders] = useState<TrustedSender[]>([]);
+	const trustedAddresses = useMemo(
+		() => new Set(trustedSenders.map((s) => s.sender_address)),
+		[trustedSenders],
+	);
+
+	// Fetch trusted senders when account changes
+	useEffect(() => {
+		if (!accountId) return;
+		api.trustedSenders
+			.list(accountId)
+			.then(setTrustedSenders)
+			.catch(() => {});
+	}, [accountId]);
 
 	// Auto-mark message as read when opened — debounced to avoid marking every message
 	// as read during rapid j/k keyboard navigation (1s delay, like Gmail)
@@ -95,6 +110,24 @@ export function MessageDetail({
 	const handleAllowImages = useCallback((id: number) => {
 		setImagesAllowed((prev) => new Set([...prev, id]));
 	}, []);
+
+	const handleTrustSender = useCallback(
+		(senderAddress: string) => {
+			if (!accountId) return;
+			const normalized = senderAddress.toLowerCase().trim();
+			// Optimistic update
+			setTrustedSenders((prev) => [
+				...prev,
+				{ id: 0, sender_address: normalized, created_at: new Date().toISOString() },
+			]);
+			api.trustedSenders.add(accountId, normalized).catch(() => {
+				// Rollback on failure
+				setTrustedSenders((prev) => prev.filter((s) => s.sender_address !== normalized));
+				toast("Failed to trust sender", "error");
+			});
+		},
+		[accountId],
+	);
 
 	if (loading) {
 		return (
@@ -228,10 +261,12 @@ export function MessageDetail({
 							expanded={expanded}
 							showHtml={showHtml}
 							imagesAllowed={imagesAllowed.has(msg.id)}
+							senderTrusted={trustedAddresses.has((msg.from_address ?? "").toLowerCase().trim())}
 							dark={dark}
 							onToggleExpanded={toggleExpanded}
 							onToggleShowHtml={() => setShowHtml((h) => !h)}
 							onAllowImages={handleAllowImages}
+							onTrustSender={handleTrustSender}
 							onReply={onReply}
 							onReplyAll={onReplyAll}
 							onForward={onForward}
