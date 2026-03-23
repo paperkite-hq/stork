@@ -1,11 +1,18 @@
 /**
- * Entropy-based password strength estimation.
+ * Dictionary-aware password strength estimation.
  *
- * Scores passwords by estimating information entropy (bits) from character
- * pool diversity × length. This naturally rewards long passphrases — a
- * sentence of lowercase words scores higher than a short string with
- * forced symbol substitutions.
+ * Computes both character-level entropy (length × log2(poolSize)) and
+ * dictionary-aware entropy (treating recognized common words as single
+ * units from a known dictionary). Uses the LOWER of the two estimates,
+ * so a password like "david was here" gets scored as ~3 common words
+ * (~33 bits) rather than 14 random characters (~82 bits).
+ *
+ * This naturally rewards genuinely random passwords and long passphrases
+ * with uncommon words, while penalizing phrases built from trivially
+ * guessable dictionary words.
  */
+
+import { getCommonWords } from "./common-words";
 
 export interface PasswordStrength {
 	score: number; // 0–4 (0 = empty)
@@ -25,37 +32,76 @@ const LEVELS: Record<number, { label: string; color: string; textColor: string }
 };
 
 /**
- * Estimate the effective character pool size from classes present in the
- * password, then compute entropy = length × log2(poolSize).
+ * Estimate character-pool entropy: length × log2(poolSize).
+ */
+function charEntropy(password: string): number {
+	let poolSize = 0;
+	if (/[a-z]/.test(password)) poolSize += 26;
+	if (/[A-Z]/.test(password)) poolSize += 26;
+	if (/[0-9]/.test(password)) poolSize += 10;
+	if (/[^a-zA-Z0-9]/.test(password)) poolSize += 33;
+	if (poolSize === 0) poolSize = 95;
+	return password.length * Math.log2(poolSize);
+}
+
+/**
+ * Estimate dictionary-aware entropy. Splits the password into tokens on
+ * whitespace/hyphens/underscores, checks each against a common-words list,
+ * and scores matched tokens as dictionary picks rather than random characters.
+ *
+ * Returns Infinity if the password doesn't decompose into dictionary words
+ * (i.e., character entropy should be used instead).
+ */
+function dictEntropy(password: string): number {
+	const words = getCommonWords();
+	// Split on common delimiters (space, hyphen, underscore, period)
+	const tokens = password
+		.toLowerCase()
+		.split(/[\s\-_.]+/)
+		.filter(Boolean);
+
+	// Only apply dictionary penalty if we get multiple tokens and most are common words
+	if (tokens.length < 2) return Number.POSITIVE_INFINITY;
+
+	let dictCount = 0;
+	let nonDictBits = 0;
+
+	for (const token of tokens) {
+		if (words.has(token)) {
+			dictCount++;
+		} else {
+			// Non-dictionary token: use character-level entropy for this segment
+			nonDictBits += charEntropy(token);
+		}
+	}
+
+	// Only apply dictionary scoring if at least half the tokens are common words
+	if (dictCount < tokens.length / 2) return Number.POSITIVE_INFINITY;
+
+	// Each dictionary word contributes log2(dictionarySize) bits
+	const dictBits = dictCount * Math.log2(words.size);
+
+	// Small bonus for separator choice (space vs hyphen vs underscore etc.)
+	// An attacker would need to guess which separator, but there are only ~4 options
+	const separatorBits = (tokens.length - 1) * Math.log2(4);
+
+	return dictBits + nonDictBits + separatorBits;
+}
+
+/**
+ * Get password strength using the more conservative of character-level
+ * and dictionary-aware entropy estimates.
  *
  * Thresholds (in bits of entropy):
  *   < 40  → Weak
  *   40–59 → Fair
  *   60–79 → Good
  *   80+   → Strong
- *
- * Examples that score well:
- *   "correct horse battery staple" → ~133 bits (Strong)
- *   "a long sentence of words"     → ~114 bits (Strong)
- *   "sixteencharslong"             → ~75 bits  (Good)
- *
- * Examples that DON'T get free points for symbols:
- *   "P@ss!"  → ~33 bits (Weak)
  */
 export function getPasswordStrength(password: string): PasswordStrength {
 	if (password.length === 0) return EMPTY;
 
-	let poolSize = 0;
-	if (/[a-z]/.test(password)) poolSize += 26;
-	if (/[A-Z]/.test(password)) poolSize += 26;
-	if (/[0-9]/.test(password)) poolSize += 10;
-	if (/[^a-zA-Z0-9]/.test(password)) poolSize += 33; // symbols, space, punctuation
-
-	// Fallback: if somehow no class matched (shouldn't happen for non-empty),
-	// assume at least the full printable ASCII range
-	if (poolSize === 0) poolSize = 95;
-
-	const bits = password.length * Math.log2(poolSize);
+	const bits = Math.min(charEntropy(password), dictEntropy(password));
 
 	let score: number;
 	if (bits < 40) score = 1;
