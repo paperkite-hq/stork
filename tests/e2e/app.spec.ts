@@ -94,11 +94,8 @@ test.describe("Message interaction", () => {
 		await expect(page.getByText("sender2@example.com")).toBeVisible();
 		// Click reply — use first() since there might be Reply and Reply All
 		await page.getByRole("button", { name: /reply/i }).first().click();
-		// Compose modal should open — look for the compose form
-		await page.waitForTimeout(300);
-		// The compose modal has input fields
-		const inputCount = await page.locator("input, textarea").count();
-		expect(inputCount).toBeGreaterThanOrEqual(2);
+		// Compose modal should open with To and Subject inputs
+		await expect(page.getByPlaceholder("recipient@example.com")).toBeVisible();
 	});
 });
 
@@ -133,10 +130,8 @@ test.describe("Compose", () => {
 			.getByRole("button", { name: /compose/i })
 			.first()
 			.click();
-		// Modal should appear — look for compose form elements
-		await page.waitForTimeout(300);
-		const inputs = page.locator("input");
-		expect(await inputs.count()).toBeGreaterThanOrEqual(2);
+		// Modal should appear with compose form elements
+		await expect(page.getByPlaceholder("recipient@example.com")).toBeVisible();
 	});
 
 	test("compose modal can be dismissed", async ({ page }) => {
@@ -146,10 +141,11 @@ test.describe("Compose", () => {
 			.getByRole("button", { name: /compose/i })
 			.first()
 			.click();
-		await page.waitForTimeout(300);
+		// Wait for compose modal to appear
+		await expect(page.getByPlaceholder("recipient@example.com")).toBeVisible();
 		// Dismiss with Escape
 		await page.keyboard.press("Escape");
-		await page.waitForTimeout(300);
+		await expect(page.getByPlaceholder("recipient@example.com")).not.toBeVisible();
 	});
 });
 
@@ -164,9 +160,7 @@ test.describe("Search", () => {
 		await page.goto("/");
 		await page.getByText("Search mail").click();
 		// Search panel should open with an input field
-		await page.waitForTimeout(300);
-		const searchInput = page.locator("input[type=text], input[type=search]").first();
-		await expect(searchInput).toBeVisible();
+		await expect(page.getByPlaceholder("Search messages…")).toBeVisible();
 	});
 });
 
@@ -195,7 +189,10 @@ test.describe("Keyboard shortcuts", () => {
 		await page.keyboard.press("j");
 		// Press Enter to open the selected message
 		await page.keyboard.press("Enter");
-		await page.waitForTimeout(300);
+		// Message detail should appear (sender email visible)
+		await expect(
+			page.locator("[class*='text-gray']").filter({ hasText: /@/ }).first(),
+		).toBeVisible();
 	});
 });
 
@@ -209,7 +206,8 @@ test.describe("Dark mode", () => {
 	test("clicking dark mode toggle changes theme", async ({ page }) => {
 		await page.goto("/");
 		await page.getByTitle("Toggle dark mode").click();
-		await page.waitForTimeout(200);
+		// Wait for dark class to be applied to the document
+		await page.waitForFunction(() => document.documentElement.classList.contains("dark"));
 		const hasDark = await page.evaluate(() => document.documentElement.classList.contains("dark"));
 		expect(hasDark).toBeTruthy();
 	});
@@ -220,7 +218,6 @@ test.describe("Settings", () => {
 		await page.goto("/");
 		// Settings is a gear icon button with title "Settings"
 		await page.getByTitle("Settings").click();
-		await page.waitForTimeout(300);
 		// Settings panel should show account info
 		await expect(page.getByText("E2E Test Account")).toBeVisible();
 	});
