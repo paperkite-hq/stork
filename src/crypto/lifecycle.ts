@@ -85,6 +85,10 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 
 	const scheduler = new SyncScheduler(db, {
 		onSyncComplete: (accountId, result) => {
+			if (result.aborted) {
+				console.log(`Sync interrupted for account ${accountId}: ${result.totalNew} new (aborted)`);
+				return;
+			}
 			const parts = [`Sync complete for account ${accountId}: ${result.totalNew} new`];
 			if (result.totalErrors > 0) {
 				parts.push(`${result.totalErrors} errors`);
