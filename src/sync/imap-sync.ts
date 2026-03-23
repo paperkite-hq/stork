@@ -172,7 +172,20 @@ export class ImapSync {
 				...this.config,
 				logger: false,
 			});
-			return this.client.connect();
+			try {
+				return await this.client.connect();
+			} catch (err) {
+				// Suppress errors on the just-failed client/socket immediately to
+				// prevent ECONNRESET from surfacing as an unhandled exception in the
+				// window between this rejection and the next retry (or forceClose).
+				suppressImapFlowErrors(this.client);
+				const failedSocket = getImapSocket(this.client);
+				suppressSocketErrors(failedSocket);
+				if (failedSocket && typeof failedSocket.destroy === "function") {
+					failedSocket.destroy();
+				}
+				throw err;
+			}
 		}, "IMAP connect");
 	}
 
