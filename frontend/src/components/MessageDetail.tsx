@@ -22,6 +22,7 @@ interface MessageDetailProps {
 	folders?: Folder[];
 	accountId?: number | null;
 	onLabelsChanged?: () => void;
+	openedFromSearch?: boolean;
 }
 
 export function MessageDetail({
@@ -39,6 +40,7 @@ export function MessageDetail({
 	onLabelsChanged,
 	error,
 	dark,
+	openedFromSearch,
 }: MessageDetailProps) {
 	const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 	const [showHtml, setShowHtml] = useState(true);
@@ -167,7 +169,7 @@ export function MessageDetail({
 						onClick={onBack}
 						className="text-sm text-stork-600 dark:text-stork-400 hover:underline"
 					>
-						← Back to list
+						{openedFromSearch ? "← Back to search results" : "← Back to list"}
 					</button>
 				</div>
 			</div>
@@ -200,9 +202,9 @@ export function MessageDetail({
 				<button
 					type="button"
 					onClick={onBack}
-					className="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+					className={`text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex-shrink-0 ${openedFromSearch ? "" : "md:hidden"}`}
 				>
-					← Back
+					{openedFromSearch ? "← Search results" : "← Back"}
 				</button>
 				<h2 className="flex-1 font-semibold text-lg truncate">
 					{message.subject || "(no subject)"}
