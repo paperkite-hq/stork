@@ -9,6 +9,7 @@ import {
 	ReplyAllIcon,
 	ReplyIcon,
 } from "./Icons";
+import { highlightText } from "./SearchPanel";
 
 import { AttachmentList } from "./AttachmentList";
 import { SandboxedEmail } from "./SandboxedEmail";
@@ -22,6 +23,7 @@ interface ThreadMessageProps {
 	imagesAllowed: boolean;
 	senderTrusted: boolean;
 	dark?: boolean;
+	searchQuery?: string;
 	onToggleExpanded: (id: number) => void;
 	onToggleShowHtml: () => void;
 	onAllowImages: (id: number) => void;
@@ -43,6 +45,7 @@ export function ThreadMessage({
 	imagesAllowed,
 	senderTrusted,
 	dark,
+	searchQuery,
 	onToggleExpanded,
 	onToggleShowHtml,
 	onAllowImages,
@@ -167,10 +170,13 @@ export function ThreadMessage({
 							className="email-content"
 							allowRemoteImages={imagesAllowed || senderTrusted}
 							dark={dark}
+							searchQuery={searchQuery}
 						/>
 					) : (
 						<pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 font-sans">
-							{msg.text_body || "(empty message)"}
+							{searchQuery
+								? highlightText(msg.text_body || "(empty message)", searchQuery)
+								: msg.text_body || "(empty message)"}
 						</pre>
 					)}
 
