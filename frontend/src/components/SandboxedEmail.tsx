@@ -1,4 +1,51 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { extractSearchTerms } from "../utils";
+
+/**
+ * Walk all text nodes in a parsed HTML document and wrap search term matches
+ * in <mark> elements. Operates on text nodes only — never touches tag names
+ * or attribute values — so it is safe to run on sanitized email HTML.
+ */
+function highlightHtmlTerms(html: string, terms: string[]): string {
+	if (terms.length === 0) return html;
+	const parser = new DOMParser();
+	const doc = parser.parseFromString(html, "text/html");
+	const regex = new RegExp(`(${terms.join("|")})`, "gi");
+
+	const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+	const textNodes: Text[] = [];
+	let node = walker.nextNode();
+	while (node) {
+		textNodes.push(node as Text);
+		node = walker.nextNode();
+	}
+
+	for (const textNode of textNodes) {
+		const text = textNode.textContent ?? "";
+		if (!regex.test(text)) {
+			regex.lastIndex = 0;
+			continue;
+		}
+		regex.lastIndex = 0;
+		const parts = text.split(regex);
+		if (parts.length <= 1) continue;
+
+		const fragment = doc.createDocumentFragment();
+		for (let i = 0; i < parts.length; i++) {
+			const part = parts[i] ?? "";
+			if (i % 2 === 1) {
+				const mark = doc.createElement("mark");
+				mark.textContent = part;
+				fragment.appendChild(mark);
+			} else if (part) {
+				fragment.appendChild(doc.createTextNode(part));
+			}
+		}
+		textNode.parentNode?.replaceChild(fragment, textNode);
+	}
+
+	return doc.body.innerHTML;
+}
 
 /**
  * Renders sanitized email HTML inside a sandboxed iframe.
@@ -20,9 +67,17 @@ interface SandboxedEmailProps {
 	allowRemoteImages?: boolean;
 	/** When true, applies dark-mode-friendly colors inside the iframe. */
 	dark?: boolean;
+	/** When set, highlights matching search terms in the email body. */
+	searchQuery?: string;
 }
 
-export function SandboxedEmail({ html, className, allowRemoteImages, dark }: SandboxedEmailProps) {
+export function SandboxedEmail({
+	html,
+	className,
+	allowRemoteImages,
+	dark,
+	searchQuery,
+}: SandboxedEmailProps) {
 	const iframeRef = useRef<HTMLIFrameElement>(null);
 
 	const adjustHeight = useCallback(() => {
@@ -63,6 +118,12 @@ export function SandboxedEmail({ html, className, allowRemoteImages, dark }: San
 		return () => iframe.removeEventListener("load", onLoad);
 	}, [adjustHeight]);
 
+	const highlightedHtml = useMemo(() => {
+		if (!searchQuery) return html;
+		const terms = extractSearchTerms(searchQuery);
+		return highlightHtmlTerms(html, terms);
+	}, [html, searchQuery]);
+
 	// Wrap the email HTML with minimal styling to match the parent theme
 	const srcdoc = `<!DOCTYPE html>
 <html>
@@ -88,9 +149,10 @@ export function SandboxedEmail({ html, className, allowRemoteImages, dark }: San
   a { color: ${dark ? "#93c5fd" : "#2563eb"}; }
   table { max-width: 100%; }
   pre, code { white-space: pre-wrap; }
+  mark { background: ${dark ? "#854d0e" : "#fef08a"}; color: inherit; border-radius: 2px; }
 </style>
 </head>
-<body>${html}</body>
+<body>${highlightedHtml}</body>
 </html>`;
 
 	return (

@@ -4,6 +4,7 @@ import { isUnread } from "../utils";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MailOpenIcon } from "./Icons";
 import { MessageHeaderActions } from "./MessageHeaderActions";
+import { highlightText } from "./SearchPanel";
 import { ThreadMessage } from "./ThreadMessage";
 import { toast } from "./Toast";
 
@@ -26,6 +27,7 @@ interface MessageDetailProps {
 	searchPosition?: { current: number; total: number };
 	onSearchPrev?: () => void;
 	onSearchNext?: () => void;
+	searchQuery?: string;
 }
 
 export function MessageDetail({
@@ -47,6 +49,7 @@ export function MessageDetail({
 	searchPosition,
 	onSearchPrev,
 	onSearchNext,
+	searchQuery,
 }: MessageDetailProps) {
 	const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 	const [showHtml, setShowHtml] = useState(true);
@@ -254,7 +257,9 @@ export function MessageDetail({
 					</div>
 				)}
 				<h2 className="flex-1 font-semibold text-lg truncate">
-					{message.subject || "(no subject)"}
+					{searchQuery
+						? highlightText(message.subject || "(no subject)", searchQuery)
+						: message.subject || "(no subject)"}
 				</h2>
 				{isThread && (
 					<>
@@ -306,6 +311,7 @@ export function MessageDetail({
 							imagesAllowed={imagesAllowed.has(msg.id)}
 							senderTrusted={trustedAddresses.has((msg.from_address ?? "").toLowerCase().trim())}
 							dark={dark}
+							searchQuery={searchQuery}
 							onToggleExpanded={toggleExpanded}
 							onToggleShowHtml={() => setShowHtml((h) => !h)}
 							onAllowImages={handleAllowImages}
