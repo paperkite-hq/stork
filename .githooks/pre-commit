@@ -5,8 +5,7 @@
 # Install: git config core.hooksPath .githooks
 set -euo pipefail
 
-# Use fast KDF for crypto tests — matches CI behavior.
-# Production Argon2id params are too slow for
+# Use fast KDF params for tests — production Argon2id params are too slow for
 # a pre-commit hook. Matches CI behavior.
 export STORK_FAST_KDF=1
 
