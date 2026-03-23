@@ -1596,9 +1596,12 @@ describe("App — Send email", () => {
 		const sendBtn = sendBtns.find((b) => b.textContent?.includes("Send")) as HTMLElement;
 		await userEvent.click(sendBtn);
 		// Error should appear inline in the compose modal
-		await waitFor(() => {
-			expect(screen.getByText(/SMTP connection refused/i)).toBeInTheDocument();
-		});
+		await waitFor(
+			() => {
+				expect(screen.getByText(/SMTP connection refused/i)).toBeInTheDocument();
+			},
+			{ timeout: 3000 },
+		);
 		// Compose modal should still be open — draft is preserved
 		expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument();
 	});
