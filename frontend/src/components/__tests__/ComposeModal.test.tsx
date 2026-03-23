@@ -679,4 +679,176 @@ describe("ComposeModal", () => {
 		expect(screen.getByLabelText("Subject")).toBeInTheDocument();
 		expect(screen.queryByText("Subj")).not.toBeInTheDocument();
 	});
+
+	it("switches from plain text to rich text mode", async () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		// Start in plain text
+		expect(screen.getByText("Rich text")).toBeInTheDocument();
+		expect(screen.getByPlaceholderText("Write your message…")).toBeInTheDocument();
+		// Switch to rich text
+		await userEvent.click(screen.getByText("Rich text"));
+		expect(screen.getByText("Plain text")).toBeInTheDocument();
+		expect(screen.getByRole("textbox", { name: "Message body" })).toBeInTheDocument();
+	});
+
+	it("shows format warning when switching from HTML to plain with content", async () => {
+		const msg = makeMessage({ html_body: "<p>Hello world</p>" });
+		render(
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		// In HTML mode, click to switch to plain
+		expect(screen.getByText("Plain text")).toBeInTheDocument();
+		await userEvent.click(screen.getByText("Plain text"));
+		// Warning should appear
+		expect(screen.getByText(/Switching to plain text will remove formatting/)).toBeInTheDocument();
+	});
+
+	it("cancels format switch warning", async () => {
+		const msg = makeMessage({ html_body: "<p>Hello world</p>" });
+		render(
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		await userEvent.click(screen.getByText("Plain text"));
+		expect(screen.getByText(/Switching to plain text/)).toBeInTheDocument();
+		await userEvent.click(screen.getByText("Cancel"));
+		expect(screen.queryByText(/Switching to plain text/)).not.toBeInTheDocument();
+		// Should still be in HTML mode
+		expect(screen.getByText("Plain text")).toBeInTheDocument();
+	});
+
+	it("confirms format switch from HTML to plain text", async () => {
+		const msg = makeMessage({ html_body: "<p>Hello world</p>" });
+		render(
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		await userEvent.click(screen.getByText("Plain text"));
+		await userEvent.click(screen.getByText("Switch"));
+		// Should now be in plain text mode
+		expect(screen.getByText("Rich text")).toBeInTheDocument();
+		expect(screen.getByPlaceholderText("Write your message…")).toBeInTheDocument();
+	});
+
+	it("builds forward body with HTML content", () => {
+		const msg = makeMessage({
+			from_name: "Alice",
+			from_address: "alice@test.com",
+			subject: "Important",
+			html_body: "<p>HTML content</p>",
+		});
+		render(
+			<ComposeModal mode={{ type: "forward", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		// Should default to HTML mode since original has html_body
+		expect(screen.getByText("Plain text")).toBeInTheDocument();
+	});
+
+	it("reply-all with no CC addresses does not show Cc field", () => {
+		const msg = makeMessage({
+			from_address: "alice@test.com",
+			to_addresses: '["alice@test.com"]',
+			cc_addresses: null,
+		});
+		render(
+			<ComposeModal
+				mode={{ type: "reply-all", original: msg }}
+				accounts={[makeAccount({ id: 1, email: "me@test.com" })]}
+				selectedAccountId={1}
+				onClose={vi.fn()}
+				onSend={vi.fn()}
+			/>,
+		);
+		// No CC addresses besides the sender, so Cc field should not be auto-shown
+		expect(screen.queryByPlaceholderText("cc@example.com")).not.toBeInTheDocument();
+	});
+
+	it("restores saved format from draft", () => {
+		localStorage.setItem(
+			"stork-compose-draft",
+			JSON.stringify({
+				to: "x@test.com",
+				cc: "",
+				bcc: "",
+				subject: "test",
+				body: "",
+				htmlBody: "<p>draft html</p>",
+				format: "html",
+			}),
+		);
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		// Should restore HTML mode from draft
+		expect(screen.getByText("Plain text")).toBeInTheDocument();
+	});
+
+	it("clears validation error when CC field is edited", async () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "valid@test.com");
+		await userEvent.click(screen.getByText("Cc"));
+		await userEvent.type(screen.getByPlaceholderText("cc@example.com"), "bad");
+		await userEvent.click(screen.getByText("Send"));
+		expect(screen.getByText(/Invalid email address/)).toBeInTheDocument();
+		// Editing CC should clear the error
+		await userEvent.type(screen.getByPlaceholderText("cc@example.com"), "@test.com");
+		expect(screen.queryByText(/Invalid email address/)).not.toBeInTheDocument();
+	});
+
+	it("clears validation error when BCC field is edited", async () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "valid@test.com");
+		await userEvent.click(screen.getByText("Bcc"));
+		await userEvent.type(screen.getByPlaceholderText("bcc@example.com"), "bad");
+		await userEvent.click(screen.getByText("Send"));
+		expect(screen.getByText(/Invalid email address/)).toBeInTheDocument();
+		await userEvent.type(screen.getByPlaceholderText("bcc@example.com"), "@test.com");
+		expect(screen.queryByText(/Invalid email address/)).not.toBeInTheDocument();
+	});
+
+	it("sends HTML body when in HTML mode", async () => {
+		const onSend = vi.fn();
+		const msg = makeMessage({ html_body: "<p>Original</p>" });
+		render(
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={onSend} />,
+		);
+		// We're in HTML mode; send
+		await userEvent.click(screen.getByText("Send"));
+		expect(onSend).toHaveBeenCalledWith(
+			expect.objectContaining({
+				htmlBody: expect.any(String),
+			}),
+		);
+	});
+
+	it("reply builds quoted body with unknown date when date is null", () => {
+		const msg = makeMessage({ date: null as unknown as string, text_body: "Test" });
+		render(
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		const textarea = screen.getByPlaceholderText("Write your message…") as HTMLTextAreaElement;
+		expect(textarea.value).toContain("unknown date");
+	});
+
+	it("forward body uses from_address when from_name is null", () => {
+		const msg = makeMessage({ from_name: null as unknown as string });
+		render(
+			<ComposeModal mode={{ type: "forward", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		const textarea = screen.getByPlaceholderText("Write your message…") as HTMLTextAreaElement;
+		expect(textarea.value).toContain("sender@test.com");
+	});
+
+	it("restores bcc visibility from draft with existing bcc", () => {
+		localStorage.setItem(
+			"stork-compose-draft",
+			JSON.stringify({
+				to: "a@test.com",
+				cc: "b@test.com",
+				bcc: "c@test.com",
+				subject: "test",
+				body: "x",
+			}),
+		);
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		// Both CC and BCC should be visible since draft had values
+		expect(screen.getByPlaceholderText("cc@example.com")).toHaveValue("b@test.com");
+		expect(screen.getByPlaceholderText("bcc@example.com")).toHaveValue("c@test.com");
+	});
 });
