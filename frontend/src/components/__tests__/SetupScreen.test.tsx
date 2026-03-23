@@ -136,7 +136,7 @@ describe("SetupScreen", () => {
 		await waitFor(() => expect(screen.getByText("Save Your Recovery Phrase")).toBeInTheDocument());
 	});
 
-	// Password strength meter tests
+	// Password strength meter tests (entropy-based scoring)
 	describe("password strength indicator", () => {
 		it("shows no strength indicator when password is empty", () => {
 			render(<SetupScreen {...defaultProps} />);
@@ -149,25 +149,29 @@ describe("SetupScreen", () => {
 			expect(screen.getByTestId("password-strength")).toHaveTextContent("Weak");
 		});
 
-		it("shows Fair for moderate password", async () => {
+		it("shows Fair for 12-char lowercase password", async () => {
 			render(<SetupScreen {...defaultProps} />);
-			// 12+ chars with mixed case = score 2 (Fair)
-			await userEvent.type(screen.getByPlaceholderText("At least 12 characters"), "Abcdefghijklm");
+			// 12 * log2(26) ≈ 56 bits → Fair
+			await userEvent.type(screen.getByPlaceholderText("At least 12 characters"), "abcdefghijkl");
 			expect(screen.getByTestId("password-strength")).toHaveTextContent("Fair");
 		});
 
-		it("shows Good for mixed-case password with digits", async () => {
+		it("shows Good for 16-char lowercase password", async () => {
 			render(<SetupScreen {...defaultProps} />);
-			// 12+ chars (not 16) with mixed case + digit = score 3 (Good)
-			await userEvent.type(screen.getByPlaceholderText("At least 12 characters"), "Abcdefghijk1");
+			// 16 * log2(26) ≈ 75 bits → Good
+			await userEvent.type(
+				screen.getByPlaceholderText("At least 12 characters"),
+				"abcdefghijklmnop",
+			);
 			expect(screen.getByTestId("password-strength")).toHaveTextContent("Good");
 		});
 
-		it("shows Strong for long mixed password with special chars", async () => {
+		it("shows Strong for long passphrase", async () => {
 			render(<SetupScreen {...defaultProps} />);
+			// Long lowercase passphrase with spaces scores Strong
 			await userEvent.type(
 				screen.getByPlaceholderText("At least 12 characters"),
-				"MyStr0ng!Passw0rd",
+				"correct horse battery staple",
 			);
 			expect(screen.getByTestId("password-strength")).toHaveTextContent("Strong");
 		});
