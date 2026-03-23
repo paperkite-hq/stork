@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { ConnectionPool, type ConnectionPoolOptions } from "./connection-pool.js";
-import type { ImapConfig, SyncAllResult, SyncProgress } from "./imap-sync.js";
+import type { ImapConfig, SyncAllResult, SyncError, SyncProgress } from "./imap-sync.js";
 
 /**
  * Progress snapshot for an actively-running sync, as exposed to callers
@@ -30,6 +30,8 @@ export interface SyncSchedulerOptions {
 	poolOptions?: ConnectionPoolOptions;
 	/** Called when a sync completes */
 	onSyncComplete?: (accountId: number, result: SyncAllResult) => void;
+	/** Called immediately when a sync error is recorded (for inline logging) */
+	onSyncRecordError?: (accountId: number, error: SyncError) => void;
 	/** Called when a sync fails */
 	onSyncError?: (accountId: number, error: Error) => void;
 }
@@ -65,6 +67,7 @@ export class SyncScheduler {
 	private db: Database.Database;
 	private defaultIntervalMs: number;
 	private onSyncComplete?: (accountId: number, result: SyncAllResult) => void;
+	private onSyncRecordError?: (accountId: number, error: SyncError) => void;
 	private onSyncError?: (accountId: number, error: Error) => void;
 	private started = false;
 
@@ -73,6 +76,7 @@ export class SyncScheduler {
 		this.defaultIntervalMs = options.defaultIntervalMs ?? DEFAULT_INTERVAL_MS;
 		this.pool = new ConnectionPool(db, options.poolOptions);
 		this.onSyncComplete = options.onSyncComplete;
+		this.onSyncRecordError = options.onSyncRecordError;
 		this.onSyncError = options.onSyncError;
 	}
 
@@ -298,7 +302,10 @@ export class SyncScheduler {
 				const sync = await this.pool.acquire(accountId, scheduled.config.imapConfig);
 
 				try {
-					const result = await sync.syncAll(abortController.signal, onProgress);
+					const onError = this.onSyncRecordError
+						? (err: SyncError) => this.onSyncRecordError?.(accountId, err)
+						: undefined;
+					const result = await sync.syncAll(abortController.signal, onProgress, onError);
 					scheduled.lastSync = Date.now();
 					scheduled.lastError = null;
 					scheduled.consecutiveErrors = 0;
