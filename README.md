@@ -1,5 +1,5 @@
 [![CI](https://github.com/paperkite-hq/stork/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/paperkite-hq/stork/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/paperkite-hq/stork/badges/coverage.json)](https://github.com/paperkite-hq/stork/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/paperkite-hq/stork/badges/coverage.json)](https://paperkite-hq.github.io/stork/)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 
 # Stork
