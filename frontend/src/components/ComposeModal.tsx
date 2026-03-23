@@ -99,7 +99,8 @@ function buildForwardSubject(subject: string | null): string {
 }
 
 function buildReplyBody(msg: Message): string {
-	const date = new Date(msg.date).toLocaleString();
+	const d = msg.date ? new Date(msg.date) : null;
+	const date = d && !Number.isNaN(d.getTime()) ? d.toLocaleString() : "unknown date";
 	const header = `\n\nOn ${date}, ${msg.from_name || msg.from_address} wrote:\n`;
 	const body = msg.text_body || "";
 	const quoted = body

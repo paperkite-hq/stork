@@ -95,7 +95,11 @@ export function ThreadMessage({
 						)}
 					</div>
 					<div className="text-xs text-gray-400 flex-shrink-0">
-						{expanded ? formatFullDate(msg.date) : new Date(msg.date).toLocaleDateString()}
+						{expanded
+							? formatFullDate(msg.date)
+							: msg.date && !Number.isNaN(new Date(msg.date).getTime())
+								? new Date(msg.date).toLocaleDateString()
+								: ""}
 					</div>
 				</div>
 			</button>

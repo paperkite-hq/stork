@@ -191,6 +191,7 @@ export function MessageDetail({
 
 	const displayThread = thread.length > 1 ? thread : [message];
 	const isThread = displayThread.length > 1;
+	const allExpanded = isThread && displayThread.slice(0, -1).every((m) => expandedIds.has(m.id));
 
 	return (
 		<div className="flex-1 flex flex-col overflow-hidden">
@@ -211,7 +212,6 @@ export function MessageDetail({
 						<button
 							type="button"
 							onClick={() => {
-								const allExpanded = displayThread.slice(0, -1).every((m) => expandedIds.has(m.id));
 								if (allExpanded) {
 									setExpandedIds(new Set());
 								} else {
@@ -219,15 +219,9 @@ export function MessageDetail({
 								}
 							}}
 							className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-							title={
-								displayThread.slice(0, -1).every((m) => expandedIds.has(m.id))
-									? "Collapse all"
-									: "Expand all"
-							}
+							title={allExpanded ? "Collapse all" : "Expand all"}
 						>
-							{displayThread.slice(0, -1).every((m) => expandedIds.has(m.id))
-								? "Collapse all"
-								: "Expand all"}
+							{allExpanded ? "Collapse all" : "Expand all"}
 						</button>
 						<span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
 							{displayThread.length} messages

@@ -39,4 +39,12 @@ describe("ShortcutsHelp", () => {
 		fireEvent.click(screen.getByText("Keyboard Shortcuts"));
 		expect(onClose).not.toHaveBeenCalled();
 	});
+
+	it("calls onClose when Escape key is pressed", () => {
+		const onClose = vi.fn();
+		render(<ShortcutsHelp onClose={onClose} />);
+		const dialog = screen.getByRole("dialog");
+		fireEvent.keyDown(dialog, { key: "Escape" });
+		expect(onClose).toHaveBeenCalledOnce();
+	});
 });
