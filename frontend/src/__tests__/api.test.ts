@@ -752,6 +752,21 @@ describe("api client", () => {
 			await expect(api.accounts.get(999)).rejects.toThrow("Not found");
 		});
 
+		it("dispatches stork-container-locked event on 423 response", async () => {
+			mockFetch.mockResolvedValue(
+				mockJsonResponse({ error: "Container is locked", state: "locked" }, 423),
+			);
+
+			const handler = vi.fn();
+			window.addEventListener("stork-container-locked", handler);
+			try {
+				await expect(api.accounts.list()).rejects.toThrow("Container is locked");
+				expect(handler).toHaveBeenCalledTimes(1);
+			} finally {
+				window.removeEventListener("stork-container-locked", handler);
+			}
+		});
+
 		it("falls back to statusText when no error in body", async () => {
 			mockFetch.mockResolvedValue({
 				ok: false,
