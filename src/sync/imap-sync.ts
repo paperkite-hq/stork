@@ -440,7 +440,7 @@ export class ImapSync {
 				folderPath,
 				uid: null,
 				errorType: "folder",
-				message: `Could not lock mailbox ${folderPath}: ${err}`,
+				message: `Could not lock mailbox ${folderPath}: ${formatImapError(err)} [STORK-E001]`,
 				retriable: true,
 			});
 			return result;
@@ -479,21 +479,24 @@ export class ImapSync {
 			`)
 				.run(mailboxStatus.uidValidity, mailboxStatus.uidNext, mailboxStatus.exists, folder.id);
 
-			// Phase 1: Fetch new messages
-			try {
-				const newCount = await this.fetchNewMessages(folder.id, result, signal);
-				result.newMessages = newCount;
-			} catch (err) {
-				// Don't let a single folder FETCH failure kill the entire sync —
-				// record the error and continue to the next folder
-				if (signal?.aborted) throw err;
-				this.recordError(result, {
-					folderPath,
-					uid: null,
-					errorType: "folder",
-					message: `Fetch failed for ${folderPath}: ${formatImapError(err)}`,
-					retriable: true,
-				});
+			// Phase 1: Fetch new messages (skip empty folders — IMAP FETCH on
+			// an empty mailbox returns "Invalid messageset")
+			if (mailboxStatus.exists > 0) {
+				try {
+					const newCount = await this.fetchNewMessages(folder.id, result, signal);
+					result.newMessages = newCount;
+				} catch (err) {
+					// Don't let a single folder FETCH failure kill the entire sync —
+					// record the error and continue to the next folder
+					if (signal?.aborted) throw err;
+					this.recordError(result, {
+						folderPath,
+						uid: null,
+						errorType: "folder",
+						message: `Fetch failed for ${folderPath}: ${formatImapError(err)} [STORK-E002]`,
+						retriable: true,
+					});
+				}
 			}
 
 			// Phase 2: Sync flags on existing messages (skip if aborted)
@@ -608,8 +611,10 @@ export class ImapSync {
 						bccAddrs ? JSON.stringify(bccAddrs) : null,
 						envelope.date instanceof Date && !Number.isNaN(envelope.date.getTime())
 							? envelope.date.toISOString()
-							: null,
-						parsed.text ?? null,
+							: typeof envelope.date === "string"
+								? envelope.date
+								: null,
+						typeof parsed.text === "string" ? parsed.text : null,
 						typeof parsed.html === "string" ? parsed.html : null,
 						Array.from(message.flags ?? new Set()).join(","),
 						typeof message.size === "number" ? message.size : null,
@@ -646,7 +651,7 @@ export class ImapSync {
 						folderPath: result.folder,
 						uid: message.uid,
 						errorType: "message",
-						message: `Failed to process UID ${message.uid}: ${err}`,
+						message: `Failed to process UID ${message.uid}: ${err instanceof Error ? err.message : err} [STORK-E004]`,
 						retriable: false,
 					});
 				}
@@ -727,7 +732,7 @@ export class ImapSync {
 					folderPath: result.folder,
 					uid: null,
 					errorType: "flags",
-					message: `Flag sync failed for "${result.folder}" (UIDs ${batch[0]}–${batch[batch.length - 1]}): ${formatImapError(err)}`,
+					message: `Flag sync failed for "${result.folder}" (UIDs ${batch[0]}–${batch[batch.length - 1]}): ${formatImapError(err)} [STORK-E003]`,
 					retriable: true,
 				});
 			}
