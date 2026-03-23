@@ -169,6 +169,58 @@ describe("Trusted Senders API", () => {
 		expect(status).toBe(404);
 	});
 
+	// ─── Route parameter validation ────────────────────────
+	test("GET /api/accounts/abc/trusted-senders returns 400 for non-numeric accountId", async () => {
+		const { status, body } = await jsonRequest("/api/accounts/abc/trusted-senders");
+		expect(status).toBe(400);
+		expect(body.error).toMatch(/accountId/);
+	});
+
+	test("GET /api/accounts/abc/trusted-senders/check returns 400", async () => {
+		const { status, body } = await jsonRequest(
+			"/api/accounts/abc/trusted-senders/check?sender=x@y.com",
+		);
+		expect(status).toBe(400);
+		expect(body.error).toMatch(/accountId/);
+	});
+
+	test("POST /api/accounts/abc/trusted-senders returns 400", async () => {
+		const { status, body } = await jsonRequest("/api/accounts/abc/trusted-senders", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ sender_address: "test@example.com" }),
+		});
+		expect(status).toBe(400);
+		expect(body.error).toMatch(/accountId/);
+	});
+
+	test("DELETE /api/trusted-senders/abc returns 400 for non-numeric id", async () => {
+		const { status, body } = await jsonRequest("/api/trusted-senders/abc", {
+			method: "DELETE",
+		});
+		expect(status).toBe(400);
+		expect(body.error).toMatch(/id/);
+	});
+
+	test("DELETE /api/accounts/abc/trusted-senders returns 400", async () => {
+		const { status, body } = await jsonRequest("/api/accounts/abc/trusted-senders", {
+			method: "DELETE",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ sender_address: "x@y.com" }),
+		});
+		expect(status).toBe(400);
+		expect(body.error).toMatch(/accountId/);
+	});
+
+	test("DELETE by address rejects missing sender_address", async () => {
+		const { status } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
+			method: "DELETE",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({}),
+		});
+		expect(status).toBe(400);
+	});
+
 	test("trusted senders are per-account", async () => {
 		const accountId2 = createTestAccount(db);
 
