@@ -340,6 +340,89 @@ describe("Send API", () => {
 		});
 	});
 
+	// ─── SES send path ────────────────────────────────────────
+	describe("SES send path", () => {
+		test("rejects SES account without ses_region configured", async () => {
+			// Create account with send_connector_type=ses but no ses_region
+			db.prepare(`
+				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
+					send_connector_type)
+				VALUES ('SES Account', 'ses@example.com', 'imap.example.com', 'user', 'pass',
+					'ses')
+			`).run();
+			const accountId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+
+			const { status, body } = await jsonRequest("/api/send", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					account_id: accountId,
+					to: ["test@example.com"],
+					subject: "SES test",
+					text_body: "Test",
+				}),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toContain("SES is not configured");
+		});
+
+		test("sends via SES when ses_region is configured", async () => {
+			// Create account with SES config — the actual send will fail (no real AWS)
+			// but it exercises the SES connector creation branch
+			db.prepare(`
+				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
+					send_connector_type, ses_region, ses_access_key_id, ses_secret_access_key)
+				VALUES ('SES Account', 'ses@example.com', 'imap.example.com', 'user', 'pass',
+					'ses', 'us-east-1', 'AKIATEST', 'secret123')
+			`).run();
+			const accountId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+
+			const { status, body } = await jsonRequest("/api/send", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					account_id: accountId,
+					to: ["test@example.com"],
+					subject: "SES test",
+					text_body: "Test",
+				}),
+			});
+			// SES send will fail since we have no real AWS credentials, but we'll
+			// get a 500 (connector creation succeeds, send fails) — not a 400
+			expect(status).toBe(500);
+			expect(body.error).toContain("Failed to send");
+		});
+
+		test("sends via SES with default credential chain (no explicit keys)", async () => {
+			db.prepare(`
+				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
+					send_connector_type, ses_region)
+				VALUES ('SES Default Creds', 'ses2@example.com', 'imap.example.com', 'user', 'pass',
+					'ses', 'eu-west-1')
+			`).run();
+			const accountId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+
+			const { status, body } = await jsonRequest("/api/send", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					account_id: accountId,
+					to: ["test@example.com"],
+					subject: "SES default creds test",
+					text_body: "Test",
+				}),
+			});
+			// Will fail at AWS level but exercises the branch where credentials are undefined
+			expect(status).toBe(500);
+		});
+	});
+
 	// ─── SMTP test endpoint ───────────────────────────────────
 	describe("POST /api/send/test-smtp", () => {
 		test("verifies valid SMTP credentials", async () => {

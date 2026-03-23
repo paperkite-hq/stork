@@ -421,4 +421,241 @@ describe("Accounts API", () => {
 			expect(body.unread).toBe(1); // NULL flags message should count as unread
 		});
 	});
+
+	// ─── Connector type validation ─────────────────────────
+	describe("Connector type validation", () => {
+		test("POST /api/accounts rejects invalid ingest_connector_type", async () => {
+			const { status, body } = await jsonRequest("/api/accounts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "Test",
+					email: "test@example.com",
+					ingest_connector_type: "invalid",
+					imap_host: "imap.example.com",
+					imap_user: "user",
+					imap_pass: "pass",
+				}),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toContain("Invalid ingest_connector_type");
+		});
+
+		test("POST /api/accounts rejects invalid send_connector_type", async () => {
+			const { status, body } = await jsonRequest("/api/accounts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "Test",
+					email: "test@example.com",
+					send_connector_type: "invalid",
+					imap_host: "imap.example.com",
+					imap_user: "user",
+					imap_pass: "pass",
+				}),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toContain("Invalid send_connector_type");
+		});
+
+		test("POST /api/accounts rejects cloudflare-email without webhook secret", async () => {
+			const { status, body } = await jsonRequest("/api/accounts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "CF Account",
+					email: "cf@example.com",
+					ingest_connector_type: "cloudflare-email",
+				}),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toContain("cf_email_webhook_secret");
+		});
+
+		test("POST /api/accounts rejects SES without ses_region", async () => {
+			const { status, body } = await jsonRequest("/api/accounts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "SES Account",
+					email: "ses@example.com",
+					send_connector_type: "ses",
+					ingest_connector_type: "cloudflare-email",
+					cf_email_webhook_secret: "secret123",
+				}),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toContain("ses_region");
+		});
+
+		test("POST /api/accounts creates cloudflare-email + SES account", async () => {
+			const { status, body } = await jsonRequest("/api/accounts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "CF+SES Account",
+					email: "cfses@example.com",
+					ingest_connector_type: "cloudflare-email",
+					send_connector_type: "ses",
+					cf_email_webhook_secret: "webhook-secret",
+					ses_region: "us-east-1",
+					// imap_host is NOT NULL in schema, pass a placeholder for non-IMAP accounts
+					imap_host: "",
+					imap_user: "",
+					imap_pass: "",
+				}),
+			});
+			expect(status).toBe(201);
+			expect(body.id).toBeGreaterThan(0);
+
+			// Verify the account was stored with correct connector types
+			const { body: account } = await jsonRequest(`/api/accounts/${body.id}`);
+			expect(account.ingest_connector_type).toBe("cloudflare-email");
+			expect(account.send_connector_type).toBe("ses");
+		});
+
+		test("POST /api/accounts defaults to imap/smtp when types omitted", async () => {
+			const { status, body } = await jsonRequest("/api/accounts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "Default",
+					email: "default@example.com",
+					imap_host: "imap.example.com",
+					imap_user: "user",
+					imap_pass: "pass",
+				}),
+			});
+			expect(status).toBe(201);
+
+			const { body: account } = await jsonRequest(`/api/accounts/${body.id}`);
+			expect(account.ingest_connector_type).toBe("imap");
+			expect(account.send_connector_type).toBe("smtp");
+		});
+	});
+
+	// ─── Connector health ──────────────────────────────────
+	describe("Connector health", () => {
+		test("GET /api/accounts/:id/connector-health returns 404 for missing account", async () => {
+			const { status, body } = await jsonRequest("/api/accounts/999/connector-health");
+			expect(status).toBe(404);
+			expect(body.error).toContain("Account not found");
+		});
+
+		test("GET /api/accounts/:id/connector-health reports unconfigured IMAP", async () => {
+			// Create account with cloudflare-email type but query its health
+			// The default createTestAccount has imap fields, so insert directly with no IMAP config
+			db.prepare(`
+				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
+					ingest_connector_type, send_connector_type)
+				VALUES ('No Config', 'noconfig@example.com', '', '', '',
+					'imap', 'smtp')
+			`).run();
+			const accountId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+
+			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/connector-health`);
+			expect(status).toBe(200);
+			expect(body.ingest.type).toBe("imap");
+			expect(body.ingest.ok).toBe(false);
+			expect(body.ingest.error).toContain("not configured");
+			expect(body.send.type).toBe("smtp");
+			expect(body.send.ok).toBe(false);
+			expect(body.send.error).toContain("not configured");
+		});
+
+		test("GET /api/accounts/:id/connector-health checks cloudflare-email with secret", async () => {
+			db.prepare(`
+				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
+					ingest_connector_type, send_connector_type,
+					cf_email_webhook_secret)
+				VALUES ('CF Account', 'cf@example.com', '', '', '',
+					'cloudflare-email', 'smtp',
+					'my-webhook-secret')
+			`).run();
+			const accountId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+
+			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/connector-health`);
+			expect(status).toBe(200);
+			expect(body.ingest.type).toBe("cloudflare-email");
+			expect(body.ingest.ok).toBe(true);
+			expect(body.ingest.details).toEqual({ mode: "push-based webhook" });
+		});
+
+		test("GET /api/accounts/:id/connector-health reports cloudflare-email without secret", async () => {
+			db.prepare(`
+				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
+					ingest_connector_type, send_connector_type)
+				VALUES ('CF No Secret', 'cf-nosecret@example.com', '', '', '',
+					'cloudflare-email', 'smtp')
+			`).run();
+			const accountId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+
+			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/connector-health`);
+			expect(status).toBe(200);
+			expect(body.ingest.type).toBe("cloudflare-email");
+			expect(body.ingest.ok).toBe(false);
+			expect(body.ingest.error).toContain("Webhook secret not configured");
+		});
+
+		test("GET /api/accounts/:id/connector-health includes sync status when available", async () => {
+			const accountId = createTestAccount(db, {
+				imapHost: "127.0.0.1",
+				imapPort: 19999,
+			});
+			scheduler.addAccount({
+				accountId,
+				imapConfig: {
+					host: "127.0.0.1",
+					port: 19999,
+					secure: false,
+					auth: { user: "test", pass: "test" },
+				},
+			});
+
+			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/connector-health`);
+			expect(status).toBe(200);
+			expect(body.sync).toBeTruthy();
+			expect(body.sync).toHaveProperty("running");
+		});
+
+		test("GET /api/accounts/:id/connector-health returns null sync when not registered", async () => {
+			const accountId = createTestAccount(db);
+			const { body } = await jsonRequest(`/api/accounts/${accountId}/connector-health`);
+			expect(body.sync).toBeNull();
+		});
+	});
+
+	// ─── Unread messages ───────────────────────────────────
+	describe("Unread Messages", () => {
+		test("GET /api/accounts/:id/unread-messages returns only unread", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			createTestMessage(db, accountId, folderId, 1, { flags: "\\Seen" });
+			createTestMessage(db, accountId, folderId, 2, { flags: "" });
+			createTestMessage(db, accountId, folderId, 3, { flags: "" });
+
+			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/unread-messages`);
+			expect(status).toBe(200);
+			expect(body).toHaveLength(2);
+		});
+
+		test("GET /api/accounts/:id/unread-messages/count returns count", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			createTestMessage(db, accountId, folderId, 1, { flags: "\\Seen" });
+			createTestMessage(db, accountId, folderId, 2, { flags: "" });
+
+			const { status, body } = await jsonRequest(
+				`/api/accounts/${accountId}/unread-messages/count`,
+			);
+			expect(status).toBe(200);
+			expect(body.total).toBe(1);
+		});
+	});
 });
