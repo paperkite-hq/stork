@@ -1566,8 +1566,10 @@ describe("App — Send email", () => {
 		});
 		// Fill required field
 		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "test@test.com");
-		// Click Send
-		await userEvent.click(screen.getByRole("button", { name: /send/i }));
+		// Click Send — use getAllByRole to handle SVG <title>Send</title> matches
+		const sendBtns = screen.getAllByRole("button", { name: /send/i });
+		const sendBtn = sendBtns.find((b) => b.textContent?.includes("Send")) as HTMLElement;
+		await userEvent.click(sendBtn);
 		// Modal should close after successful send + toast confirmation
 		await waitFor(() => {
 			expect(screen.queryByPlaceholderText("recipient@example.com")).not.toBeInTheDocument();
@@ -1589,13 +1591,146 @@ describe("App — Send email", () => {
 		});
 		// Fill required field
 		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "test@test.com");
-		// Click Send
-		await userEvent.click(screen.getByRole("button", { name: /send/i }));
+		// Click Send — use getAllByRole to handle SVG <title>Send</title> matches
+		const sendBtns = screen.getAllByRole("button", { name: /send/i });
+		const sendBtn = sendBtns.find((b) => b.textContent?.includes("Send")) as HTMLElement;
+		await userEvent.click(sendBtn);
 		// Error should appear inline in the compose modal
 		await waitFor(() => {
 			expect(screen.getByText(/SMTP connection refused/i)).toBeInTheDocument();
 		});
 		// Compose modal should still be open — draft is preserved
 		expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument();
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Inline star toggle from message list
+// ------------------------------------------------------------------
+
+describe("App — Inline star toggle", () => {
+	it("inline star toggle calls updateFlags with add Flagged for unstarred message", async () => {
+		const messages = [makeMessageSummary({ id: 80, subject: "Star inline", flags: null })];
+		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		render(<App />);
+		await waitFor(() => expect(screen.getByText("Star inline")).toBeInTheDocument());
+		// The star button appears on hover — click it directly
+		const starBtn = screen.getByRole("button", { name: /star message/i });
+		await userEvent.click(starBtn);
+		await waitFor(() => {
+			expect(api.messages.updateFlags as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(80, {
+				add: ["\\Flagged"],
+			});
+		});
+	});
+
+	it("inline star toggle calls updateFlags with remove Flagged for starred message", async () => {
+		const messages = [makeMessageSummary({ id: 81, subject: "Unstar inline", flags: "\\Flagged" })];
+		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		render(<App />);
+		await waitFor(() => expect(screen.getByText("Unstar inline")).toBeInTheDocument());
+		const starBtn = screen.getByRole("button", { name: /remove star/i });
+		await userEvent.click(starBtn);
+		await waitFor(() => {
+			expect(api.messages.updateFlags as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(81, {
+				remove: ["\\Flagged"],
+			});
+		});
+	});
+
+	it("inline star toggle reverts on API failure", async () => {
+		(api.messages.updateFlags as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Network error"),
+		);
+		const messages = [makeMessageSummary({ id: 82, subject: "Star fail", flags: null })];
+		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		render(<App />);
+		await waitFor(() => expect(screen.getByText("Star fail")).toBeInTheDocument());
+		const starBtn = screen.getByRole("button", { name: /star message/i });
+		await userEvent.click(starBtn);
+		// After failure, refetch should be triggered (revert) — labels.messages called again
+		await waitFor(() => {
+			const calls = mockApi.labels.messages.mock.calls.length;
+			expect(calls).toBeGreaterThanOrEqual(2);
+		});
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Container locked event
+// ------------------------------------------------------------------
+
+describe("App — Container locked event", () => {
+	it("shows unlock screen when stork-container-locked event fires", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+		// Dispatch the custom event that the API client fires on 423 responses
+		window.dispatchEvent(new Event("stork-container-locked"));
+		await waitFor(() => {
+			expect(screen.getByText("Unlock Stork")).toBeInTheDocument();
+		});
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Sync trigger error handling
+// ------------------------------------------------------------------
+
+describe("App — Sync trigger errors", () => {
+	it("shows error toast when sync trigger fails with non-already-syncing error", async () => {
+		mockApi.sync.trigger.mockRejectedValueOnce(new Error("Connection refused"));
+		setupWithAccounts([makeAccount({ id: 5 })], [makeLabel()]);
+		render(<App />);
+		await waitForAppLayout();
+		const syncBtn = screen.getByTitle("Sync now");
+		await userEvent.click(syncBtn);
+		await waitFor(() => {
+			expect(screen.getByText(/Sync failed.*Connection refused/)).toBeInTheDocument();
+		});
+	});
+
+	it("suppresses toast when sync trigger fails with already syncing", async () => {
+		mockApi.sync.trigger.mockRejectedValueOnce(new Error("already syncing"));
+		setupWithAccounts([makeAccount({ id: 5 })], [makeLabel()]);
+		render(<App />);
+		await waitForAppLayout();
+		const syncBtn = screen.getByTitle("Sync now");
+		await userEvent.click(syncBtn);
+		// Wait a tick and verify no error toast
+		await new Promise((r) => setTimeout(r, 100));
+		expect(screen.queryByText(/Sync failed/)).not.toBeInTheDocument();
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Send with reply threading headers
+// ------------------------------------------------------------------
+
+describe("App — Reply compose pre-fills sender", () => {
+	it("reply shortcut opens compose with the original sender's address pre-filled", async () => {
+		const msg = makeMessage({
+			id: 90,
+			subject: "Reply pre-fill",
+			from_address: "alice@test.com",
+			text_body: "Hello",
+		});
+		mockApi.messages.get.mockResolvedValue(msg);
+		mockApi.messages.getThread.mockResolvedValue([msg]);
+		setupWithAccounts(
+			[makeAccount()],
+			[makeLabel()],
+			[makeMessageSummary({ id: 90, subject: "Reply pre-fill" })],
+		);
+		render(<App />);
+		await waitFor(() => expect(screen.getByText("Reply pre-fill")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("Reply pre-fill"));
+		await waitFor(() => expect(mockApi.messages.get).toHaveBeenCalledWith(90));
+		// Press r to reply
+		fireEvent.keyDown(window, { key: "r" });
+		await waitFor(() => {
+			const toInput = screen.getByPlaceholderText("recipient@example.com") as HTMLInputElement;
+			expect(toInput.value).toContain("alice@test.com");
+		});
 	});
 });

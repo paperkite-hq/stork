@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeEmailHtml } from "../email-sanitizer";
+import {
+	formatFileSize,
+	formatFullDate,
+	hasRemoteImages,
+	sanitizeEmailHtml,
+} from "../email-sanitizer";
 
 describe("sanitizeEmailHtml", () => {
 	it("strips script tags", () => {
@@ -102,5 +107,107 @@ describe("sanitizeEmailHtml", () => {
 		expect(result).toContain("<p>");
 		expect(result).toContain("<b>world</b>");
 		expect(result).toContain("<li>item</li>");
+	});
+
+	it("rewrites cid: URLs to API endpoint when messageId provided", () => {
+		const result = sanitizeEmailHtml(
+			'<img src="cid:image001@example.com" width="200" height="200">',
+			{ blockRemoteImages: false, messageId: 42 },
+		);
+		expect(result).toContain("/api/attachments/by-cid/42/image001%40example.com");
+	});
+
+	it("preserves data: URI images regardless of blockRemoteImages", () => {
+		const result = sanitizeEmailHtml(
+			'<img src="data:image/png;base64,iVBOR" width="200" height="200">',
+		);
+		expect(result).toContain("data:image/png;base64,iVBOR");
+	});
+
+	it("strips style tags", () => {
+		const result = sanitizeEmailHtml("<style>body { background: red; }</style><p>Hello</p>");
+		expect(result).not.toContain("<style");
+		expect(result).toContain("<p>Hello</p>");
+	});
+});
+
+describe("hasRemoteImages", () => {
+	it("returns false for plain text (no img tags)", () => {
+		expect(hasRemoteImages("<p>Hello world</p>")).toBe(false);
+	});
+
+	it("returns true for remote http image", () => {
+		expect(
+			hasRemoteImages('<img src="https://example.com/photo.jpg" width="200" height="200">'),
+		).toBe(true);
+	});
+
+	it("returns false for data: URI images", () => {
+		expect(hasRemoteImages('<img src="data:image/png;base64,abc">')).toBe(false);
+	});
+
+	it("returns false for 1x1 tracking pixels", () => {
+		expect(hasRemoteImages('<img src="https://tracker.com/px.gif" width="1" height="1">')).toBe(
+			false,
+		);
+	});
+
+	it("returns false for tracking URL patterns", () => {
+		expect(
+			hasRemoteImages('<img src="https://example.com/pixel/img.gif" width="100" height="100">'),
+		).toBe(false);
+		expect(
+			hasRemoteImages('<img src="https://example.com/beacon.gif" width="100" height="100">'),
+		).toBe(false);
+	});
+
+	it("returns false for 0x0 tracking pixels via CSS style", () => {
+		expect(
+			hasRemoteImages('<img src="https://tracker.com/px.gif" style="width: 0px; height: 0px">'),
+		).toBe(false);
+	});
+});
+
+describe("formatFullDate", () => {
+	it("returns empty string for null", () => {
+		expect(formatFullDate(null)).toBe("");
+	});
+
+	it("returns empty string for undefined", () => {
+		expect(formatFullDate(undefined)).toBe("");
+	});
+
+	it("returns original string for invalid date", () => {
+		expect(formatFullDate("not-a-date")).toBe("not-a-date");
+	});
+
+	it("formats a valid ISO date string", () => {
+		const result = formatFullDate("2026-01-15T10:30:00Z");
+		// Should contain the day and month at minimum (locale-dependent)
+		expect(result).toContain("January");
+		expect(result).toContain("15");
+		expect(result).toContain("2026");
+	});
+});
+
+describe("formatFileSize", () => {
+	it("returns empty string for null", () => {
+		expect(formatFileSize(null)).toBe("");
+	});
+
+	it("returns empty string for 0", () => {
+		expect(formatFileSize(0)).toBe("");
+	});
+
+	it("formats bytes", () => {
+		expect(formatFileSize(512)).toBe("512 B");
+	});
+
+	it("formats kilobytes", () => {
+		expect(formatFileSize(2048)).toBe("2.0 KB");
+	});
+
+	it("formats megabytes", () => {
+		expect(formatFileSize(5242880)).toBe("5.0 MB");
 	});
 });
