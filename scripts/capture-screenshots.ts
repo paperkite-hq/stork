@@ -17,7 +17,7 @@ import {
 	createTestFolder,
 	createTestLabel,
 	createTestMessage,
-} from "../tests/helpers/test-db.js";
+} from "../src/test-helpers/test-db.js";
 
 const PORT = 13250;
 const OUTPUT_DIR = join(import.meta.dirname, "..", "docs", "screenshots");
