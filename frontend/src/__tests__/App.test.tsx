@@ -1103,20 +1103,38 @@ describe("App — Dark mode", () => {
 // ------------------------------------------------------------------
 
 describe("App — Error state", () => {
-	it("shows fatal error when accounts fail to load", async () => {
+	it("shows reconnecting screen when accounts fail to load", async () => {
 		const { api: mockApiModule } = await import("../api");
 		(mockApiModule.status as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "unlocked" });
 		mockApi.accounts.list.mockRejectedValue(new Error("Server error"));
 		render(<App />);
 		await waitFor(() => {
-			expect(screen.getByText("Failed to connect to server")).toBeInTheDocument();
+			expect(screen.getByText("Reconnecting to server…")).toBeInTheDocument();
 		});
-		expect(screen.getByText("Retry")).toBeInTheDocument();
 	});
 
-	it("retry button refetches accounts", async () => {
+	it("auto-recovers to unlock screen when server comes back locked", async () => {
 		const { api: mockApiModule } = await import("../api");
-		(mockApiModule.status as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "unlocked" });
+		// Initial: server is unlocked but accounts fail (simulating restart mid-load)
+		(mockApiModule.status as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ state: "unlocked" }) // initial status check
+			.mockResolvedValueOnce({ state: "locked" }); // probe during reconnect
+		mockApi.accounts.list.mockRejectedValue(new Error("Server error"));
+		render(<App />);
+		await waitFor(() => {
+			expect(screen.getByText("Reconnecting to server…")).toBeInTheDocument();
+		});
+		// The auto-probe should detect locked state and show UnlockScreen
+		await waitFor(() => {
+			expect(screen.getByText("Unlock Stork")).toBeInTheDocument();
+		});
+	});
+
+	it("auto-recovers when server comes back unlocked", async () => {
+		const { api: mockApiModule } = await import("../api");
+		(mockApiModule.status as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({ state: "unlocked" }) // initial status check
+			.mockResolvedValueOnce({ state: "unlocked" }); // probe during reconnect
 		mockApi.accounts.list
 			.mockRejectedValueOnce(new Error("Server error"))
 			.mockResolvedValueOnce([makeAccount()]);
@@ -1125,9 +1143,9 @@ describe("App — Error state", () => {
 		mockApi.folders.list.mockResolvedValue([]);
 		render(<App />);
 		await waitFor(() => {
-			expect(screen.getByText("Retry")).toBeInTheDocument();
+			expect(screen.getByText("Reconnecting to server…")).toBeInTheDocument();
 		});
-		await userEvent.click(screen.getByText("Retry"));
+		// The probe sets containerState to "unlocked" which re-triggers accounts fetch
 		await waitForAppLayout();
 	});
 });
