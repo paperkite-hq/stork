@@ -95,7 +95,7 @@ export function Welcome({ onAccountCreated, dark, onToggleDark }: WelcomeProps) 
 			await api.accounts.create({
 				...form,
 				sync_delete_from_server: 0,
-			} as Record<string, unknown>);
+			});
 			onAccountCreated();
 		} catch (err) {
 			setError((err as Error).message);

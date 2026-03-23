@@ -205,6 +205,69 @@ export interface TrustedSender {
 
 export type ContainerState = "setup" | "locked" | "unlocked";
 
+export type IngestConnectorType = "imap" | "cloudflare-email";
+export type SendConnectorType = "smtp" | "ses";
+
+export interface CreateAccountRequest {
+	name: string;
+	email: string;
+	ingest_connector_type?: IngestConnectorType;
+	send_connector_type?: SendConnectorType;
+	imap_host?: string;
+	imap_port?: number;
+	imap_tls?: number;
+	imap_user?: string;
+	imap_pass?: string;
+	smtp_host?: string;
+	smtp_port?: number;
+	smtp_tls?: number;
+	smtp_user?: string;
+	smtp_pass?: string;
+	cf_email_webhook_secret?: string;
+	ses_region?: string;
+	ses_access_key_id?: string;
+	ses_secret_access_key?: string;
+	sync_delete_from_server?: number;
+}
+
+export interface UpdateAccountRequest {
+	name?: string;
+	email?: string;
+	ingest_connector_type?: IngestConnectorType;
+	send_connector_type?: SendConnectorType;
+	imap_host?: string;
+	imap_port?: number;
+	imap_tls?: number;
+	imap_user?: string;
+	imap_pass?: string;
+	smtp_host?: string;
+	smtp_port?: number;
+	smtp_tls?: number;
+	smtp_user?: string;
+	smtp_pass?: string;
+	cf_email_webhook_secret?: string;
+	ses_region?: string;
+	ses_access_key_id?: string;
+	ses_secret_access_key?: string;
+	sync_delete_from_server?: number;
+}
+
+export interface TestConnectionRequest {
+	imap_host: string;
+	imap_port?: number;
+	imap_tls?: number;
+	imap_user: string;
+	imap_pass: string;
+}
+
+export interface TestSmtpRequest {
+	smtp_host: string;
+	smtp_port?: number;
+	smtp_tls?: number;
+	smtp_user: string;
+	smtp_pass: string;
+}
+
 // API calls
 export const api = {
 	status: () => fetchJSON<{ state: ContainerState }>("/status"),
@@ -245,19 +308,19 @@ export const api = {
 	accounts: {
 		list: () => fetchJSON<Account[]>("/accounts"),
 		get: (id: number) => fetchJSON<AccountDetail>(`/accounts/${id}`),
-		create: (data: Partial<Account> & Record<string, unknown>) =>
+		create: (data: CreateAccountRequest) =>
 			fetchJSON<{ id: number }>("/accounts", {
 				method: "POST",
 				body: JSON.stringify(data),
 			}),
-		update: (id: number, data: Record<string, unknown>) =>
+		update: (id: number, data: UpdateAccountRequest) =>
 			fetchJSON<{ ok: boolean }>(`/accounts/${id}`, {
 				method: "PUT",
 				body: JSON.stringify(data),
 			}),
 		delete: (id: number) => fetchJSON<{ ok: boolean }>(`/accounts/${id}`, { method: "DELETE" }),
 		syncStatus: (id: number) => fetchJSON<SyncStatus[]>(`/accounts/${id}/sync-status`),
-		testConnection: (data: Record<string, unknown>) =>
+		testConnection: (data: TestConnectionRequest) =>
 			fetchJSON<{ ok: boolean; error?: string; mailboxes?: number }>("/accounts/test-connection", {
 				method: "POST",
 				body: JSON.stringify(data),
@@ -362,7 +425,9 @@ export const api = {
 	sync: {
 		status: () => fetchJSON<GlobalSyncStatus>("/sync/status"),
 		trigger: (accountId: number) =>
-			fetchJSON<Record<string, unknown>>(`/accounts/${accountId}/sync`, { method: "POST" }),
+			fetchJSON<{ ok?: boolean; error?: string }>(`/accounts/${accountId}/sync`, {
+				method: "POST",
+			}),
 	},
 	send: (data: {
 		account_id: number;
@@ -386,7 +451,7 @@ export const api = {
 			method: "POST",
 			body: JSON.stringify(data),
 		}),
-	testSmtp: (data: Record<string, unknown>) =>
+	testSmtp: (data: TestSmtpRequest) =>
 		fetchJSON<{ ok: boolean; error?: string }>("/send/test-smtp", {
 			method: "POST",
 			body: JSON.stringify(data),

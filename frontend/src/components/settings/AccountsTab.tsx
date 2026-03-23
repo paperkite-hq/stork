@@ -375,10 +375,10 @@ function AccountForm({
 
 		try {
 			if (accountId === null) {
-				await api.accounts.create({ ...form } as Record<string, unknown>);
+				await api.accounts.create({ ...form });
 			} else {
 				// Only send non-empty password fields on update
-				const update: Record<string, unknown> = { ...form };
+				const update: import("../../api.js").UpdateAccountRequest = { ...form };
 				if (!update.imap_pass) update.imap_pass = undefined;
 				if (!update.smtp_pass) update.smtp_pass = undefined;
 				await api.accounts.update(accountId, update);
