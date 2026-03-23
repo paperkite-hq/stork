@@ -58,6 +58,7 @@ export function App() {
 	const [initialSearchQuery, setInitialSearchQuery] = useState("");
 	const [openedFromSearch, setOpenedFromSearch] = useState(false);
 	const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+	const [activeSearchQuery, setActiveSearchQuery] = useState("");
 	const [showShortcuts, setShowShortcuts] = useState(false);
 	const [showSettings, setShowSettings] = useState(false);
 	const [messageListIndex, setMessageListIndex] = useState(0);
@@ -721,6 +722,7 @@ export function App() {
 								}}
 								accountId={effectiveAccountId}
 								onResultsChange={setSearchResults}
+								onQueryChange={setActiveSearchQuery}
 								initialQuery={initialSearchQuery}
 							/>
 						) : (
@@ -807,6 +809,7 @@ export function App() {
 							folders={folders ?? []}
 							accountId={effectiveAccountId}
 							onLabelsChanged={refetchLabels}
+							searchQuery={openedFromSearch ? activeSearchQuery : undefined}
 						/>
 					</div>
 				</div>

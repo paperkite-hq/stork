@@ -75,6 +75,23 @@ export function formatAddressList(raw: string | null): string {
 }
 
 /**
+ * Extract plain text search terms from a query string, stripping field
+ * operators (from:, to:, subject:, has:, is:, before:, after:, label:).
+ * Returns regex-escaped terms with length > 1.
+ */
+export function extractSearchTerms(query: string): string[] {
+	const textOnly = query
+		.replace(/\b(from|to|subject|has|is|before|after|label):((?:"[^"]*")|(?:\S+))/gi, "")
+		.replace(/\s+/g, " ")
+		.trim();
+	if (!textOnly) return [];
+	return textOnly
+		.split(/\s+/)
+		.filter((t) => t.length > 1)
+		.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+}
+
+/**
  * Read messages-per-page preference from localStorage.
  * Returns the stored value or the default (50).
  */

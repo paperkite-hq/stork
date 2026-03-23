@@ -1,6 +1,7 @@
 import DOMPurify from "dompurify";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { type SearchResult, api } from "../api";
+import { extractSearchTerms } from "../utils";
 import {
 	CalendarIcon,
 	FilterIcon,
@@ -17,6 +18,7 @@ interface SearchPanelProps {
 	onSelectMessage: (id: number) => void;
 	accountId: number | null;
 	onResultsChange?: (results: SearchResult[]) => void;
+	onQueryChange?: (query: string) => void;
 	initialQuery?: string;
 }
 
@@ -24,19 +26,8 @@ interface SearchPanelProps {
  * Highlight search terms in a plain text string, returning a React node.
  * Strips search operators (from:, to:, etc.) before matching.
  */
-function highlightText(text: string, query: string): ReactNode {
-	const textOnly = query
-		.replace(/\b(from|to|subject|has|is|before|after|label):((?:"[^"]*")|(?:\S+))/gi, "")
-		.replace(/\s+/g, " ")
-		.trim();
-
-	if (!textOnly) return text;
-
-	const terms = textOnly
-		.split(/\s+/)
-		.filter((t) => t.length > 1)
-		.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-
+export function highlightText(text: string, query: string): ReactNode {
+	const terms = extractSearchTerms(query);
 	if (terms.length === 0) return text;
 
 	const regex = new RegExp(`(${terms.join("|")})`, "gi");
@@ -93,11 +84,13 @@ export function SearchPanel({
 	onSelectMessage,
 	accountId,
 	onResultsChange,
+	onQueryChange,
 	initialQuery = "",
 }: SearchPanelProps) {
 	const [query, setQuery] = useState(initialQuery);
 	const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
 	const [results, setResults] = useState<SearchResult[]>([]);
+	const [activeQuery, setActiveQuery] = useState(initialQuery);
 	const [loading, setLoading] = useState(false);
 	const [loadingMore, setLoadingMore] = useState(false);
 	const [searched, setSearched] = useState(false);
@@ -125,9 +118,11 @@ export function SearchPanel({
 				setResults([]);
 				setSearched(false);
 				setHasMore(false);
+				setActiveQuery("");
 				return;
 			}
 			lastQueryRef.current = fullQuery;
+			setActiveQuery(fullQuery);
 			setLoading(true);
 			api
 				.search(fullQuery, { accountId: accountId ?? undefined, limit: SEARCH_PAGE_SIZE })
@@ -242,10 +237,14 @@ export function SearchPanel({
 		debounceRef.current = setTimeout(() => triggerSearch(query, newFilters), 150);
 	}, [dateAfter, dateBefore, activeFilters, query, triggerSearch]);
 
-	// Notify parent of results changes for prev/next navigation
+	// Notify parent of results and query changes
 	useEffect(() => {
 		onResultsChange?.(results);
 	}, [results, onResultsChange]);
+
+	useEffect(() => {
+		onQueryChange?.(activeQuery);
+	}, [activeQuery, onQueryChange]);
 
 	// Scroll focused result into view
 	useEffect(() => {
