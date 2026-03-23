@@ -1,9 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <rect width="64" height="64" rx="14" fill="#4338CA"/>
-  <!-- Stork head profile with curved neck — optimized for 16x16 favicon clarity -->
-  <path d="M18,58 Q14,42 18,32 Q22,22 26,20" stroke="white" stroke-width="11" fill="none" stroke-linecap="round"/>
-  <circle cx="28" cy="20" r="13" fill="white"/>
-  <polygon points="37,13 62,20 37,27" fill="#F97316"/>
-  <circle cx="23" cy="16" r="4.5" fill="#4338CA"/>
-  <circle cx="24.5" cy="14.8" r="1.7" fill="white"/>
+  <!-- Stork head profile — bold teardrop head filling canvas, prominent beak -->
+  <path d="M6,56 C0,40 6,20 22,14 C32,10 42,14 44,26 C46,38 36,54 16,56 Z" fill="white"/>
+  <polygon points="38,8 64,18 38,26" fill="#F97316"/>
+  <circle cx="24" cy="22" r="6" fill="#4338CA"/>
+  <circle cx="26" cy="20" r="2.5" fill="white"/>
 </svg>
