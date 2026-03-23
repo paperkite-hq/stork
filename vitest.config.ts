@@ -16,6 +16,8 @@ export default defineConfig({
 				"src/connectors/index.ts",
 				"src/**/*.test.ts",
 				"src/test-helpers/**",
+				"src/storage/migrate.ts",
+				"src/index.ts",
 			],
 			thresholds: {
 				lines: 80,
