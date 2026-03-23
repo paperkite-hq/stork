@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api";
+import { PasswordStrengthMeter } from "../PasswordStrengthMeter";
 import { FormField } from "./FormField";
 
 export function SecurityTab() {
@@ -128,14 +129,17 @@ export function SecurityTab() {
 					placeholder="Your current encryption password"
 					required
 				/>
-				<FormField
-					label="New Password"
-					value={newPassword}
-					onChange={setNewPassword}
-					type="password"
-					placeholder="At least 12 characters"
-					required
-				/>
+				<div>
+					<FormField
+						label="New Password"
+						value={newPassword}
+						onChange={setNewPassword}
+						type="password"
+						placeholder="At least 12 characters"
+						required
+					/>
+					<PasswordStrengthMeter password={newPassword} />
+				</div>
 				<FormField
 					label="Confirm New Password"
 					value={confirmNewPassword}
