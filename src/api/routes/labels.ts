@@ -1,12 +1,14 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
+import { parseIntParam, parsePagination } from "../validation.js";
 
 export function labelRoutes(getDb: () => Database.Database): Hono {
 	const api = new Hono();
 
 	api.put("/:labelId", async (c) => {
 		const db = getDb();
-		const labelId = Number(c.req.param("labelId"));
+		const labelId = parseIntParam(c, "labelId", c.req.param("labelId"));
+		if (labelId instanceof Response) return labelId;
 		const body = await c.req.json();
 
 		const sets: string[] = [];
@@ -30,16 +32,19 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 	});
 
 	api.delete("/:labelId", (c) => {
-		const labelId = Number(c.req.param("labelId"));
+		const labelId = parseIntParam(c, "labelId", c.req.param("labelId"));
+		if (labelId instanceof Response) return labelId;
 		const result = getDb().prepare("DELETE FROM labels WHERE id = ?").run(labelId);
 		if (result.changes === 0) return c.json({ error: "Label not found" }, 404);
 		return c.json({ ok: true });
 	});
 
 	api.get("/:labelId/messages", (c) => {
-		const labelId = Number(c.req.param("labelId"));
-		const limit = Number(c.req.query("limit") ?? 50);
-		const offset = Number(c.req.query("offset") ?? 0);
+		const labelId = parseIntParam(c, "labelId", c.req.param("labelId"));
+		if (labelId instanceof Response) return labelId;
+		const pagination = parsePagination(c);
+		if (pagination instanceof Response) return pagination;
+		const { limit, offset } = pagination;
 
 		const messages = getDb()
 			.prepare(`

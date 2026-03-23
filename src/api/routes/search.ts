@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
 import { MessageSearch } from "../../search/search.js";
+import { parsePagination } from "../validation.js";
 
 export function searchRoutes(getDb: () => Database.Database): Hono {
 	const api = new Hono();
@@ -9,9 +10,17 @@ export function searchRoutes(getDb: () => Database.Database): Hono {
 		const query = c.req.query("q");
 		if (!query) return c.json({ error: "Query parameter 'q' is required" }, 400);
 
-		const accountId = c.req.query("account_id") ? Number(c.req.query("account_id")) : undefined;
-		const limit = Number(c.req.query("limit") ?? 50);
-		const offset = Number(c.req.query("offset") ?? 0);
+		const rawAccountId = c.req.query("account_id");
+		let accountId: number | undefined;
+		if (rawAccountId !== undefined) {
+			accountId = Number(rawAccountId);
+			if (!Number.isFinite(accountId) || accountId < 1) {
+				return c.json({ error: "Invalid account_id: must be a positive integer" }, 400);
+			}
+		}
+		const pagination = parsePagination(c);
+		if (pagination instanceof Response) return pagination;
+		const { limit, offset } = pagination;
 
 		const search = new MessageSearch(getDb());
 		const results = search.search(query, { accountId, limit, offset });

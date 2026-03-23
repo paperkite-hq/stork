@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
+import { parseIntParam } from "../validation.js";
 
 /** Routes for managing per-account image trusted senders.
  *  Trusted senders have their remote images loaded automatically —
@@ -9,7 +10,8 @@ export function trustedSenderRoutes(getDb: () => Database.Database): Hono {
 
 	// List trusted senders for an account
 	api.get("/accounts/:accountId/trusted-senders", (c) => {
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const rows = getDb()
 			.prepare(
 				"SELECT id, sender_address, created_at FROM image_trusted_senders WHERE account_id = ? ORDER BY sender_address",
@@ -20,7 +22,8 @@ export function trustedSenderRoutes(getDb: () => Database.Database): Hono {
 
 	// Check if a specific sender is trusted for an account
 	api.get("/accounts/:accountId/trusted-senders/check", (c) => {
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const sender = c.req.query("sender");
 		if (!sender) return c.json({ error: "sender query param required" }, 400);
 
@@ -34,7 +37,8 @@ export function trustedSenderRoutes(getDb: () => Database.Database): Hono {
 	// Add a trusted sender
 	api.post("/accounts/:accountId/trusted-senders", async (c) => {
 		const db = getDb();
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const body = await c.req.json();
 		if (!body.sender_address) return c.json({ error: "sender_address is required" }, 400);
 
@@ -56,7 +60,8 @@ export function trustedSenderRoutes(getDb: () => Database.Database): Hono {
 
 	// Remove a trusted sender
 	api.delete("/trusted-senders/:id", (c) => {
-		const id = Number(c.req.param("id"));
+		const id = parseIntParam(c, "id", c.req.param("id"));
+		if (id instanceof Response) return id;
 		const result = getDb().prepare("DELETE FROM image_trusted_senders WHERE id = ?").run(id);
 		if (result.changes === 0) return c.json({ error: "Trusted sender not found" }, 404);
 		return c.json({ ok: true });
@@ -64,7 +69,8 @@ export function trustedSenderRoutes(getDb: () => Database.Database): Hono {
 
 	// Remove a trusted sender by address (convenience endpoint)
 	api.delete("/accounts/:accountId/trusted-senders", async (c) => {
-		const accountId = Number(c.req.param("accountId"));
+		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
+		if (accountId instanceof Response) return accountId;
 		const body = await c.req.json();
 		if (!body.sender_address) return c.json({ error: "sender_address is required" }, 400);
 

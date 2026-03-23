@@ -642,5 +642,53 @@ describe("Messages API", () => {
 				expect(body.error).toMatch(/folder/i);
 			});
 		});
+
+		test("non-numeric ids in array returns 400", async () => {
+			const { status, body } = await bulkPost({
+				ids: ["abc", 1],
+				action: "delete",
+			});
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/positive integers/i);
+		});
+	});
+
+	// ─── Route parameter validation ─────────────────────────
+	describe("Route parameter validation", () => {
+		test("GET /api/messages/abc returns 400 for non-numeric messageId", async () => {
+			const { status, body } = await jsonRequest("/api/messages/abc");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/messageId/);
+		});
+
+		test("GET /api/messages/0 returns 400 for zero messageId", async () => {
+			const { status, body } = await jsonRequest("/api/messages/0");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/positive integer/);
+		});
+
+		test("GET /api/messages/abc/thread returns 400", async () => {
+			const { status, body } = await jsonRequest("/api/messages/abc/thread");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/messageId/);
+		});
+
+		test("PATCH /api/messages/abc/flags returns 400", async () => {
+			const { status, body } = await jsonRequest("/api/messages/abc/flags", {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ add: ["\\Seen"] }),
+			});
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/messageId/);
+		});
+
+		test("DELETE /api/messages/abc returns 400", async () => {
+			const { status, body } = await jsonRequest("/api/messages/abc", {
+				method: "DELETE",
+			});
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/messageId/);
+		});
 	});
 });
