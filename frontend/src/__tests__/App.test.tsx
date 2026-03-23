@@ -1707,6 +1707,34 @@ describe("App — Sync trigger errors", () => {
 // Tests: Send with reply threading headers
 // ------------------------------------------------------------------
 
+describe("App — Welcome screen", () => {
+	it("shows welcome screen when no accounts exist", async () => {
+		setupWithAccounts([], []);
+		render(<App />);
+		await waitFor(() => {
+			expect(screen.getByText("Welcome to Stork")).toBeInTheDocument();
+		});
+	});
+});
+
+describe("App — Escape key chain", () => {
+	it("Escape closes shortcuts modal", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+		// Open shortcuts help
+		fireEvent.keyDown(window, { key: "?" });
+		await waitFor(() => {
+			expect(screen.getByText("Keyboard Shortcuts")).toBeInTheDocument();
+		});
+		// Press Escape
+		fireEvent.keyDown(window, { key: "Escape" });
+		await waitFor(() => {
+			expect(screen.queryByText("Keyboard Shortcuts")).not.toBeInTheDocument();
+		});
+	});
+});
+
 describe("App — Reply compose pre-fills sender", () => {
 	it("reply shortcut opens compose with the original sender's address pre-filled", async () => {
 		const msg = makeMessage({
