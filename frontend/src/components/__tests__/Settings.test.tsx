@@ -6,6 +6,7 @@ import { Settings } from "../Settings";
 // Mock the api module
 vi.mock("../../api", () => ({
 	api: {
+		testSmtp: vi.fn().mockResolvedValue({ ok: true }),
 		accounts: {
 			list: vi
 				.fn()
@@ -1028,5 +1029,222 @@ describe("Settings — Provider auto-fill in account form", () => {
 		await userEvent.click(screen.getByText("Delete Account"));
 		// The error toast should fire — verify the delete API was called
 		await waitFor(() => expect(api.accounts.delete).toHaveBeenCalledWith(1));
+	});
+});
+
+describe("Settings — SMTP connection testing", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorageMock.clear();
+	});
+
+	it("shows Test SMTP button when smtp_host is filled", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		// No Test SMTP button initially since smtp_host is empty
+		expect(screen.queryByText("Test SMTP")).not.toBeInTheDocument();
+		// Fill SMTP host
+		await userEvent.type(screen.getByPlaceholderText("smtp.example.com"), "smtp.test.com");
+		expect(screen.getByText("Test SMTP")).toBeInTheDocument();
+	});
+
+	it("tests SMTP connection successfully", async () => {
+		const { api } = await import("../../api");
+		(api as unknown as { testSmtp: ReturnType<typeof vi.fn> }).testSmtp = vi
+			.fn()
+			.mockResolvedValueOnce({ ok: true });
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		// Fill IMAP fields (required for SMTP test to use as fallback)
+		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
+		const userFields = screen.getAllByPlaceholderText("you@example.com");
+		const imapUserField = userFields.find((el) =>
+			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
+		const passwordFields = screen.getAllByDisplayValue("");
+		const imapPassField = passwordFields.find(
+			(el) =>
+				el.getAttribute("type") === "password" &&
+				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapPassField) await userEvent.type(imapPassField, "pass123");
+		// Fill SMTP host to make button appear
+		await userEvent.type(screen.getByPlaceholderText("smtp.example.com"), "smtp.test.com");
+		await userEvent.click(screen.getByText("Test SMTP"));
+		await waitFor(() =>
+			expect(screen.getByText("SMTP connection successful — ready to send")).toBeInTheDocument(),
+		);
+	});
+
+	it("tests SMTP connection and shows failure message", async () => {
+		const { api } = await import("../../api");
+		(api as unknown as { testSmtp: ReturnType<typeof vi.fn> }).testSmtp = vi
+			.fn()
+			.mockResolvedValueOnce({ ok: false, error: "Auth rejected" });
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
+		const userFields = screen.getAllByPlaceholderText("you@example.com");
+		const imapUserField = userFields.find((el) =>
+			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
+		const passwordFields = screen.getAllByDisplayValue("");
+		const imapPassField = passwordFields.find(
+			(el) =>
+				el.getAttribute("type") === "password" &&
+				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapPassField) await userEvent.type(imapPassField, "pass123");
+		await userEvent.type(screen.getByPlaceholderText("smtp.example.com"), "smtp.test.com");
+		await userEvent.click(screen.getByText("Test SMTP"));
+		await waitFor(() =>
+			expect(screen.getByText(/SMTP connection failed: Auth rejected/)).toBeInTheDocument(),
+		);
+	});
+
+	it("handles SMTP test network error", async () => {
+		const { api } = await import("../../api");
+		(api as unknown as { testSmtp: ReturnType<typeof vi.fn> }).testSmtp = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Connection refused"));
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
+		const userFields = screen.getAllByPlaceholderText("you@example.com");
+		const imapUserField = userFields.find((el) =>
+			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
+		const passwordFields = screen.getAllByDisplayValue("");
+		const imapPassField = passwordFields.find(
+			(el) =>
+				el.getAttribute("type") === "password" &&
+				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		);
+		if (imapPassField) await userEvent.type(imapPassField, "pass123");
+		await userEvent.type(screen.getByPlaceholderText("smtp.example.com"), "smtp.test.com");
+		await userEvent.click(screen.getByText("Test SMTP"));
+		await waitFor(() =>
+			expect(screen.getByText(/SMTP connection failed: Connection refused/)).toBeInTheDocument(),
+		);
+	});
+});
+
+describe("Settings — Security tab recovery rotation", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorageMock.clear();
+	});
+
+	it("shows error when confirm rotation API fails", async () => {
+		const { api } = await import("../../api");
+		(api.encryption.confirmRecoveryRotation as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Confirmation failed — wrong password"),
+		);
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
+		await userEvent.type(
+			screen.getByPlaceholderText("Confirm your encryption password"),
+			"mypassword123!",
+		);
+		await userEvent.click(screen.getByRole("button", { name: /rotate recovery key/i }));
+		await waitFor(() => expect(screen.getByText("New Recovery Phrase")).toBeInTheDocument());
+		await userEvent.click(screen.getByRole("checkbox"));
+		await userEvent.click(screen.getByRole("button", { name: /confirm/i }));
+		await waitFor(() =>
+			expect(screen.getByText("Confirmation failed — wrong password")).toBeInTheDocument(),
+		);
+		// Should still show the mnemonic (not dismissed)
+		expect(screen.getByText("New Recovery Phrase")).toBeInTheDocument();
+	});
+
+	it("cancels rotation and returns to rotate form", async () => {
+		const { api } = await import("../../api");
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
+		await userEvent.type(
+			screen.getByPlaceholderText("Confirm your encryption password"),
+			"mypassword123!",
+		);
+		await userEvent.click(screen.getByRole("button", { name: /rotate recovery key/i }));
+		await waitFor(() => expect(screen.getByText("New Recovery Phrase")).toBeInTheDocument());
+		// Click Cancel
+		await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+		await waitFor(() => expect(api.encryption.cancelRecoveryRotation).toHaveBeenCalled());
+		// Should return to rotate form
+		expect(screen.getByRole("heading", { name: "Rotate Recovery Key" })).toBeInTheDocument();
+		expect(screen.queryByText("New Recovery Phrase")).not.toBeInTheDocument();
+	});
+
+	it("shows pending rotation warning on mount", async () => {
+		const { api } = await import("../../api");
+		(api.encryption.recoveryRotationStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			pending: true,
+		});
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
+		await waitFor(() =>
+			expect(
+				screen.getByText(/A recovery key rotation was started but not confirmed/),
+			).toBeInTheDocument(),
+		);
+	});
+
+	it("cancels pending rotation via inline button", async () => {
+		const { api } = await import("../../api");
+		(api.encryption.recoveryRotationStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			pending: true,
+		});
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
+		await waitFor(() =>
+			expect(screen.getByText("Cancel the pending rotation")).toBeInTheDocument(),
+		);
+		await userEvent.click(screen.getByText("Cancel the pending rotation"));
+		await waitFor(() => expect(api.encryption.cancelRecoveryRotation).toHaveBeenCalled());
+		// Warning should disappear
+		await waitFor(() =>
+			expect(screen.queryByText(/A recovery key rotation was started/)).not.toBeInTheDocument(),
+		);
+	});
+});
+
+describe("Settings — tab navigation", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorageMock.clear();
+	});
+
+	it("switches between all three tabs", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		// Start on Accounts tab
+		await waitFor(() => expect(screen.getByText("Email Accounts")).toBeInTheDocument());
+		// Switch to General
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
+		expect(screen.getByText("General Settings")).toBeInTheDocument();
+		// Switch to Security
+		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
+		expect(screen.getByRole("heading", { name: "Change Password" })).toBeInTheDocument();
+		// Switch back to Accounts
+		await userEvent.click(screen.getAllByText("Accounts")[0] as HTMLElement);
+		await waitFor(() => expect(screen.getByText("Email Accounts")).toBeInTheDocument());
 	});
 });
