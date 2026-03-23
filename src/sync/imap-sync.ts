@@ -90,6 +90,7 @@ export class ImapSync {
 	private subBatchLabelSize: number;
 
 	private insertSyncError: Database.Statement | null = null;
+	private activeOnError?: (error: SyncError) => void;
 
 	constructor(
 		config: ImapConfig,
@@ -132,6 +133,7 @@ export class ImapSync {
 			error.message,
 			error.retriable ? 1 : 0,
 		);
+		this.activeOnError?.(error);
 	}
 
 	/**
@@ -232,14 +234,21 @@ export class ImapSync {
 	 *
 	 * Accepts an optional onProgress callback that fires as sync proceeds,
 	 * useful for showing real-time status in the UI.
+	 *
+	 * Accepts an optional onError callback that fires immediately when an
+	 * error is recorded, so callers can log errors inline rather than
+	 * waiting for the summary.
 	 */
 	async syncAll(
 		signal?: AbortSignal,
 		onProgress?: (progress: SyncProgress) => void,
+		onError?: (error: SyncError) => void,
 	): Promise<SyncAllResult> {
 		const result: SyncAllResult = { folders: [], totalNew: 0, totalErrors: 0, aborted: false };
 
 		if (signal?.aborted) return result;
+
+		this.activeOnError = onError;
 
 		// Mark previous errors as resolved — they'll be re-recorded if they recur
 		this.resolveStaleErrors();
@@ -319,6 +328,7 @@ export class ImapSync {
 
 			return result;
 		} finally {
+			this.activeOnError = undefined;
 			signal?.removeEventListener("abort", onAbort);
 		}
 	}
@@ -714,10 +724,10 @@ export class ImapSync {
 				// Connection force-closed during shutdown — treat as normal abort
 				if (signal?.aborted) break;
 				this.recordError(result, {
-					folderPath: null,
+					folderPath: result.folder,
 					uid: null,
 					errorType: "flags",
-					message: `Flag sync batch error: ${err}`,
+					message: `Flag sync failed for "${result.folder}" (UIDs ${batch[0]}–${batch[batch.length - 1]}): ${formatImapError(err)}`,
 					retriable: true,
 				});
 			}

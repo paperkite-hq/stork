@@ -84,6 +84,10 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 	vaultKey.fill(0);
 
 	const scheduler = new SyncScheduler(db, {
+		onSyncRecordError: (_accountId, err) => {
+			const retry = err.retriable ? "(will retry)" : "(permanent)";
+			console.error(`  [${err.errorType}] ${err.message} ${retry}`);
+		},
 		onSyncComplete: (accountId, result) => {
 			if (result.aborted) {
 				console.log(`Sync interrupted for account ${accountId}: ${result.totalNew} new (aborted)`);
@@ -92,13 +96,6 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 			const parts = [`Sync complete for account ${accountId}: ${result.totalNew} new`];
 			if (result.totalErrors > 0) {
 				parts.push(`${result.totalErrors} errors`);
-				// Log each error with detail so the user knows what failed
-				for (const folder of result.folders) {
-					for (const err of folder.errors) {
-						const retry = err.retriable ? "(will retry)" : "(permanent)";
-						console.error(`  [${err.errorType}] ${err.message} ${retry}`);
-					}
-				}
 			}
 			console.log(parts.join(", "));
 		},
