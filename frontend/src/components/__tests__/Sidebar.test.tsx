@@ -59,12 +59,12 @@ describe("Sidebar", () => {
 		expect(onCompose).toHaveBeenCalledOnce();
 	});
 
-	it("renders search button", async () => {
+	it("renders search input and opens search on focus", async () => {
 		const onSearch = vi.fn();
 		render(<Sidebar {...defaultProps} onSearch={onSearch} />);
 
-		const searchBtn = screen.getByText("Search mail…");
-		await userEvent.click(searchBtn);
+		const searchInput = screen.getByPlaceholderText("Search mail…");
+		await userEvent.click(searchInput);
 		expect(onSearch).toHaveBeenCalledOnce();
 	});
 

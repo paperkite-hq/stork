@@ -2,7 +2,13 @@ import { act, render, renderHook, screen, waitFor } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { useRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useAsync, useDarkMode, useFocusTrap, useKeyboardShortcuts } from "../hooks";
+import {
+	useAsync,
+	useDarkMode,
+	useFocusTrap,
+	useHistoryNavigation,
+	useKeyboardShortcuts,
+} from "../hooks";
 
 describe("useAsync", () => {
 	it("returns data on success", async () => {
@@ -339,5 +345,172 @@ describe("useFocusTrap", () => {
 	it("auto-focuses first focusable element on mount", () => {
 		render(<TestModal />);
 		expect(document.activeElement).toBe(screen.getByText("First"));
+	});
+});
+
+describe("useHistoryNavigation", () => {
+	beforeEach(() => {
+		// Reset history state
+		history.replaceState(null, "");
+	});
+
+	it("replaces initial history entry with current state when accountId becomes non-null", () => {
+		const onNavigate = vi.fn();
+		const { rerender } = renderHook(
+			(props: {
+				accountId: number | null;
+				labelId: number | null;
+				messageId: number | null;
+			}) =>
+				useHistoryNavigation({
+					...props,
+					onNavigate,
+				}),
+			{ initialProps: { accountId: null, labelId: null, messageId: null } },
+		);
+
+		// accountId is null — should not set state yet
+		expect(history.state).toBeNull();
+
+		// Rerender with a valid accountId
+		rerender({ accountId: 1, labelId: 5, messageId: null });
+		expect(history.state).toEqual({
+			accountId: 1,
+			labelId: 5,
+			messageId: null,
+			searchActive: undefined,
+		});
+	});
+
+	it("pushes new state when navigation changes after initialization", () => {
+		const onNavigate = vi.fn();
+		const pushSpy = vi.spyOn(history, "pushState");
+
+		const { rerender } = renderHook(
+			(props: {
+				accountId: number | null;
+				labelId: number | null;
+				messageId: number | null;
+			}) =>
+				useHistoryNavigation({
+					...props,
+					onNavigate,
+				}),
+			{ initialProps: { accountId: 1, labelId: 5, messageId: null } },
+		);
+
+		// Clear the calls from initialization
+		pushSpy.mockClear();
+
+		// Change navigation state
+		rerender({ accountId: 1, labelId: 10, messageId: null });
+		expect(pushSpy).toHaveBeenCalledWith(
+			{ accountId: 1, labelId: 10, messageId: null, searchActive: undefined },
+			"",
+		);
+
+		pushSpy.mockRestore();
+	});
+
+	it("does not push duplicate state", () => {
+		const onNavigate = vi.fn();
+		const pushSpy = vi.spyOn(history, "pushState");
+
+		const { rerender } = renderHook(
+			(props: {
+				accountId: number | null;
+				labelId: number | null;
+				messageId: number | null;
+			}) =>
+				useHistoryNavigation({
+					...props,
+					onNavigate,
+				}),
+			{ initialProps: { accountId: 1, labelId: 5, messageId: null } },
+		);
+
+		pushSpy.mockClear();
+
+		// Re-render with same state — should not push
+		rerender({ accountId: 1, labelId: 5, messageId: null });
+		expect(pushSpy).not.toHaveBeenCalled();
+
+		pushSpy.mockRestore();
+	});
+
+	it("calls onNavigate on popstate event", () => {
+		const onNavigate = vi.fn();
+
+		renderHook(() =>
+			useHistoryNavigation({
+				accountId: 1,
+				labelId: 5,
+				messageId: null,
+				onNavigate,
+			}),
+		);
+
+		// Simulate a popstate event (browser back/forward)
+		const navState = { accountId: 1, labelId: 3, messageId: 42, searchActive: false };
+		act(() => {
+			const event = new PopStateEvent("popstate", { state: navState });
+			window.dispatchEvent(event);
+		});
+
+		expect(onNavigate).toHaveBeenCalledWith(navState);
+	});
+
+	it("ignores popstate with null state", () => {
+		const onNavigate = vi.fn();
+
+		renderHook(() =>
+			useHistoryNavigation({
+				accountId: 1,
+				labelId: 5,
+				messageId: null,
+				onNavigate,
+			}),
+		);
+
+		act(() => {
+			const event = new PopStateEvent("popstate", { state: null });
+			window.dispatchEvent(event);
+		});
+
+		expect(onNavigate).not.toHaveBeenCalled();
+	});
+
+	it("does not push state after popstate (prevents circular navigation)", () => {
+		const onNavigate = vi.fn();
+		const pushSpy = vi.spyOn(history, "pushState");
+
+		const { rerender } = renderHook(
+			(props: {
+				accountId: number | null;
+				labelId: number | null;
+				messageId: number | null;
+			}) =>
+				useHistoryNavigation({
+					...props,
+					onNavigate,
+				}),
+			{ initialProps: { accountId: 1, labelId: 5, messageId: null } },
+		);
+
+		pushSpy.mockClear();
+
+		// Simulate popstate
+		const navState = { accountId: 1, labelId: 3, messageId: null };
+		act(() => {
+			window.dispatchEvent(new PopStateEvent("popstate", { state: navState }));
+		});
+
+		// Rerender with the navigated state (simulating what the App would do after onNavigate)
+		rerender({ accountId: 1, labelId: 3, messageId: null });
+
+		// Should NOT push (isPopstateRef prevents it)
+		expect(pushSpy).not.toHaveBeenCalled();
+
+		pushSpy.mockRestore();
 	});
 });

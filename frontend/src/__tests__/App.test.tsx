@@ -178,9 +178,9 @@ function setupWithAccounts(
 
 /** Wait for the main app layout (not Welcome screen) to be ready */
 async function waitForAppLayout() {
-	// "Search mail" text is unique to the sidebar search button — unambiguous signal that layout loaded
+	// Search input placeholder is unique to the sidebar — unambiguous signal that layout loaded
 	await waitFor(() => {
-		expect(screen.getByText("Search mail…")).toBeInTheDocument();
+		expect(screen.getByPlaceholderText("Search mail…")).toBeInTheDocument();
 	});
 }
 
@@ -243,8 +243,8 @@ describe("App — Welcome screen", () => {
 		await waitFor(() => {
 			expect(screen.getByText("Welcome to Stork")).toBeInTheDocument();
 		});
-		// Sidebar compose button should not be present in Welcome mode
-		expect(screen.queryByText("Search mail…")).not.toBeInTheDocument();
+		// Sidebar search input should not be present in Welcome mode
+		expect(screen.queryByPlaceholderText("Search mail…")).not.toBeInTheDocument();
 	});
 });
 
@@ -444,7 +444,7 @@ describe("App — Search panel", () => {
 		setupWithAccounts();
 		render(<App />);
 		await waitForAppLayout();
-		await userEvent.click(screen.getByText("Search mail…"));
+		await userEvent.click(screen.getByPlaceholderText("Search mail…"));
 		await waitFor(() => {
 			expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument();
 		});
@@ -1763,5 +1763,222 @@ describe("App — Reply compose pre-fills sender", () => {
 			const toInput = screen.getByPlaceholderText("recipient@example.com") as HTMLInputElement;
 			expect(toInput.value).toContain("alice@test.com");
 		});
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Send with threading headers
+// ------------------------------------------------------------------
+
+describe("App — Send with reply threading", () => {
+	it("sends reply with In-Reply-To and References headers", async () => {
+		const original = makeMessage({
+			id: 91,
+			subject: "Thread test",
+			from_address: "bob@test.com",
+			message_id: "<original@test.com>",
+			references: '["<ref1@test.com>","<ref2@test.com>"]',
+			text_body: "Original body",
+		});
+		mockApi.messages.get.mockResolvedValue(original);
+		mockApi.messages.getThread.mockResolvedValue([original]);
+		(api.send as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			message_id: "<reply@test.com>",
+			accepted: ["bob@test.com"],
+			rejected: [],
+			stored_message_id: 2,
+		});
+		setupWithAccounts(
+			[makeAccount()],
+			[makeLabel()],
+			[makeMessageSummary({ id: 91, subject: "Thread test" })],
+		);
+		render(<App />);
+		await waitFor(() => expect(screen.getByText("Thread test")).toBeInTheDocument());
+		// Select message and wait for detail to finish loading
+		await userEvent.click(screen.getByText("Thread test"));
+		await waitFor(() => expect(mockApi.messages.get).toHaveBeenCalledWith(91));
+		// Wait for message to render (ThreadMessage shows text_body in a pre tag)
+		await waitFor(() => expect(screen.getByText("Original body")).toBeInTheDocument());
+		// Press r to reply
+		fireEvent.keyDown(window, { key: "r" });
+		await waitFor(() =>
+			expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument(),
+		);
+		// Verify To field is pre-filled with sender
+		const toInput = screen.getByPlaceholderText("recipient@example.com") as HTMLInputElement;
+		expect(toInput.value).toBe("bob@test.com");
+		// Click Send — find the button by exact text content
+		const allBtns = screen.getAllByRole("button");
+		const sendBtn = allBtns.find(
+			(b) => b.textContent === "Send" || b.textContent === "Sending…",
+		) as HTMLElement;
+		expect(sendBtn).toBeDefined();
+		await userEvent.click(sendBtn);
+		await waitFor(
+			() => {
+				expect(api.send).toHaveBeenCalledWith(
+					expect.objectContaining({
+						in_reply_to: "<original@test.com>",
+						references: ["<ref1@test.com>", "<ref2@test.com>", "<original@test.com>"],
+					}),
+				);
+			},
+			{ timeout: 3000 },
+		);
+	});
+
+	it("sends reply with space-separated references fallback", async () => {
+		const original = makeMessage({
+			id: 92,
+			subject: "Space refs",
+			from_address: "bob@test.com",
+			message_id: "<orig2@test.com>",
+			references: "<ref-a@test.com> <ref-b@test.com>",
+			text_body: "Ref body",
+		});
+		mockApi.messages.get.mockResolvedValue(original);
+		mockApi.messages.getThread.mockResolvedValue([original]);
+		(api.send as ReturnType<typeof vi.fn>).mockResolvedValue({
+			ok: true,
+			message_id: "<reply2@test.com>",
+			accepted: ["bob@test.com"],
+			rejected: [],
+			stored_message_id: 3,
+		});
+		setupWithAccounts(
+			[makeAccount()],
+			[makeLabel()],
+			[makeMessageSummary({ id: 92, subject: "Space refs" })],
+		);
+		render(<App />);
+		await waitFor(() => expect(screen.getByText("Space refs")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("Space refs"));
+		await waitFor(() => expect(screen.getByText("Ref body")).toBeInTheDocument());
+		fireEvent.keyDown(window, { key: "r" });
+		await waitFor(() =>
+			expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument(),
+		);
+		const allBtns = screen.getAllByRole("button");
+		const sendBtn = allBtns.find(
+			(b) => b.textContent === "Send" || b.textContent === "Sending…",
+		) as HTMLElement;
+		expect(sendBtn).toBeDefined();
+		await userEvent.click(sendBtn);
+		await waitFor(
+			() => {
+				expect(api.send).toHaveBeenCalledWith(
+					expect.objectContaining({
+						in_reply_to: "<orig2@test.com>",
+						references: ["<ref-a@test.com>", "<ref-b@test.com>", "<orig2@test.com>"],
+					}),
+				);
+			},
+			{ timeout: 3000 },
+		);
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Message detail callbacks (onBack, onMessageChanged, onMessageDeleted)
+// ------------------------------------------------------------------
+
+describe("App — MessageDetail callbacks", () => {
+	async function setupWithMessage() {
+		const msg = makeMessage({ id: 70, subject: "Detail test", text_body: "Body text" });
+		mockApi.messages.get.mockResolvedValue(msg);
+		mockApi.messages.getThread.mockResolvedValue([msg]);
+		setupWithAccounts(
+			[makeAccount()],
+			[makeLabel()],
+			[makeMessageSummary({ id: 70, subject: "Detail test" })],
+		);
+		render(<App />);
+		await waitFor(() => expect(screen.getByText("Detail test")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("Detail test"));
+		await waitFor(() => expect(mockApi.messages.get).toHaveBeenCalledWith(70));
+	}
+
+	it("back button deselects message and returns to message list", async () => {
+		await setupWithMessage();
+		// Wait for message body to render in detail view
+		await waitFor(() => expect(screen.getByText("Body text")).toBeInTheDocument());
+		// Find the back button in the message detail header (text "← Back to list")
+		const backBtn = screen.getByText(/← Back/);
+		const msgGetCallsBefore = mockApi.messages.get.mock.calls.length;
+		await userEvent.click(backBtn);
+		// After clicking back, no new message fetch should happen (message deselected)
+		await new Promise((r) => setTimeout(r, 50));
+		expect(mockApi.messages.get.mock.calls.length).toBe(msgGetCallsBefore);
+	});
+
+	it("deleting message from detail view triggers onMessageDeleted", async () => {
+		await setupWithMessage();
+		// Wait for message body to render in detail view
+		await waitFor(() => expect(screen.getByText("Body text")).toBeInTheDocument());
+		// Find the delete button in the message detail header actions
+		const deleteBtn = screen.getByTitle("Delete message");
+		await userEvent.click(deleteBtn);
+		// Confirm deletion in the dialog
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"This will permanently delete this message. This action cannot be undone.",
+				),
+			).toBeInTheDocument(),
+		);
+		await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+		// After deletion, messages and labels should be refetched
+		await waitFor(() => {
+			expect(api.messages.delete as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(70);
+		});
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Search result navigation
+// ------------------------------------------------------------------
+
+describe("App — Search result navigation", () => {
+	it("opening search and closing returns to correct state", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+		// Open search
+		fireEvent.keyDown(window, { key: "/" });
+		await waitFor(() =>
+			expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument(),
+		);
+		// Close search
+		fireEvent.keyDown(window, { key: "Escape" });
+		await waitFor(() =>
+			expect(screen.queryByPlaceholderText("Search messages…")).not.toBeInTheDocument(),
+		);
+		// Main layout should still be intact
+		expect(screen.getByPlaceholderText("Search mail…")).toBeInTheDocument();
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Escape priority — settings modal
+// ------------------------------------------------------------------
+
+describe("App — Escape closes settings before other modals", () => {
+	it("Escape closes settings modal when settings is open", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+		// Open settings
+		const settingsBtns = screen.getAllByTitle("Settings");
+		await userEvent.click(settingsBtns[0] as HTMLElement);
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument(),
+		);
+		// Escape should close settings
+		fireEvent.keyDown(window, { key: "Escape" });
+		await waitFor(() =>
+			expect(screen.queryByRole("heading", { name: "Settings" })).not.toBeInTheDocument(),
+		);
 	});
 });
