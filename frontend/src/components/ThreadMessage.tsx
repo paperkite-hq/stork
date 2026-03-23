@@ -20,10 +20,12 @@ interface ThreadMessageProps {
 	expanded: boolean;
 	showHtml: boolean;
 	imagesAllowed: boolean;
+	senderTrusted: boolean;
 	dark?: boolean;
 	onToggleExpanded: (id: number) => void;
 	onToggleShowHtml: () => void;
 	onAllowImages: (id: number) => void;
+	onTrustSender: (senderAddress: string) => void;
 	onReply: (msg: Message) => void;
 	onReplyAll: (msg: Message) => void;
 	onForward: (msg: Message) => void;
@@ -39,10 +41,12 @@ export function ThreadMessage({
 	expanded,
 	showHtml,
 	imagesAllowed,
+	senderTrusted,
 	dark,
 	onToggleExpanded,
 	onToggleShowHtml,
 	onAllowImages,
+	onTrustSender,
 	onReply,
 	onReplyAll,
 	onForward,
@@ -113,32 +117,51 @@ export function ThreadMessage({
 					)}
 
 					{/* Remote images banner */}
-					{showHtml && msg.html_body && !imagesAllowed && hasRemoteImages(msg.html_body) && (
-						<div className="mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md text-sm text-amber-700 dark:text-amber-400">
-							<ImageIcon className="w-4 h-4 flex-shrink-0" />
-							<span>
-								Remote images are hidden to protect your privacy. Tracking pixels are always
-								blocked.
-							</span>
-							<button
-								type="button"
-								onClick={() => onAllowImages(msg.id)}
-								className="ml-auto text-xs font-medium text-amber-600 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 whitespace-nowrap"
-								title="Load remote images for this message only. This choice is not remembered — images will be hidden again next time you open this message."
-							>
-								Show for this message
-							</button>
-						</div>
-					)}
+					{showHtml &&
+						msg.html_body &&
+						!imagesAllowed &&
+						!senderTrusted &&
+						hasRemoteImages(msg.html_body) && (
+							<div className="mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md text-sm text-amber-700 dark:text-amber-400">
+								<ImageIcon className="w-4 h-4 flex-shrink-0" />
+								<span>
+									Remote images are hidden to protect your privacy. Tracking pixels are always
+									blocked.
+								</span>
+								<div className="ml-auto flex items-center gap-2">
+									<button
+										type="button"
+										onClick={() => onAllowImages(msg.id)}
+										className="text-xs font-medium text-amber-600 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 whitespace-nowrap"
+										title="Load remote images for this message only. This choice is not remembered — images will be hidden again next time you open this message."
+									>
+										Show once
+									</button>
+									{msg.from_address && (
+										<>
+											<span className="text-amber-300 dark:text-amber-700">|</span>
+											<button
+												type="button"
+												onClick={() => onTrustSender(msg.from_address)}
+												className="text-xs font-medium text-amber-600 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 whitespace-nowrap"
+												title={`Always load remote images from ${msg.from_address}. Tracking pixels are still blocked.`}
+											>
+												Always show from this sender
+											</button>
+										</>
+									)}
+								</div>
+							</div>
+						)}
 
 					{showHtml && msg.html_body ? (
 						<SandboxedEmail
 							html={sanitizeEmailHtml(msg.html_body, {
-								blockRemoteImages: !imagesAllowed,
+								blockRemoteImages: !imagesAllowed && !senderTrusted,
 								messageId: msg.id,
 							})}
 							className="email-content"
-							allowRemoteImages={imagesAllowed}
+							allowRemoteImages={imagesAllowed || senderTrusted}
 							dark={dark}
 						/>
 					) : (

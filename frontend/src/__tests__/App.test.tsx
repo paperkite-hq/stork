@@ -67,6 +67,12 @@ vi.mock("../api", () => ({
 			update: vi.fn(),
 			delete: vi.fn(),
 		},
+		trustedSenders: {
+			list: vi.fn().mockResolvedValue([]),
+			check: vi.fn().mockResolvedValue({ trusted: false }),
+			add: vi.fn().mockResolvedValue({ id: 1 }),
+			remove: vi.fn().mockResolvedValue({ ok: true }),
+		},
 	},
 }));
 
