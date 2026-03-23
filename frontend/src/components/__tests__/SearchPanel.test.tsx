@@ -18,38 +18,50 @@ describe("SearchPanel", () => {
 	});
 
 	it("renders search input with placeholder", () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument();
 	});
 
 	it("renders close button", () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		expect(screen.getByTitle("Close")).toBeInTheDocument();
 	});
 
 	it("calls onClose when close button is clicked", async () => {
 		const onClose = vi.fn();
-		render(<SearchPanel onClose={onClose} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={onClose} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		await userEvent.click(screen.getByTitle("Close"));
 		expect(onClose).toHaveBeenCalledOnce();
 	});
 
 	it("calls onClose when Escape is pressed in input", async () => {
 		const onClose = vi.fn();
-		render(<SearchPanel onClose={onClose} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={onClose} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "{Escape}");
 		expect(onClose).toHaveBeenCalledOnce();
 	});
 
 	it("shows search tip with operator hints", () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		expect(screen.getByText(/to navigate/)).toBeInTheDocument();
 	});
 
 	it("shows no results message after search", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "nonexistent");
 		await waitFor(() => {
@@ -68,7 +80,9 @@ describe("SearchPanel", () => {
 				snippet: "This is a <b>match</b>",
 			},
 		]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "found");
 		await waitFor(() => {
@@ -90,7 +104,14 @@ describe("SearchPanel", () => {
 		]);
 		const onSelectMessage = vi.fn();
 		const onClose = vi.fn();
-		render(<SearchPanel onClose={onClose} onSelectMessage={onSelectMessage} accountId={null} />);
+		render(
+			<SearchPanel
+				visible={true}
+				onClose={onClose}
+				onSelectMessage={onSelectMessage}
+				accountId={null}
+			/>,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "clickable");
 		await waitFor(() => {
@@ -103,7 +124,9 @@ describe("SearchPanel", () => {
 
 	it("passes accountId to search API", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={5} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={5} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -140,7 +163,14 @@ describe("SearchPanel", () => {
 		]);
 		const onSelectMessage = vi.fn();
 		const onClose = vi.fn();
-		render(<SearchPanel onClose={onClose} onSelectMessage={onSelectMessage} accountId={null} />);
+		render(
+			<SearchPanel
+				visible={true}
+				onClose={onClose}
+				onSelectMessage={onSelectMessage}
+				accountId={null}
+			/>,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -189,7 +219,9 @@ describe("SearchPanel", () => {
 				snippet: "",
 			},
 		]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -203,7 +235,9 @@ describe("SearchPanel", () => {
 	});
 
 	it("shows keyboard navigation hint", () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		expect(screen.getByText(/to navigate/)).toBeInTheDocument();
 	});
 
@@ -218,7 +252,9 @@ describe("SearchPanel", () => {
 			snippet: "",
 		}));
 		mockSearch.mockResolvedValueOnce(results);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -239,7 +275,9 @@ describe("SearchPanel", () => {
 				snippet: "",
 			},
 		]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -268,7 +306,9 @@ describe("SearchPanel", () => {
 			},
 		];
 		mockSearch.mockResolvedValueOnce(firstPage);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={3} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={3} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "query");
 		await waitFor(() => {
@@ -288,7 +328,9 @@ describe("SearchPanel", () => {
 
 	it("calls onClose when backdrop is clicked", async () => {
 		const onClose = vi.fn();
-		render(<SearchPanel onClose={onClose} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={onClose} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		// Click the backdrop (the outer dialog overlay)
 		const backdrop = screen.getByRole("dialog");
 		await userEvent.click(backdrop);
@@ -297,7 +339,9 @@ describe("SearchPanel", () => {
 
 	it("does not close when clicking inside the modal content", async () => {
 		const onClose = vi.fn();
-		render(<SearchPanel onClose={onClose} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={onClose} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		// Click on the search input (inside the modal)
 		await userEvent.click(screen.getByPlaceholderText("Search messages…"));
 		expect(onClose).not.toHaveBeenCalled();
@@ -314,7 +358,9 @@ describe("SearchPanel", () => {
 				snippet: "",
 			},
 		]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -323,7 +369,9 @@ describe("SearchPanel", () => {
 	});
 
 	it("renders quick filter buttons", () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		expect(screen.getByText("Unread")).toBeInTheDocument();
 		expect(screen.getByText("Starred")).toBeInTheDocument();
 		expect(screen.getByText("Has attachment")).toBeInTheDocument();
@@ -332,7 +380,9 @@ describe("SearchPanel", () => {
 
 	it("toggles quick filter and triggers search", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={1} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={1} />,
+		);
 		// Click "Unread" filter
 		await userEvent.click(screen.getByText("Unread"));
 		await waitFor(() => {
@@ -342,7 +392,9 @@ describe("SearchPanel", () => {
 
 	it("shows active filter chips and allows removal", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		await userEvent.click(screen.getByText("Starred"));
 		await waitFor(() => {
 			// Should show the active filter chip
@@ -357,7 +409,9 @@ describe("SearchPanel", () => {
 
 	it("combines text query with filter chips", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		// Click a filter first
 		await userEvent.click(screen.getByText("Has attachment"));
 		// Then type a query
@@ -372,7 +426,9 @@ describe("SearchPanel", () => {
 	});
 
 	it("shows date range picker when Date range is clicked", async () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		await userEvent.click(screen.getByText("Date range"));
 		expect(screen.getByText("After:")).toBeInTheDocument();
 		expect(screen.getByText("Before:")).toBeInTheDocument();
@@ -381,7 +437,9 @@ describe("SearchPanel", () => {
 
 	it("shows filter-specific empty state when only filters are active", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		// Activate filter without typing any text
 		await userEvent.click(screen.getByText("Unread"));
 		await waitFor(() => {
@@ -391,7 +449,9 @@ describe("SearchPanel", () => {
 
 	it("clears all filters with Clear all button", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		// Activate two filters
 		await userEvent.click(screen.getByText("Unread"));
 		await userEvent.click(screen.getByText("Starred"));
@@ -406,7 +466,9 @@ describe("SearchPanel", () => {
 
 	it("applies date range filter with after and before dates", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={1} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={1} />,
+		);
 		// Open date range picker
 		await userEvent.click(screen.getByText("Date range"));
 		expect(screen.getByText("Apply")).toBeInTheDocument();
@@ -432,7 +494,9 @@ describe("SearchPanel", () => {
 
 	it("applies date filter with only after date", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		await userEvent.click(screen.getByText("Date range"));
 		const afterInput = screen.getByLabelText("After:");
 		await userEvent.type(afterInput, "2026-03-15");
@@ -447,7 +511,9 @@ describe("SearchPanel", () => {
 
 	it("combines date filters with text query and other filters", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		// Type a query first
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "invoice");
@@ -468,7 +534,9 @@ describe("SearchPanel", () => {
 
 	it("shows search error toast on API failure", async () => {
 		mockSearch.mockRejectedValueOnce(new Error("Search failed"));
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "broken");
 		// Wait for the search to be called and fail
@@ -484,7 +552,9 @@ describe("SearchPanel", () => {
 				resolveSearch = resolve;
 			}),
 		);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => expect(mockSearch).toHaveBeenCalled());
@@ -505,11 +575,47 @@ describe("SearchPanel", () => {
 				snippet: "",
 			},
 		]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => expect(mockSearch).toHaveBeenCalled());
 		await waitFor(() => expect(screen.getByText("Result")).toBeInTheDocument());
 		expect(screen.queryByTestId("search-skeleton")).not.toBeInTheDocument();
+	});
+
+	it("preserves search state when hidden and re-shown", async () => {
+		mockSearch.mockResolvedValue([
+			{
+				id: 1,
+				subject: "Persistent Result",
+				from_address: "alice@test.com",
+				from_name: "Alice",
+				date: "2026-01-15T10:00:00Z",
+				snippet: "",
+			},
+		]);
+		const { rerender } = render(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "persistent");
+		await waitFor(() => {
+			expect(screen.getByText("Persistent Result")).toBeInTheDocument();
+		});
+		// Hide the panel (simulates closing search)
+		rerender(
+			<SearchPanel visible={false} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
+		// Panel should not render anything
+		expect(screen.queryByText("Persistent Result")).not.toBeInTheDocument();
+		// Re-show the panel — state should persist
+		rerender(
+			<SearchPanel visible={true} onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />,
+		);
+		// Results and query should still be there
+		expect(screen.getByText("Persistent Result")).toBeInTheDocument();
+		expect(screen.getByPlaceholderText("Search messages…")).toHaveValue("persistent");
 	});
 });
