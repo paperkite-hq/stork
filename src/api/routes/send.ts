@@ -1,17 +1,22 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
+import { type SendConnectorType, createSendConnector } from "../../connectors/registry.js";
 import { SmtpSendConnector } from "../../connectors/smtp.js";
 import type { OutgoingAttachment } from "../../connectors/types.js";
 
-interface AccountSmtpRow {
+interface AccountSendRow {
 	id: number;
 	email: string;
 	name: string;
+	send_connector_type: SendConnectorType;
 	smtp_host: string | null;
 	smtp_port: number | null;
 	smtp_tls: number | null;
 	smtp_user: string | null;
 	smtp_pass: string | null;
+	ses_region: string | null;
+	ses_access_key_id: string | null;
+	ses_secret_access_key: string | null;
 }
 
 interface FolderRow {
@@ -58,21 +63,53 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 
 		const account = db
 			.prepare(
-				"SELECT id, email, name, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass FROM accounts WHERE id = ?",
+				`SELECT id, email, name, send_connector_type,
+					smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass,
+					ses_region, ses_access_key_id, ses_secret_access_key
+				FROM accounts WHERE id = ?`,
 			)
-			.get(account_id) as AccountSmtpRow | undefined;
+			.get(account_id) as AccountSendRow | undefined;
 
 		if (!account) return c.json({ error: "Account not found" }, 404);
-		if (!account.smtp_host || !account.smtp_user || !account.smtp_pass) {
-			return c.json({ error: "SMTP is not configured for this account" }, 400);
-		}
 
-		const connector = new SmtpSendConnector({
-			host: account.smtp_host,
-			port: account.smtp_port ?? 587,
-			secure: (account.smtp_tls ?? 1) === 1,
-			auth: { user: account.smtp_user, pass: account.smtp_pass },
-		});
+		const sendType = account.send_connector_type ?? "smtp";
+		let connector: import("../../connectors/types.js").SendConnector;
+		try {
+			if (sendType === "ses") {
+				if (!account.ses_region) {
+					return c.json({ error: "SES is not configured for this account" }, 400);
+				}
+				connector = createSendConnector({
+					type: "ses",
+					ses: {
+						region: account.ses_region,
+						credentials:
+							account.ses_access_key_id && account.ses_secret_access_key
+								? {
+										accessKeyId: account.ses_access_key_id,
+										secretAccessKey: account.ses_secret_access_key,
+									}
+								: undefined,
+					},
+				});
+			} else {
+				if (!account.smtp_host || !account.smtp_user || !account.smtp_pass) {
+					return c.json({ error: "SMTP is not configured for this account" }, 400);
+				}
+				connector = createSendConnector({
+					type: "smtp",
+					smtp: {
+						host: account.smtp_host,
+						port: account.smtp_port ?? 587,
+						secure: (account.smtp_tls ?? 1) === 1,
+						auth: { user: account.smtp_user, pass: account.smtp_pass },
+					},
+				});
+			}
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			return c.json({ error: `Failed to create send connector: ${message}` }, 500);
+		}
 
 		const outgoingAttachments: OutgoingAttachment[] | undefined = attachments?.map((a) => ({
 			filename: a.filename,
