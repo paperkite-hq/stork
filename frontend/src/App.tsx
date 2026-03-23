@@ -706,16 +706,15 @@ export function App() {
 						onSend={handleSend}
 					/>
 				)}
-				{showSearch && (
-					<SearchPanel
-						onClose={() => setShowSearch(false)}
-						onSelectMessage={(id) => {
-							setSelectedMessageId(id);
-							setShowSearch(false);
-						}}
-						accountId={effectiveAccountId}
-					/>
-				)}
+				<SearchPanel
+					visible={showSearch}
+					onClose={() => setShowSearch(false)}
+					onSelectMessage={(id) => {
+						setSelectedMessageId(id);
+						setShowSearch(false);
+					}}
+					accountId={effectiveAccountId}
+				/>
 				{showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
 				{showSettings && <Settings onClose={() => setShowSettings(false)} />}
 				{msgActions.pendingDelete !== null && (

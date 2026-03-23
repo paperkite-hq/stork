@@ -14,6 +14,7 @@ import {
 import { toast } from "./Toast";
 
 interface SearchPanelProps {
+	visible: boolean;
 	onClose: () => void;
 	onSelectMessage: (id: number) => void;
 	accountId: number | null;
@@ -61,7 +62,7 @@ function buildQueryWithFilters(text: string, filters: ActiveFilter[]): string {
 	return parts.filter(Boolean).join(" ");
 }
 
-export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanelProps) {
+export function SearchPanel({ visible, onClose, onSelectMessage, accountId }: SearchPanelProps) {
 	const [query, setQuery] = useState("");
 	const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
 	const [results, setResults] = useState<SearchResult[]>([]);
@@ -77,7 +78,16 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 	const resultRefs = useRef<(HTMLButtonElement | null)[]>([]);
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const lastQueryRef = useRef("");
-	useFocusTrap(dialogRef);
+	useFocusTrap(visible ? dialogRef : { current: null });
+
+	// Focus the search input when panel becomes visible
+	const inputRef = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		if (visible) {
+			// Small delay to ensure the panel is rendered before focusing
+			requestAnimationFrame(() => inputRef.current?.focus());
+		}
+	}, [visible]);
 
 	const doSearch = useCallback(
 		(fullQuery: string) => {
@@ -230,6 +240,8 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 	const isFilterActive = (type: string, value: string) =>
 		activeFilters.some((f) => f.type === type && f.value === value);
 
+	if (!visible) return null;
+
 	return (
 		<div
 			ref={dialogRef}
@@ -249,6 +261,7 @@ export function SearchPanel({ onClose, onSelectMessage, accountId }: SearchPanel
 				<div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
 					<SearchIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
 					<input
+						ref={inputRef}
 						type="text"
 						value={query}
 						onChange={(e) => handleChange(e.target.value)}
