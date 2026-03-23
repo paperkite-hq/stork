@@ -23,6 +23,9 @@ interface MessageDetailProps {
 	accountId?: number | null;
 	onLabelsChanged?: () => void;
 	openedFromSearch?: boolean;
+	searchPosition?: { current: number; total: number };
+	onSearchPrev?: () => void;
+	onSearchNext?: () => void;
 }
 
 export function MessageDetail({
@@ -41,6 +44,9 @@ export function MessageDetail({
 	error,
 	dark,
 	openedFromSearch,
+	searchPosition,
+	onSearchPrev,
+	onSearchNext,
 }: MessageDetailProps) {
 	const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 	const [showHtml, setShowHtml] = useState(true);
@@ -206,6 +212,47 @@ export function MessageDetail({
 				>
 					{openedFromSearch ? "← Search results" : "← Back"}
 				</button>
+				{openedFromSearch && searchPosition && (
+					<div className="flex items-center gap-1 flex-shrink-0">
+						<button
+							type="button"
+							onClick={onSearchPrev}
+							disabled={!onSearchPrev}
+							className="p-1 rounded text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-default transition-colors"
+							title="Previous search result"
+						>
+							<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<title>Previous</title>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M15 19l-7-7 7-7"
+								/>
+							</svg>
+						</button>
+						<span className="text-xs text-gray-400 tabular-nums">
+							{searchPosition.current}/{searchPosition.total}
+						</span>
+						<button
+							type="button"
+							onClick={onSearchNext}
+							disabled={!onSearchNext}
+							className="p-1 rounded text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-default transition-colors"
+							title="Next search result"
+						>
+							<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<title>Next</title>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M9 5l7 7-7 7"
+								/>
+							</svg>
+						</button>
+					</div>
+				)}
 				<h2 className="flex-1 font-semibold text-lg truncate">
 					{message.subject || "(no subject)"}
 				</h2>
