@@ -166,12 +166,22 @@ describe("SetupScreen", () => {
 			expect(screen.getByTestId("password-strength")).toHaveTextContent("Good");
 		});
 
-		it("shows Strong for long passphrase", async () => {
+		it("shows Fair for common-word passphrase (dictionary-aware)", async () => {
 			render(<SetupScreen {...defaultProps} />);
-			// Long lowercase passphrase with spaces scores Strong
+			// 4 common dictionary words → dictionary-aware scoring ≈ 44 bits → Fair
 			await userEvent.type(
 				screen.getByPlaceholderText("At least 12 characters"),
 				"correct horse battery staple",
+			);
+			expect(screen.getByTestId("password-strength")).toHaveTextContent("Fair");
+		});
+
+		it("shows Strong for passphrase with uncommon words", async () => {
+			render(<SetupScreen {...defaultProps} />);
+			// Words not in common dictionary → character-level entropy applies
+			await userEvent.type(
+				screen.getByPlaceholderText("At least 12 characters"),
+				"plinth sextant gibbous vermicelli",
 			);
 			expect(screen.getByTestId("password-strength")).toHaveTextContent("Strong");
 		});
