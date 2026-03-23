@@ -283,4 +283,19 @@ describe("MessageList", () => {
 		const { container } = render(<MessageList {...defaultProps} messages={messages} />);
 		expect(container.textContent).toContain("now");
 	});
+
+	it("handles null date without showing Invalid Date", () => {
+		const messages = [makeMessage({ id: 1, date: null as unknown as string, subject: "No date" })];
+		const { container } = render(<MessageList {...defaultProps} messages={messages} />);
+		expect(container.textContent).not.toContain("Invalid Date");
+		// Date tooltip should not be set for invalid dates
+		const dateSpan = container.querySelector("span.ml-auto");
+		expect(dateSpan?.getAttribute("title")).toBeNull();
+	});
+
+	it("handles invalid date string without showing Invalid Date", () => {
+		const messages = [makeMessage({ id: 1, date: "not-a-date", subject: "Bad date" })];
+		const { container } = render(<MessageList {...defaultProps} messages={messages} />);
+		expect(container.textContent).not.toContain("Invalid Date");
+	});
 });
