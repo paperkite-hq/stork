@@ -26,6 +26,10 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 			headers: { "Content-Type": "application/json", ...init?.headers },
 		});
 		if (!res.ok) {
+			// Container went back to locked state (e.g. after restart) — notify the app
+			if (res.status === 423) {
+				window.dispatchEvent(new CustomEvent("stork-container-locked"));
+			}
 			const err = await res.json().catch(() => ({ error: res.statusText }));
 			throw new Error((err as { error: string }).error || res.statusText);
 		}
