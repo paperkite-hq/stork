@@ -659,7 +659,6 @@ export function App() {
 							setInitialSearchQuery(query);
 							setShowSearch(true);
 						}}
-						searchActive={showSearch}
 						onSettings={() => setShowSettings(true)}
 						onSyncNow={handleSyncNow}
 						dark={dark}
