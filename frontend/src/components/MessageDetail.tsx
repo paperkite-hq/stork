@@ -53,6 +53,15 @@ export function MessageDetail({
 }: MessageDetailProps) {
 	const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 	const [showHtml, setShowHtml] = useState(true);
+
+	// When the selected message changes, expand it in the thread view.
+	// This ensures clicking a search result that isn't the last thread message still shows it.
+	const messageId = message?.id;
+	useEffect(() => {
+		if (messageId != null) {
+			setExpandedIds(new Set([messageId]));
+		}
+	}, [messageId]);
 	const [confirmDelete, setConfirmDelete] = useState<Message | null>(null);
 	// Per-message remote image allow-list — tracks message IDs where user clicked "Show images"
 	const [imagesAllowed, setImagesAllowed] = useState<Set<number>>(new Set());
@@ -74,7 +83,6 @@ export function MessageDetail({
 
 	// Auto-mark message as read when opened — debounced to avoid marking every message
 	// as read during rapid j/k keyboard navigation (1s delay, like Gmail)
-	const messageId = message?.id;
 	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only trigger on messageId change, not on flag/callback changes
 	useEffect(() => {
 		if (messageId == null) return;
