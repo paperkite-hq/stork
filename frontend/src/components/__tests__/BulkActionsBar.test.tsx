@@ -159,4 +159,22 @@ describe("BulkActionsBar", () => {
 		fireEvent.click(btn);
 		expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 	});
+
+	it("closes move dropdown on outside click", () => {
+		render(<BulkActionsBar {...defaultProps()} />);
+		fireEvent.click(screen.getByTitle("Move to folder"));
+		expect(screen.getByRole("menu")).toBeInTheDocument();
+		// Click outside the menu
+		fireEvent.mouseDown(document.body);
+		expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+	});
+
+	it("does not close move dropdown when clicking inside menu area", () => {
+		render(<BulkActionsBar {...defaultProps()} />);
+		fireEvent.click(screen.getByTitle("Move to folder"));
+		expect(screen.getByRole("menu")).toBeInTheDocument();
+		// Click inside the menu container
+		fireEvent.mouseDown(screen.getByRole("menu"));
+		expect(screen.getByRole("menu")).toBeInTheDocument();
+	});
 });

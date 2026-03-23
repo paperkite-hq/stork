@@ -1,8 +1,65 @@
-import { act, render, renderHook, screen } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useDarkMode, useFocusTrap, useKeyboardShortcuts } from "../hooks";
+import { useAsync, useDarkMode, useFocusTrap, useKeyboardShortcuts } from "../hooks";
+
+describe("useAsync", () => {
+	it("returns data on success", async () => {
+		const { result } = renderHook(() => useAsync(() => Promise.resolve("hello"), []));
+		expect(result.current.loading).toBe(true);
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		expect(result.current.data).toBe("hello");
+		expect(result.current.error).toBeNull();
+	});
+
+	it("returns error message on failure", async () => {
+		const { result } = renderHook(() =>
+			useAsync(() => Promise.reject(new Error("fetch failed")), []),
+		);
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		expect(result.current.data).toBeNull();
+		expect(result.current.error).toBe("fetch failed");
+	});
+
+	it("cancels stale requests when deps change", async () => {
+		let resolveFirst: (v: string) => void;
+		const firstPromise = new Promise<string>((r) => {
+			resolveFirst = r;
+		});
+		let callCount = 0;
+		const fn = vi.fn((signal: AbortSignal) => {
+			callCount++;
+			if (callCount === 1) return firstPromise;
+			return Promise.resolve("second");
+		});
+
+		const { result, rerender } = renderHook(({ dep }: { dep: number }) => useAsync(fn, [dep]), {
+			initialProps: { dep: 1 },
+		});
+
+		// Trigger deps change before first resolves
+		rerender({ dep: 2 });
+		await waitFor(() => expect(result.current.data).toBe("second"));
+
+		// Resolve the first — should be ignored (aborted)
+		resolveFirst?.("first");
+		// Give it a tick to process
+		await new Promise((r) => setTimeout(r, 50));
+		expect(result.current.data).toBe("second");
+	});
+
+	it("refetch re-fetches data", async () => {
+		let count = 0;
+		const { result } = renderHook(() => useAsync(() => Promise.resolve(`result-${++count}`), []));
+		await waitFor(() => expect(result.current.data).toBe("result-1"));
+
+		act(() => {
+			result.current.refetch();
+		});
+		await waitFor(() => expect(result.current.data).toBe("result-2"));
+	});
+});
 
 describe("useDarkMode", () => {
 	beforeEach(() => {
