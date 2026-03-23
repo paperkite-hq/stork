@@ -139,7 +139,10 @@ export function useSyncPoller(onSyncComplete: () => void): {
 
 				prevStatusRef.current = status;
 			} catch {
-				// Ignore poll errors — server may be briefly unavailable
+				// Poll errors are mostly harmless (server briefly unavailable).
+				// But check if the container went back to locked state — the 423
+				// handler in fetchJSON dispatches an event that App.tsx picks up,
+				// so we just need to let the error propagate through fetchJSON.
 			}
 		}
 
