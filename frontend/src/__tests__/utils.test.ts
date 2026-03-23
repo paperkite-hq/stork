@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+	extractSearchTerms,
 	formatAddressList,
 	getPageSize,
 	isFlagged,
@@ -198,5 +199,78 @@ describe("getPageSize", () => {
 		localStorage.setItem("stork-messages-per-page", "abc");
 		expect(getPageSize()).toBe(50);
 		localStorage.removeItem("stork-messages-per-page");
+	});
+});
+
+describe("extractSearchTerms", () => {
+	test("empty query → empty array", () => {
+		expect(extractSearchTerms("")).toEqual([]);
+	});
+
+	test("whitespace-only query → empty array", () => {
+		expect(extractSearchTerms("   ")).toEqual([]);
+	});
+
+	test("single word → array with that word", () => {
+		expect(extractSearchTerms("invoice")).toEqual(["invoice"]);
+	});
+
+	test("multiple words → array with all words", () => {
+		expect(extractSearchTerms("meeting notes")).toEqual(["meeting", "notes"]);
+	});
+
+	test("single-character words are filtered out", () => {
+		expect(extractSearchTerms("a b c invoice")).toEqual(["invoice"]);
+	});
+
+	test("strips from: operator", () => {
+		expect(extractSearchTerms("from:alice@test.com invoice")).toEqual(["invoice"]);
+	});
+
+	test("strips to: operator", () => {
+		expect(extractSearchTerms("to:bob@test.com report")).toEqual(["report"]);
+	});
+
+	test("strips subject: operator with bare value", () => {
+		expect(extractSearchTerms("subject:meeting notes")).toEqual(["notes"]);
+	});
+
+	test("strips subject: operator with quoted phrase", () => {
+		expect(extractSearchTerms('subject:"meeting notes" invoice')).toEqual(["invoice"]);
+	});
+
+	test("strips has: operator", () => {
+		expect(extractSearchTerms("has:attachment report")).toEqual(["report"]);
+	});
+
+	test("strips is: operator", () => {
+		expect(extractSearchTerms("is:unread invoice")).toEqual(["invoice"]);
+	});
+
+	test("strips before: and after: operators", () => {
+		expect(extractSearchTerms("after:2024-01-01 before:2024-12-31 report")).toEqual(["report"]);
+	});
+
+	test("strips label: operator", () => {
+		expect(extractSearchTerms("label:important meeting")).toEqual(["meeting"]);
+	});
+
+	test("operator-only query → empty array", () => {
+		expect(extractSearchTerms("from:alice is:unread has:attachment")).toEqual([]);
+	});
+
+	test("mixed operators and free text", () => {
+		expect(extractSearchTerms("invoice from:alice has:attachment due")).toEqual(["invoice", "due"]);
+	});
+
+	test("regex-escapes special characters in terms", () => {
+		const terms = extractSearchTerms("price(100)");
+		// Special chars should be escaped so they work safely in RegExp
+		expect(terms[0]).toContain("\\(");
+		expect(terms[0]).toContain("\\)");
+	});
+
+	test("case-insensitive operator stripping", () => {
+		expect(extractSearchTerms("FROM:alice SUBJECT:meeting notes")).toEqual(["notes"]);
 	});
 });
