@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { type ContainerState, type Message, api } from "./api";
+import { type ContainerState, type Message, type SearchResult, api } from "./api";
 import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { DemoBanner } from "./components/DemoBanner";
@@ -48,6 +48,7 @@ export function App() {
 	const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
 	const [showSearch, setShowSearch] = useState(false);
 	const [openedFromSearch, setOpenedFromSearch] = useState(false);
+	const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 	const [showShortcuts, setShowShortcuts] = useState(false);
 	const [showSettings, setShowSettings] = useState(false);
 	const [messageListIndex, setMessageListIndex] = useState(0);
@@ -192,6 +193,26 @@ export function App() {
 		},
 		[allMessages],
 	);
+
+	// Search result prev/next navigation
+	const searchResultIndex = useMemo(() => {
+		if (!openedFromSearch || !selectedMessageId) return -1;
+		return searchResults.findIndex((r) => r.id === selectedMessageId);
+	}, [openedFromSearch, selectedMessageId, searchResults]);
+
+	const handleSearchPrev = useCallback(() => {
+		const prev = searchResults[searchResultIndex - 1];
+		if (searchResultIndex > 0 && prev) {
+			setSelectedMessageId(prev.id);
+		}
+	}, [searchResultIndex, searchResults]);
+
+	const handleSearchNext = useCallback(() => {
+		const next = searchResults[searchResultIndex + 1];
+		if (searchResultIndex >= 0 && searchResultIndex < searchResults.length - 1 && next) {
+			setSelectedMessageId(next.id);
+		}
+	}, [searchResultIndex, searchResults]);
 
 	const handleSelectAccount = useCallback((id: number) => {
 		setSelectedAccountId(id);
@@ -693,6 +714,17 @@ export function App() {
 							onReplyAll={handleReplyAll}
 							onForward={handleForward}
 							openedFromSearch={openedFromSearch}
+							searchPosition={
+								searchResultIndex >= 0
+									? { current: searchResultIndex + 1, total: searchResults.length }
+									: undefined
+							}
+							onSearchPrev={searchResultIndex > 0 ? handleSearchPrev : undefined}
+							onSearchNext={
+								searchResultIndex >= 0 && searchResultIndex < searchResults.length - 1
+									? handleSearchNext
+									: undefined
+							}
 							onBack={() => {
 								setSelectedMessageId(null);
 								if (openedFromSearch) {
@@ -738,6 +770,7 @@ export function App() {
 						setOpenedFromSearch(true);
 					}}
 					accountId={effectiveAccountId}
+					onResultsChange={setSearchResults}
 				/>
 				{showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
 				{showSettings && <Settings onClose={() => setShowSettings(false)} />}
