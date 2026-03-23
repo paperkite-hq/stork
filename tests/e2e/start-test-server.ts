@@ -12,7 +12,7 @@ import {
 	createTestFolder,
 	createTestLabel,
 	createTestMessage,
-} from "../helpers/test-db.js";
+} from "../../src/test-helpers/test-db.js";
 
 const PORT = 13200;
 const db = createTestDb();
