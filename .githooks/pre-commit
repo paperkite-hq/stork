@@ -10,6 +10,25 @@ set -euo pipefail
 # slow and risk watchdog timeouts. CI already uses STORK_FAST_KDF=1.
 export STORK_FAST_KDF=1
 
+# Heartbeat: emit a dot every 30s to keep the pipeline watchdog alive.
+# When git commit runs this hook, stdout may be block-buffered (no TTY),
+# and individual stages can take 30-60s without visible output. The watchdog
+# kills after 120s of silence, so this heartbeat prevents false kills.
+_heartbeat_pid=
+_start_heartbeat() {
+  (while true; do sleep 30; echo "[pre-commit heartbeat: $(date +%H:%M:%S)]"; done) &
+  _heartbeat_pid=$!
+}
+_stop_heartbeat() {
+  if [[ -n "${_heartbeat_pid:-}" ]]; then
+    kill "$_heartbeat_pid" 2>/dev/null || true
+    wait "$_heartbeat_pid" 2>/dev/null || true
+    _heartbeat_pid=
+  fi
+}
+trap _stop_heartbeat EXIT
+_start_heartbeat
+
 echo "=== Pre-commit: running lint ==="
 npm run lint
 echo "=== Pre-commit: lint passed ==="
