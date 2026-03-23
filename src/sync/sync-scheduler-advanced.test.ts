@@ -64,9 +64,11 @@ beforeEach(() => {
 
 afterEach(async () => {
 	if (scheduler) await scheduler.stop();
-	// Allow deferred socket destruction (ImapFlow uses setImmediate in close)
-	// to complete before tearing down the mock server, preventing ECONNRESET.
-	await new Promise((r) => setImmediate(r));
+	// Allow deferred socket destruction to complete before tearing down the
+	// mock server. ImapFlow uses setImmediate and microtasks during close —
+	// a single setImmediate tick is insufficient when multiple connections
+	// were created (e.g. 3 syncNow × 3 connect retries = 9 sockets).
+	await new Promise((r) => setTimeout(r, 50));
 	if (mockServer) await mockServer.stop();
 	db.close();
 });
