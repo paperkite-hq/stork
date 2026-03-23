@@ -634,6 +634,7 @@ interface NavState {
 	accountId: number | null;
 	labelId: number | null;
 	messageId: number | null;
+	searchActive?: boolean;
 }
 
 /**
@@ -644,9 +645,10 @@ export function useHistoryNavigation(opts: {
 	accountId: number | null;
 	labelId: number | null;
 	messageId: number | null;
+	searchActive?: boolean;
 	onNavigate: (state: NavState) => void;
 }) {
-	const { accountId, labelId, messageId, onNavigate } = opts;
+	const { accountId, labelId, messageId, searchActive, onNavigate } = opts;
 	const isPopstateRef = useRef(false);
 	const initializedRef = useRef(false);
 	const onNavigateRef = useRef(onNavigate);
@@ -657,9 +659,9 @@ export function useHistoryNavigation(opts: {
 		if (initializedRef.current) return;
 		if (accountId === null) return; // Wait until accounts are loaded
 		initializedRef.current = true;
-		const state: NavState = { accountId, labelId, messageId };
+		const state: NavState = { accountId, labelId, messageId, searchActive };
 		history.replaceState(state, "");
-	}, [accountId, labelId, messageId]);
+	}, [accountId, labelId, messageId, searchActive]);
 
 	// Push state when navigation changes (but not when handling popstate)
 	useEffect(() => {
@@ -668,19 +670,20 @@ export function useHistoryNavigation(opts: {
 			isPopstateRef.current = false;
 			return;
 		}
-		const state: NavState = { accountId, labelId, messageId };
+		const state: NavState = { accountId, labelId, messageId, searchActive };
 		const current = history.state as NavState | null;
 		// Don't push if the state hasn't actually changed
 		if (
 			current &&
 			current.accountId === state.accountId &&
 			current.labelId === state.labelId &&
-			current.messageId === state.messageId
+			current.messageId === state.messageId &&
+			(current.searchActive ?? false) === (state.searchActive ?? false)
 		) {
 			return;
 		}
 		history.pushState(state, "");
-	}, [accountId, labelId, messageId]);
+	}, [accountId, labelId, messageId, searchActive]);
 
 	// Listen for popstate (back/forward) and restore navigation state
 	useEffect(() => {
