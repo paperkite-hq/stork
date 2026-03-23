@@ -1,11 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <rect width="64" height="64" rx="12" fill="#444CE7"/>
-  <!-- Stork head — bold, simple, recognizable at 16x16 favicon size -->
-  <!-- Head: large white circle, offset left to leave room for beak -->
-  <circle cx="22" cy="30" r="20" fill="white"/>
-  <!-- Beak: long pointed triangle, prominent orange -->
-  <polygon points="38,24 60,30 38,36" fill="#F97316"/>
-  <!-- Eye: large with highlight for personality -->
-  <circle cx="26" cy="26" r="4.5" fill="#444CE7"/>
-  <circle cx="27.5" cy="25" r="1.5" fill="white"/>
+  <rect width="64" height="64" rx="14" fill="#4338CA"/>
+  <!-- Stork head profile with curved neck — optimized for 16x16 favicon clarity -->
+  <path d="M18,58 Q14,42 18,32 Q22,22 26,20" stroke="white" stroke-width="11" fill="none" stroke-linecap="round"/>
+  <circle cx="28" cy="20" r="13" fill="white"/>
+  <polygon points="37,13 62,20 37,27" fill="#F97316"/>
+  <circle cx="23" cy="16" r="4.5" fill="#4338CA"/>
+  <circle cx="24.5" cy="14.8" r="1.7" fill="white"/>
 </svg>
