@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
+import { parseIntParam } from "../validation.js";
 
 interface DraftRow {
 	id: number;
@@ -23,8 +24,12 @@ export function draftRoutes(getDb: () => Database.Database): Hono {
 
 	/** GET /drafts?account_id=N — list drafts for an account */
 	api.get("/", (c) => {
-		const accountId = Number(c.req.query("account_id"));
-		if (!accountId) return c.json({ error: "account_id query parameter is required" }, 400);
+		const rawAccountId = c.req.query("account_id");
+		if (!rawAccountId) return c.json({ error: "account_id query parameter is required" }, 400);
+		const accountId = Number(rawAccountId);
+		if (!Number.isFinite(accountId) || accountId < 1) {
+			return c.json({ error: "Invalid account_id: must be a positive integer" }, 400);
+		}
 
 		const drafts = getDb()
 			.prepare(
@@ -39,7 +44,8 @@ export function draftRoutes(getDb: () => Database.Database): Hono {
 
 	/** GET /drafts/:id — get a single draft */
 	api.get("/:id", (c) => {
-		const id = Number(c.req.param("id"));
+		const id = parseIntParam(c, "id", c.req.param("id"));
+		if (id instanceof Response) return id;
 		const draft = getDb().prepare("SELECT * FROM drafts WHERE id = ?").get(id) as
 			| DraftRow
 			| undefined;
@@ -79,7 +85,8 @@ export function draftRoutes(getDb: () => Database.Database): Hono {
 	/** PUT /drafts/:id — update an existing draft */
 	api.put("/:id", async (c) => {
 		const db = getDb();
-		const id = Number(c.req.param("id"));
+		const id = parseIntParam(c, "id", c.req.param("id"));
+		if (id instanceof Response) return id;
 		const body = await c.req.json();
 
 		const allowedFields = [
@@ -117,7 +124,8 @@ export function draftRoutes(getDb: () => Database.Database): Hono {
 
 	/** DELETE /drafts/:id — delete a draft */
 	api.delete("/:id", (c) => {
-		const id = Number(c.req.param("id"));
+		const id = parseIntParam(c, "id", c.req.param("id"));
+		if (id instanceof Response) return id;
 		const result = getDb().prepare("DELETE FROM drafts WHERE id = ?").run(id);
 		if (result.changes === 0) return c.json({ error: "Draft not found" }, 404);
 		return c.json({ ok: true });

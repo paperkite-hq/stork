@@ -1,11 +1,13 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
+import { parseIntParam } from "../validation.js";
 
 export function messageRoutes(getDb: () => Database.Database): Hono {
 	const api = new Hono();
 
 	api.get("/:messageId", (c) => {
-		const messageId = Number(c.req.param("messageId"));
+		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
+		if (messageId instanceof Response) return messageId;
 		const message = getDb()
 			.prepare(`
 			SELECT m.*, f.path as folder_path, f.name as folder_name
@@ -21,7 +23,8 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 
 	api.get("/:messageId/thread", (c) => {
 		const db = getDb();
-		const messageId = Number(c.req.param("messageId"));
+		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
+		if (messageId instanceof Response) return messageId;
 		const message = db
 			.prepare(
 				'SELECT message_id, in_reply_to, "references", account_id FROM messages WHERE id = ?',
@@ -87,7 +90,8 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 
 	api.patch("/:messageId/flags", async (c) => {
 		const db = getDb();
-		const messageId = Number(c.req.param("messageId"));
+		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
+		if (messageId instanceof Response) return messageId;
 		const body = await c.req.json();
 		const { add, remove } = body as { add?: string[]; remove?: string[] };
 
@@ -107,7 +111,8 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 
 	api.post("/:messageId/move", async (c) => {
 		const db = getDb();
-		const messageId = Number(c.req.param("messageId"));
+		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
+		if (messageId instanceof Response) return messageId;
 		const body = await c.req.json();
 		const folderId = body.folder_id;
 		if (!folderId) return c.json({ error: "folder_id is required" }, 400);
@@ -123,7 +128,8 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 	});
 
 	api.delete("/:messageId", (c) => {
-		const messageId = Number(c.req.param("messageId"));
+		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
+		if (messageId instanceof Response) return messageId;
 		const result = getDb().prepare("DELETE FROM messages WHERE id = ?").run(messageId);
 		if (result.changes === 0) return c.json({ error: "Message not found" }, 404);
 		return c.json({ ok: true });
@@ -143,6 +149,8 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 
 		if (!Array.isArray(ids) || ids.length === 0)
 			return c.json({ error: "ids must be a non-empty array" }, 400);
+		if (!ids.every((id) => typeof id === "number" && Number.isFinite(id) && id > 0))
+			return c.json({ error: "ids must contain only positive integers" }, 400);
 		if (!["delete", "flag", "move", "remove_label"].includes(action))
 			return c.json({ error: "action must be delete, flag, move, or remove_label" }, 400);
 
@@ -208,7 +216,8 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 	});
 
 	api.get("/:messageId/attachments", (c) => {
-		const messageId = Number(c.req.param("messageId"));
+		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
+		if (messageId instanceof Response) return messageId;
 		const attachments = getDb()
 			.prepare(
 				"SELECT id, filename, content_type, size, content_id FROM attachments WHERE message_id = ? ORDER BY id",
@@ -218,7 +227,8 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 	});
 
 	api.get("/:messageId/labels", (c) => {
-		const messageId = Number(c.req.param("messageId"));
+		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
+		if (messageId instanceof Response) return messageId;
 		const labels = getDb()
 			.prepare(`
 				SELECT l.id, l.name, l.color, l.source
@@ -233,7 +243,8 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 
 	api.post("/:messageId/labels", async (c) => {
 		const db = getDb();
-		const messageId = Number(c.req.param("messageId"));
+		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
+		if (messageId instanceof Response) return messageId;
 		const body = await c.req.json();
 		const labelIds = body.label_ids as number[];
 		if (!Array.isArray(labelIds) || labelIds.length === 0) {
@@ -258,8 +269,10 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 
 	api.delete("/:messageId/labels/:labelId", (c) => {
 		const db = getDb();
-		const messageId = Number(c.req.param("messageId"));
-		const labelId = Number(c.req.param("labelId"));
+		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
+		if (messageId instanceof Response) return messageId;
+		const labelId = parseIntParam(c, "labelId", c.req.param("labelId"));
+		if (labelId instanceof Response) return labelId;
 		db.prepare("DELETE FROM message_labels WHERE message_id = ? AND label_id = ?").run(
 			messageId,
 			labelId,
