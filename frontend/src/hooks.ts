@@ -762,3 +762,50 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement | null>) {
 		};
 	}, [containerRef]);
 }
+
+/**
+ * Desktop notification support.
+ *
+ * Returns:
+ * - `permission` — current Notification.permission state
+ * - `requestPermission()` — prompts the user for permission; updates state
+ * - `notifyNewMail(count, folder?)` — fires a notification if:
+ *   - browser permission is granted
+ *   - the user has notifications enabled in settings
+ *   - the page is not currently focused (tab is in the background)
+ */
+export function useDesktopNotifications(): {
+	permission: NotificationPermission;
+	requestPermission: () => Promise<NotificationPermission>;
+	notifyNewMail: (count: number, folder?: string) => void;
+} {
+	const [permission, setPermission] = useState<NotificationPermission>(() => {
+		if (typeof Notification === "undefined") return "denied";
+		return Notification.permission;
+	});
+
+	const requestPermission = useCallback(async (): Promise<NotificationPermission> => {
+		if (typeof Notification === "undefined") return "denied";
+		const result = await Notification.requestPermission();
+		setPermission(result);
+		return result;
+	}, []);
+
+	const notifyNewMail = useCallback((count: number, folder?: string) => {
+		if (typeof Notification === "undefined") return;
+		if (Notification.permission !== "granted") return;
+		if (localStorage.getItem("stork-notifications") === "false") return;
+		if (document.hasFocus()) return;
+
+		const title = count === 1 ? "1 new message" : `${count} new messages`;
+		const body = folder ? `in ${folder}` : "";
+		new Notification(title, {
+			body,
+			icon: "/favicon.svg",
+			// Use a tag so rapid syncs coalesce into one notification
+			tag: "stork-new-mail",
+		});
+	}, []);
+
+	return { permission, requestPermission, notifyNewMail };
+}

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	useAsync,
 	useDarkMode,
+	useDesktopNotifications,
 	useFocusTrap,
 	useHistoryNavigation,
 	useKeyboardShortcuts,
@@ -512,5 +513,96 @@ describe("useHistoryNavigation", () => {
 		expect(pushSpy).not.toHaveBeenCalled();
 
 		pushSpy.mockRestore();
+	});
+});
+
+describe("useDesktopNotifications", () => {
+	const NotificationMock = vi.fn();
+	let originalNotification: typeof Notification;
+
+	beforeEach(() => {
+		originalNotification = global.Notification;
+		NotificationMock.mockClear();
+		Object.assign(NotificationMock, {
+			permission: "granted",
+			requestPermission: vi.fn().mockResolvedValue("granted"),
+		});
+		// @ts-expect-error — mock Notification
+		global.Notification = NotificationMock;
+		localStorage.removeItem("stork-notifications");
+	});
+
+	afterEach(() => {
+		global.Notification = originalNotification;
+	});
+
+	it("reads initial permission from Notification.permission", () => {
+		const { result } = renderHook(() => useDesktopNotifications());
+		expect(result.current.permission).toBe("granted");
+	});
+
+	it("returns 'denied' when Notification is unavailable", () => {
+		// @ts-expect-error — set undefined to simulate unsupported browser
+		global.Notification = undefined;
+		const { result } = renderHook(() => useDesktopNotifications());
+		expect(result.current.permission).toBe("denied");
+		// @ts-expect-error — restore
+		global.Notification = NotificationMock;
+	});
+
+	it("requestPermission calls Notification.requestPermission and updates state", async () => {
+		Object.assign(NotificationMock, { permission: "default" });
+		const { result } = renderHook(() => useDesktopNotifications());
+		expect(result.current.permission).toBe("default");
+
+		let granted: string | undefined;
+		await act(async () => {
+			granted = await result.current.requestPermission();
+		});
+
+		expect(NotificationMock.requestPermission).toHaveBeenCalled();
+		expect(granted).toBe("granted");
+		expect(result.current.permission).toBe("granted");
+	});
+
+	it("notifyNewMail fires a Notification when permission is granted and page is blurred", () => {
+		vi.spyOn(document, "hasFocus").mockReturnValue(false);
+		const { result } = renderHook(() => useDesktopNotifications());
+		act(() => result.current.notifyNewMail(3, "Inbox"));
+		expect(NotificationMock).toHaveBeenCalledWith("3 new messages", {
+			body: "in Inbox",
+			icon: "/favicon.svg",
+			tag: "stork-new-mail",
+		});
+	});
+
+	it("notifyNewMail uses singular form for count=1", () => {
+		vi.spyOn(document, "hasFocus").mockReturnValue(false);
+		const { result } = renderHook(() => useDesktopNotifications());
+		act(() => result.current.notifyNewMail(1));
+		expect(NotificationMock).toHaveBeenCalledWith("1 new message", expect.objectContaining({}));
+	});
+
+	it("notifyNewMail does NOT fire when page has focus", () => {
+		vi.spyOn(document, "hasFocus").mockReturnValue(true);
+		const { result } = renderHook(() => useDesktopNotifications());
+		act(() => result.current.notifyNewMail(2));
+		expect(NotificationMock).not.toHaveBeenCalled();
+	});
+
+	it("notifyNewMail does NOT fire when notifications are disabled in settings", () => {
+		localStorage.setItem("stork-notifications", "false");
+		vi.spyOn(document, "hasFocus").mockReturnValue(false);
+		const { result } = renderHook(() => useDesktopNotifications());
+		act(() => result.current.notifyNewMail(2));
+		expect(NotificationMock).not.toHaveBeenCalled();
+	});
+
+	it("notifyNewMail does NOT fire when permission is not granted", () => {
+		Object.assign(NotificationMock, { permission: "denied" });
+		vi.spyOn(document, "hasFocus").mockReturnValue(false);
+		const { result } = renderHook(() => useDesktopNotifications());
+		act(() => result.current.notifyNewMail(2));
+		expect(NotificationMock).not.toHaveBeenCalled();
 	});
 });

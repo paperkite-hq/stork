@@ -398,6 +398,46 @@ describe("Settings", () => {
 		expect(localStorageMock.setItem).toHaveBeenCalledWith("stork-notifications", "false");
 	});
 
+	it("shows permission-denied warning when notifications enabled but browser blocked", async () => {
+		// Simulate browser permission denied
+		const MockNotification = vi.fn();
+		Object.assign(MockNotification, {
+			permission: "denied",
+			requestPermission: vi.fn().mockResolvedValue("denied"),
+		});
+		const original = global.Notification;
+		// @ts-expect-error — mock
+		global.Notification = MockNotification;
+
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
+		// Notification is enabled by default (localStorage returns null → "not false")
+		expect(screen.getByText(/Browser permission is blocked/)).toBeInTheDocument();
+
+		global.Notification = original;
+	});
+
+	it("requests permission when enabling notifications from default state", async () => {
+		const MockNotification = vi.fn();
+		const requestPermission = vi.fn().mockResolvedValue("granted");
+		Object.assign(MockNotification, { permission: "default", requestPermission });
+		const original = global.Notification;
+		// @ts-expect-error — mock
+		global.Notification = MockNotification;
+
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
+
+		// Default state: checkbox is enabled (localStorage not set → defaults to enabled).
+		// Turn it off, then back on to trigger the requestPermission path.
+		const checkbox = screen.getByRole("checkbox", { name: /Enable desktop notifications/ });
+		await userEvent.click(checkbox); // off
+		await userEvent.click(checkbox); // on again → should trigger requestPermission
+		expect(requestPermission).toHaveBeenCalled();
+
+		global.Notification = original;
+	});
+
 	it("loads stored theme preference on mount", async () => {
 		localStorageMock.setItem("stork-dark-mode", "false");
 		render(<Settings onClose={vi.fn()} />);
