@@ -52,6 +52,18 @@
 	}
 }
 
+/* Rich text editor placeholder */
+[contenteditable][data-placeholder]:empty::before {
+	content: attr(data-placeholder);
+	@apply text-gray-400 dark:text-gray-600;
+	pointer-events: none;
+}
+
+/* Rich text editor blockquote styling */
+[contenteditable] blockquote {
+	@apply border-l-2 border-gray-300 dark:border-gray-600 pl-3 ml-2 text-gray-600 dark:text-gray-400;
+}
+
 /* Scrollbar styling — webkit (Chrome, Safari, Edge) */
 ::-webkit-scrollbar {
 	width: 6px;
