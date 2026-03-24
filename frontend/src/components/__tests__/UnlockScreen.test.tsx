@@ -170,4 +170,33 @@ describe("UnlockScreen", () => {
 			expect(countdown).not.toBeNull();
 		});
 	});
+
+	it("countdown timer decrements each second", async () => {
+		const { api } = await import("../../api");
+		(api.encryption.unlock as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("bad"));
+		render(<UnlockScreen {...defaultProps} />);
+
+		const input = screen.getByPlaceholderText("Your encryption password");
+		const form = input.closest("form");
+		if (!form) throw new Error("Form not found");
+
+		// Two failures to trigger a 2s countdown
+		fireEvent.change(input, { target: { value: "wrong" } });
+		fireEvent.submit(form);
+		await waitFor(() => expect(screen.getByText("Incorrect password.")).toBeInTheDocument());
+		fireEvent.submit(form);
+		await waitFor(() => expect(screen.queryByTestId("rate-limit-countdown")).not.toBeNull());
+
+		const countdownEl = screen.getByTestId("rate-limit-countdown");
+		// The countdown value should start at 2
+		expect(countdownEl.textContent).toMatch(/2/);
+
+		// Wait for the timer to actually decrement (real timers)
+		await waitFor(
+			() => {
+				expect(countdownEl.textContent).toMatch(/[01]/);
+			},
+			{ timeout: 2500 },
+		);
+	});
 });

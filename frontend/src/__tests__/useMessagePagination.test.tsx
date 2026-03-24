@@ -6,6 +6,7 @@ import { useMessagePagination } from "../hooks";
 // Mock the API module
 const mockLabelMessages = vi.fn();
 const mockAllMessagesList = vi.fn();
+const mockUnreadMessagesList = vi.fn();
 vi.mock("../api", () => ({
 	api: {
 		labels: {
@@ -13,6 +14,9 @@ vi.mock("../api", () => ({
 		},
 		allMessages: {
 			list: (...args: unknown[]) => mockAllMessagesList(...args),
+		},
+		unreadMessages: {
+			list: (...args: unknown[]) => mockUnreadMessagesList(...args),
 		},
 	},
 }));
@@ -112,6 +116,43 @@ describe("useMessagePagination", () => {
 		});
 		expect(mockAllMessagesList).toHaveBeenCalledWith(5, { limit: 50 });
 		expect(result.current.allMessages).toEqual(msgs);
+	});
+
+	it("uses unreadMessages API for Unread view", async () => {
+		const msgs = [makeMessage(1), makeMessage(2)];
+		mockUnreadMessagesList.mockResolvedValue(msgs);
+
+		const { result } = renderHook(() =>
+			useMessagePagination({
+				effectiveLabelId: null,
+				effectiveAccountId: 7,
+				isAllMail: false,
+				isUnread: true,
+			}),
+		);
+
+		await waitFor(() => {
+			expect(result.current.messagesLoading).toBe(false);
+		});
+		expect(mockUnreadMessagesList).toHaveBeenCalledWith(7, { limit: 50 });
+		expect(result.current.allMessages).toEqual(msgs);
+	});
+
+	it("returns empty for Unread without account", async () => {
+		const { result } = renderHook(() =>
+			useMessagePagination({
+				effectiveLabelId: null,
+				effectiveAccountId: null,
+				isAllMail: false,
+				isUnread: true,
+			}),
+		);
+
+		await waitFor(() => {
+			expect(result.current.messagesLoading).toBe(false);
+		});
+		expect(result.current.allMessages).toEqual([]);
+		expect(mockUnreadMessagesList).not.toHaveBeenCalled();
 	});
 
 	it("returns empty for All Mail without account", async () => {

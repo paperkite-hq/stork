@@ -1419,3 +1419,79 @@ describe("Settings — TrustedSendersPanel", () => {
 		expect(screen.queryByText(/No trusted senders yet/i)).not.toBeInTheDocument();
 	});
 });
+
+describe("Settings — AccountForm field interactions", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	async function openAddAccountForm() {
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
+		);
+	}
+
+	it("toggles IMAP TLS checkbox", async () => {
+		await openAddAccountForm();
+		// IMAP TLS checkbox is initially checked (default imap_tls=1)
+		const tlsCheckboxes = screen.getAllByRole("checkbox");
+		const imapTlsCheckbox = tlsCheckboxes.find((cb) =>
+			cb.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		) as HTMLInputElement | undefined;
+		if (!imapTlsCheckbox) throw new Error("IMAP TLS checkbox not found");
+		expect(imapTlsCheckbox.checked).toBe(true);
+		await userEvent.click(imapTlsCheckbox);
+		expect(imapTlsCheckbox.checked).toBe(false);
+		await userEvent.click(imapTlsCheckbox);
+		expect(imapTlsCheckbox.checked).toBe(true);
+	});
+
+	it("changes IMAP port field", async () => {
+		await openAddAccountForm();
+		// Find the IMAP port input (a number input in the IMAP fieldset)
+		const numberInputs = screen.getAllByRole("spinbutton");
+		const imapPortInput = numberInputs.find((el) =>
+			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		) as HTMLInputElement | undefined;
+		if (!imapPortInput) throw new Error("IMAP port input not found");
+		fireEvent.change(imapPortInput, { target: { value: "143" } });
+		expect(imapPortInput.value).toBe("143");
+	});
+
+	it("toggles sync deletions checkbox", async () => {
+		await openAddAccountForm();
+		const syncCheckboxes = screen.getAllByRole("checkbox");
+		const syncDeleteCheckbox = syncCheckboxes.find((cb) =>
+			cb.closest("fieldset")?.textContent?.includes("Sync deletions"),
+		) as HTMLInputElement | undefined;
+		if (!syncDeleteCheckbox) throw new Error("Sync delete checkbox not found");
+		expect(syncDeleteCheckbox.checked).toBe(false);
+		await userEvent.click(syncDeleteCheckbox);
+		expect(syncDeleteCheckbox.checked).toBe(true);
+	});
+
+	it("changes SMTP port field", async () => {
+		await openAddAccountForm();
+		const numberInputs = screen.getAllByRole("spinbutton");
+		const smtpPortInput = numberInputs.find((el) =>
+			el.closest("fieldset")?.textContent?.includes("Outgoing Mail"),
+		) as HTMLInputElement | undefined;
+		if (!smtpPortInput) throw new Error("SMTP port input not found");
+		fireEvent.change(smtpPortInput, { target: { value: "465" } });
+		expect(smtpPortInput.value).toBe("465");
+	});
+
+	it("toggles SMTP TLS checkbox", async () => {
+		await openAddAccountForm();
+		const tlsCheckboxes = screen.getAllByRole("checkbox");
+		const smtpTlsCheckbox = tlsCheckboxes.find((cb) =>
+			cb.closest("fieldset")?.textContent?.includes("Outgoing Mail"),
+		) as HTMLInputElement | undefined;
+		if (!smtpTlsCheckbox) throw new Error("SMTP TLS checkbox not found");
+		await userEvent.click(smtpTlsCheckbox);
+		expect(smtpTlsCheckbox.checked).toBe(false);
+	});
+});
