@@ -851,4 +851,68 @@ describe("ComposeModal", () => {
 		expect(screen.getByPlaceholderText("cc@example.com")).toHaveValue("b@test.com");
 		expect(screen.getByPlaceholderText("bcc@example.com")).toHaveValue("c@test.com");
 	});
+
+	it("FormatButton calls execCommand via onAction when mousedown fires", async () => {
+		// happy-dom doesn't implement document.execCommand — define it before spying
+		const execCommandMock = vi.fn().mockReturnValue(true);
+		Object.defineProperty(document, "execCommand", {
+			value: execCommandMock,
+			writable: true,
+			configurable: true,
+		});
+
+		// Switch to rich text mode so the toolbar is active
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		await userEvent.click(screen.getByText("Rich text"));
+		const boldBtn = screen.getByTitle("Bold");
+		fireEvent.mouseDown(boldBtn);
+		// The handler calls e.preventDefault() and then onAction which calls execCommand
+		expect(execCommandMock).toHaveBeenCalledWith("bold", false, undefined);
+	});
+
+	it("LinkButton calls onAction with url when prompt returns a value", async () => {
+		// happy-dom doesn't implement window.prompt — define it before spying
+		const promptMock = vi.fn().mockReturnValue("https://example.com");
+		Object.defineProperty(window, "prompt", {
+			value: promptMock,
+			writable: true,
+			configurable: true,
+		});
+		const execCommandMock = vi.fn().mockReturnValue(true);
+		Object.defineProperty(document, "execCommand", {
+			value: execCommandMock,
+			writable: true,
+			configurable: true,
+		});
+
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		await userEvent.click(screen.getByText("Rich text"));
+		const linkBtn = screen.getByTitle("Insert link");
+		fireEvent.mouseDown(linkBtn);
+		expect(promptMock).toHaveBeenCalledWith("Enter URL:");
+		expect(execCommandMock).toHaveBeenCalledWith("createLink", false, "https://example.com");
+	});
+
+	it("LinkButton does nothing when prompt is cancelled", async () => {
+		// happy-dom doesn't implement window.prompt — define it before spying
+		const promptMock = vi.fn().mockReturnValue(null);
+		Object.defineProperty(window, "prompt", {
+			value: promptMock,
+			writable: true,
+			configurable: true,
+		});
+		const execCommandMock = vi.fn().mockReturnValue(true);
+		Object.defineProperty(document, "execCommand", {
+			value: execCommandMock,
+			writable: true,
+			configurable: true,
+		});
+
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		await userEvent.click(screen.getByText("Rich text"));
+		const linkBtn = screen.getByTitle("Insert link");
+		fireEvent.mouseDown(linkBtn);
+		expect(promptMock).toHaveBeenCalled();
+		expect(execCommandMock).not.toHaveBeenCalledWith("createLink", false, expect.anything());
+	});
 });

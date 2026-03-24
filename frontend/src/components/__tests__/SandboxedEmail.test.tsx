@@ -108,4 +108,18 @@ describe("SandboxedEmail", () => {
 		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
 		expect(iframe.srcdoc).not.toContain("<mark>");
 	});
+
+	it("highlights only matching text nodes — skips non-matching siblings", () => {
+		// HTML with two paragraphs: only the second matches the search term.
+		// This exercises the regex no-match branch (regex.lastIndex = 0; continue)
+		// for the first text node, and the match path for the second.
+		render(
+			<SandboxedEmail html="<p>Hello world</p><p>Invoice from Alice</p>" searchQuery="invoice" />,
+		);
+		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
+		// Only "Invoice" should be wrapped in a mark tag
+		expect(iframe.srcdoc).toContain("<mark>");
+		// The non-matching "Hello world" should remain unwrapped
+		expect(iframe.srcdoc).toContain("Hello world");
+	});
 });

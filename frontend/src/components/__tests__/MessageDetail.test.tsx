@@ -834,6 +834,55 @@ describe("MessageDetail — Trust sender", () => {
 		expect(screen.queryByText(/Remote images are hidden/i)).not.toBeInTheDocument();
 	});
 
+	// ---- Search navigation ----
+
+	it("shows '← Search results' back label when openedFromSearch is true", () => {
+		const msg = makeMessage();
+		render(
+			<MessageDetail {...defaultProps} message={msg} thread={[msg]} openedFromSearch={true} />,
+		);
+		expect(screen.getByText("← Search results")).toBeInTheDocument();
+	});
+
+	it("shows '← Back' label when openedFromSearch is false", () => {
+		const msg = makeMessage();
+		render(
+			<MessageDetail {...defaultProps} message={msg} thread={[msg]} openedFromSearch={false} />,
+		);
+		expect(screen.getByText("← Back")).toBeInTheDocument();
+	});
+
+	it("shows search position and prev/next buttons when openedFromSearch with searchPosition", async () => {
+		const onSearchPrev = vi.fn();
+		const onSearchNext = vi.fn();
+		const msg = makeMessage();
+		render(
+			<MessageDetail
+				{...defaultProps}
+				message={msg}
+				thread={[msg]}
+				openedFromSearch={true}
+				searchPosition={{ current: 2, total: 5 }}
+				onSearchPrev={onSearchPrev}
+				onSearchNext={onSearchNext}
+			/>,
+		);
+		expect(screen.getByText("2/5")).toBeInTheDocument();
+		await userEvent.click(screen.getByTitle("Previous search result"));
+		expect(onSearchPrev).toHaveBeenCalledOnce();
+		await userEvent.click(screen.getByTitle("Next search result"));
+		expect(onSearchNext).toHaveBeenCalledOnce();
+	});
+
+	it("hides search position when openedFromSearch but no searchPosition", () => {
+		const msg = makeMessage();
+		render(
+			<MessageDetail {...defaultProps} message={msg} thread={[msg]} openedFromSearch={true} />,
+		);
+		// No position indicator shown without searchPosition prop
+		expect(screen.queryByText(/\d+\/\d+/)).not.toBeInTheDocument();
+	});
+
 	it("shows error toast when trustedSenders.add fails", async () => {
 		const { api } = await import("../../api");
 		const { toast } = await import("../Toast");
