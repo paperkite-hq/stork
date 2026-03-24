@@ -334,7 +334,8 @@ export function AccountForm({
 						onChange={(e) => setField("sync_delete_from_server", e.target.checked ? 1 : 0)}
 						className="rounded border-gray-300 dark:border-gray-600"
 					/>
-					Sync deletions from server (remove locally when deleted on server)
+					Sync deletions — delete from IMAP server when deleting here, and remove locally when
+					deleted on server
 				</label>
 				<div className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
 					<label htmlFor="default_view_select" className="whitespace-nowrap">
