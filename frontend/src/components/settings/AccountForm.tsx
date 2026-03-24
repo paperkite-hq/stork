@@ -323,20 +323,47 @@ export function AccountForm({
 			</fieldset>
 
 			{/* Sync preferences */}
-			<fieldset className="space-y-2">
+			<fieldset className="space-y-3">
 				<legend className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
 					Sync Preferences
 				</legend>
-				<label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+				<label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
 					<input
 						type="checkbox"
 						checked={form.sync_delete_from_server === 1}
 						onChange={(e) => setField("sync_delete_from_server", e.target.checked ? 1 : 0)}
-						className="rounded border-gray-300 dark:border-gray-600"
+						className="rounded border-gray-300 dark:border-gray-600 mt-0.5 shrink-0"
 					/>
-					Archive mode — automatically delete messages from the IMAP server after syncing them
-					locally (treats your mail provider as a transient delivery edge)
+					<span>
+						<span className="font-medium">Archive mode</span> — after syncing, remove messages from
+						your IMAP server so Stork becomes your permanent record
+					</span>
 				</label>
+				{form.sync_delete_from_server === 1 ? (
+					<div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded px-3 py-2 space-y-1">
+						<p className="font-medium">Archive mode is on — Stork is your email record of truth.</p>
+						<p>
+							New messages are removed from your IMAP server after each sync. Your email provider is
+							the delivery edge; Stork holds the permanent archive. Make sure your Stork database is
+							backed up.
+						</p>
+					</div>
+				) : (
+					<div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-2 space-y-1">
+						<p className="font-medium">
+							Archive mode is off — read-only sync, good for trying Stork.
+						</p>
+						<p>
+							Messages stay on your IMAP server. Actions you take in Stork (delete, label, archive)
+							are local only and do not replicate back to your mail provider. Deletions and changes
+							made via your provider{"'"}s interface do not flow into Stork either.
+						</p>
+						<p>
+							When you{"'"}re confident Stork is right for you, enable archive mode to make it your
+							permanent record and free your provider from storing old mail.
+						</p>
+					</div>
+				)}
 				<div className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
 					<label htmlFor="default_view_select" className="whitespace-nowrap">
 						Default view on open

@@ -1065,4 +1065,72 @@ describe("archive mode (auto-delete from server after sync)", () => {
 			.get(folder.id) as { n: number };
 		expect(total.n).toBe(4);
 	});
+
+	test("crash recovery: pending_archive messages from a previous interrupted sync are deleted on the next run", async () => {
+		accountId = makeAccount(1);
+
+		// Run syncFolders first to create the folder record, then manually insert
+		// messages with pending_archive=1 (simulating Phase 1 completing before a crash).
+		const syncInit = makeSync(accountId);
+		await syncInit.connect();
+		await syncInit.syncFolders();
+		await syncInit.disconnect();
+
+		const folderRow = db
+			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
+			.get(accountId) as { id: number };
+
+		// Insert messages with pending_archive=1 (simulating interrupted Phase 1)
+		for (const uid of [1, 2, 3]) {
+			db.prepare(`
+				INSERT OR IGNORE INTO messages (account_id, folder_id, uid, subject, flags, pending_archive)
+				VALUES (?, ?, ?, ?, \'\', 1)
+			`).run(accountId, folderRow.id, uid, `Message ${uid}`);
+		}
+
+		// Set last_uid so next sync thinks these were already fetched
+		db.prepare(`
+			INSERT INTO sync_state (account_id, folder_id, last_uid, last_synced_at)
+			VALUES (?, ?, 3, datetime(\'now\'))
+			ON CONFLICT(account_id, folder_id) DO UPDATE SET last_uid = 3
+		`).run(accountId, folderRow.id);
+
+		// Verify messages are pending archive but not yet deleted from server
+		const pending = db
+			.prepare("SELECT uid FROM messages WHERE folder_id = ? AND pending_archive = 1")
+			.all(folderRow.id) as { uid: number }[];
+		expect(pending).toHaveLength(3);
+
+		// Server still has all 3 messages
+		let beforeCount = -1;
+		server.updateMailbox("INBOX", (mb) => {
+			beforeCount = mb.messages.length;
+		});
+		expect(beforeCount).toBe(3);
+
+		// Now run a fresh sync — Phase 3 should pick up the pending messages and delete them
+		const sync2 = makeSync(accountId);
+		await sync2.connect();
+		await sync2.syncAll();
+		await sync2.disconnect();
+
+		// Server should have 0 messages (pending ones got deleted)
+		let afterCount = -1;
+		server.updateMailbox("INBOX", (mb) => {
+			afterCount = mb.messages.length;
+		});
+		expect(afterCount).toBe(0);
+
+		// Pending archive flag should be cleared
+		const stillPending = db
+			.prepare("SELECT uid FROM messages WHERE folder_id = ? AND pending_archive = 1")
+			.all(folderRow.id) as { uid: number }[];
+		expect(stillPending).toHaveLength(0);
+
+		// deleted_from_server should be set
+		const deletedRows = db
+			.prepare("SELECT uid FROM messages WHERE folder_id = ? AND deleted_from_server = 1")
+			.all(folderRow.id) as { uid: number }[];
+		expect(deletedRows).toHaveLength(3);
+	});
 });

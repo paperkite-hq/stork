@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -277,5 +277,15 @@ UPDATE labels SET unread_count = (
 	`
 ALTER TABLE accounts ADD COLUMN cached_message_count INTEGER DEFAULT NULL;
 ALTER TABLE accounts ADD COLUMN cached_unread_count INTEGER DEFAULT NULL;
+`,
+	// Version 12: Add pending_archive flag for crash-safe archive mode deletion.
+	// When archive mode is on, messages are marked pending_archive=1 immediately
+	// after being inserted. Phase 3 of syncFolder queries this column instead of
+	// relying on an in-memory list — so if the process is killed after Phase 1
+	// (fetch) but before Phase 3 (delete), the next sync cycle picks up and
+	// finishes the deletion. Cleared to 0 once deleted_from_server is set.
+	`
+ALTER TABLE messages ADD COLUMN pending_archive INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_messages_pending_archive ON messages(folder_id, pending_archive);
 `,
 ];
