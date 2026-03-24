@@ -124,7 +124,7 @@ The `ImapSync` class handles the core sync logic for a single account:
 - **Attachment extraction** — stores attachment data (filename, content type, binary data) in the `attachments` table, linked to the parent message.
 - **Flag sync** — periodically fetches flags for all known UIDs and updates any that changed locally (read/unread, starred, etc.). Fetches in batches of 50 to avoid oversized IMAP commands.
 - **Server deletion detection** — can compare local UIDs against server UIDs to find messages deleted upstream.
-- **Delete-from-server** — opt-in workflow to remove messages from the IMAP server after they've been synced locally. Marks deleted messages in the database.
+- **Archive mode (delete-from-server)** — opt-in per-account mode. After each sync, any messages that were successfully fetched are deleted from the IMAP server. The IMAP provider acts as a transient delivery edge; Stork becomes the single source of truth. Only newly-synced UIDs are deleted — messages already in Stork before the flag was enabled are unaffected.
 - **Retry logic** — all IMAP operations use a `withRetry` wrapper with 3 attempts and exponential backoff (1s, 2s, 3s). Each retry creates a fresh `ImapFlow` instance since closed instances cannot be reconnected.
 
 ### Connection Pool (`src/sync/connection-pool.ts`)
@@ -330,6 +330,6 @@ The sandbox attribute alone is sufficient — it is enforced by the browser's se
 
 3. **Incremental, resumable sync.** Never re-download messages you already have. Use IMAP UIDs and UIDVALIDITY to track sync position. Handle server-side folder recreation gracefully.
 
-4. **Read-only by default.** The sync engine never modifies the IMAP server unless the user explicitly opts in to delete-from-server. Safe to point at a production mailbox.
+4. **Read-only by default.** The sync engine never modifies the IMAP server unless the user explicitly opts in to archive mode. Safe to point at a production mailbox.
 
 5. **One container, zero config.** `docker compose up` should give you a working email client. No external databases, no Redis, no environment variables required for basic operation.

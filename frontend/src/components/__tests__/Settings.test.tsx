@@ -317,7 +317,7 @@ describe("Settings", () => {
 		expect(screen.getByText("Incoming Mail (IMAP)")).toBeInTheDocument();
 		expect(screen.getByText("Outgoing Mail (SMTP)")).toBeInTheDocument();
 		expect(screen.getByText("Sync Preferences")).toBeInTheDocument();
-		expect(screen.getByText(/Sync deletions/)).toBeInTheDocument();
+		expect(screen.getByText(/Archive mode/)).toBeInTheDocument();
 	});
 
 	it("shows delete confirmation dialog and deletes account", async () => {
@@ -489,7 +489,7 @@ describe("Settings", () => {
 		});
 		await userEvent.click(screen.getByText("+ Add Account"));
 		const tlsCheckboxes = screen.getAllByRole("checkbox");
-		// Should have at least IMAP TLS, SMTP TLS, and Sync deletions
+		// Should have at least IMAP TLS, SMTP TLS, and Archive mode
 		expect(tlsCheckboxes.length).toBeGreaterThanOrEqual(3);
 		// IMAP TLS should be checked by default
 		const imapTls = tlsCheckboxes.find((cb) =>
@@ -1465,7 +1465,7 @@ describe("Settings — AccountForm field interactions", () => {
 		await openAddAccountForm();
 		const syncCheckboxes = screen.getAllByRole("checkbox");
 		const syncDeleteCheckbox = syncCheckboxes.find((cb) =>
-			cb.closest("fieldset")?.textContent?.includes("Sync deletions"),
+			cb.closest("fieldset")?.textContent?.includes("Archive mode"),
 		) as HTMLInputElement | undefined;
 		if (!syncDeleteCheckbox) throw new Error("Sync delete checkbox not found");
 		expect(syncDeleteCheckbox.checked).toBe(false);
