@@ -260,5 +260,49 @@ describe("Attachments API", () => {
 			const res = await request(`/api/attachments/${attId}`);
 			expect(res.headers.get("Content-Type")).toBe("application/octet-stream");
 		});
+
+		test("RFC 5987: includes filename* for non-ASCII filenames", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const unicodeName = "дайджест.pdf"; // Russian
+
+			db.prepare(
+				"INSERT INTO attachments (message_id, filename, content_type, size, data) VALUES (?, ?, 'application/pdf', 5, X'48656C6C6F')",
+			).run(msgId, unicodeName);
+
+			const attId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+
+			const res = await request(`/api/attachments/${attId}`);
+			expect(res.status).toBe(200);
+			const disposition = res.headers.get("Content-Disposition") ?? "";
+			// ASCII fallback should replace Cyrillic with underscores
+			expect(disposition).toContain('filename="________.pdf"');
+			// RFC 5987 parameter should contain the percent-encoded UTF-8 name
+			expect(disposition).toContain("filename*=UTF-8''");
+			expect(disposition).toContain(encodeURIComponent(unicodeName));
+		});
+
+		test("ASCII-only filename does not include filename*", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+			const msgId = createTestMessage(db, accountId, folderId, 1);
+
+			db.prepare(`
+				INSERT INTO attachments (message_id, filename, content_type, size, data)
+				VALUES (?, 'report.pdf', 'application/pdf', 5, X'48656C6C6F')
+			`).run(msgId);
+
+			const attId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+
+			const res = await request(`/api/attachments/${attId}`);
+			const disposition = res.headers.get("Content-Disposition") ?? "";
+			expect(disposition).toBe('attachment; filename="report.pdf"');
+			expect(disposition).not.toContain("filename*");
+		});
 	});
 });
