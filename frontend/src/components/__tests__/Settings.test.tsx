@@ -53,6 +53,12 @@ vi.mock("../../api", () => ({
 			cancelRecoveryRotation: vi.fn().mockResolvedValue({ ok: true }),
 			recoveryRotationStatus: vi.fn().mockResolvedValue({ pending: false }),
 		},
+		trustedSenders: {
+			list: vi.fn().mockResolvedValue([]),
+			add: vi.fn().mockResolvedValue({ id: 1 }),
+			remove: vi.fn().mockResolvedValue({ ok: true }),
+			check: vi.fn().mockResolvedValue({ trusted: false }),
+		},
 	},
 }));
 
@@ -1286,5 +1292,130 @@ describe("Settings — tab navigation", () => {
 		// Switch back to Accounts
 		await userEvent.click(screen.getAllByText("Accounts")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getByText("Email Accounts")).toBeInTheDocument());
+	});
+});
+
+describe("Settings — TrustedSendersPanel", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		localStorageMock.clear();
+	});
+
+	it("opens trusted senders panel when 'Trusted Senders' button is clicked", async () => {
+		const { api } = await import("../../api");
+		render(<Settings onClose={vi.fn()} />);
+
+		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
+
+		await userEvent.click(screen.getByTitle(/Manage senders/i));
+
+		await waitFor(() => {
+			expect(api.trustedSenders.list).toHaveBeenCalledWith(1);
+		});
+		// The panel heading is a <h4> with "Trusted Senders"
+		expect(screen.getByRole("heading", { name: "Trusted Senders" })).toBeInTheDocument();
+	});
+
+	it("shows empty state when no trusted senders", async () => {
+		const { api } = await import("../../api");
+		(api.trustedSenders.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
+		await userEvent.click(screen.getByTitle(/Manage senders/i));
+
+		await waitFor(() => {
+			expect(screen.getByText(/No trusted senders yet/i)).toBeInTheDocument();
+		});
+	});
+
+	it("lists trusted senders", async () => {
+		const { api } = await import("../../api");
+		(api.trustedSenders.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+			{ id: 1, sender_address: "newsletter@example.com", created_at: new Date().toISOString() },
+			{ id: 2, sender_address: "updates@company.com", created_at: new Date().toISOString() },
+		]);
+
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
+		await userEvent.click(screen.getByTitle(/Manage senders/i));
+
+		await waitFor(() => {
+			expect(screen.getByText("newsletter@example.com")).toBeInTheDocument();
+			expect(screen.getByText("updates@company.com")).toBeInTheDocument();
+		});
+	});
+
+	it("removes a trusted sender after confirmation", async () => {
+		const { api } = await import("../../api");
+		(api.trustedSenders.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+			{ id: 1, sender_address: "newsletter@example.com", created_at: new Date().toISOString() },
+		]);
+
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
+		await userEvent.click(screen.getByTitle(/Manage senders/i));
+
+		await waitFor(() => {
+			expect(screen.getByText("newsletter@example.com")).toBeInTheDocument();
+		});
+
+		// Click Remove
+		await userEvent.click(screen.getByRole("button", { name: /Remove newsletter@example.com/i }));
+
+		// Confirm dialog should appear
+		expect(screen.getByText(/Remove trusted sender/i)).toBeInTheDocument();
+		await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+
+		await waitFor(() => {
+			expect(api.trustedSenders.remove).toHaveBeenCalledWith(1, "newsletter@example.com");
+		});
+	});
+
+	it("shows entry remains in list when remove fails", async () => {
+		const { api } = await import("../../api");
+		(api.trustedSenders.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+			{ id: 1, sender_address: "bad@example.com", created_at: new Date().toISOString() },
+		]);
+		(api.trustedSenders.remove as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Server error"),
+		);
+
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
+		await userEvent.click(screen.getByTitle(/Manage senders/i));
+
+		await waitFor(() => {
+			expect(screen.getByText("bad@example.com")).toBeInTheDocument();
+		});
+
+		await userEvent.click(screen.getByRole("button", { name: /Remove bad@example.com/i }));
+		expect(screen.getByText(/Remove trusted sender/i)).toBeInTheDocument();
+		await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+
+		await waitFor(() => {
+			expect(api.trustedSenders.remove).toHaveBeenCalledWith(1, "bad@example.com");
+		});
+		// Entry should still be in the list (removal failed)
+		await waitFor(() => {
+			expect(screen.getByText("bad@example.com")).toBeInTheDocument();
+		});
+	});
+
+	it("closes the panel when 'Close' is clicked", async () => {
+		const { api } = await import("../../api");
+		(api.trustedSenders.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
+		await userEvent.click(screen.getByTitle(/Manage senders/i));
+
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Trusted Senders" })).toBeInTheDocument(),
+		);
+		await waitFor(() => expect(screen.getByText(/No trusted senders yet/i)).toBeInTheDocument());
+
+		await userEvent.click(screen.getByRole("button", { name: "Close trusted senders" }));
+		expect(screen.queryByText(/No trusted senders yet/i)).not.toBeInTheDocument();
 	});
 });
