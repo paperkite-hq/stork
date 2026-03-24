@@ -6,18 +6,19 @@ export default {
 		extend: {
 			colors: {
 				stork: {
-					// Rose→purple palette matching the T9 logo gradient (#BE185D → #6B21A8)
-					50: "#fff1f2", // subtle rose tint (selected item bg light mode)
-					100: "#ffe4e6", // light rose (selected item bg, badge bg)
-					200: "#fecdd3", // light rose (borders, dividers)
-					300: "#fda4af", // medium rose (dark mode text accents)
-					400: "#fb7185", // bright coral-rose (dark mode lighter accents)
-					500: "#f43f5e", // vivid rose (focus rings, progress bars)
-					600: "#be185d", // LOGO ROSE — primary buttons, active text, badges
-					700: "#9d174d", // darker rose — button hover states
-					800: "#6b21a8", // LOGO PURPLE — deep accent, dark mode active bg
-					900: "#581c87", // deep purple — dark text, dark mode containers
-					950: "#3b0764", // darkest purple — dark mode selected item bg
+					// Violet→purple palette — ties to logo's purple endpoint (#6B21A8)
+					// without the rose/pink that made the UI feel too "girly"
+					50: "#f5f3ff", // subtle violet tint (selected item bg light mode)
+					100: "#ede9fe", // light violet (selected item bg, badge bg)
+					200: "#ddd6fe", // light violet (borders, dividers)
+					300: "#c4b5fd", // medium violet (dark mode text accents)
+					400: "#a78bfa", // violet (dark mode lighter accents)
+					500: "#8b5cf6", // vivid violet (focus rings, progress bars)
+					600: "#7c3aed", // primary buttons, active text, badges
+					700: "#6d28d9", // button hover states
+					800: "#5b21b6", // deep accent, dark mode active bg
+					900: "#4c1d95", // dark text, dark mode containers
+					950: "#2e1065", // darkest — dark mode selected item bg
 				},
 			},
 		},
