@@ -680,6 +680,25 @@ describe("App — Keyboard navigation", () => {
 		// messages.get was never called (nothing selected yet, and j can't go past 0 with 1 msg)
 		expect(mockApi.messages.get).not.toHaveBeenCalled();
 	});
+
+	it("shows error toast when thread fetch fails", async () => {
+		const msg = makeMessage({ id: 42, subject: "Thread error test" });
+		mockApi.messages.get.mockResolvedValue(msg);
+		mockApi.messages.getThread.mockRejectedValueOnce(new Error("Server error"));
+		setupWithAccounts(
+			[makeAccount()],
+			[makeLabel()],
+			[makeMessageSummary({ id: 42, subject: "Thread error test" })],
+		);
+		render(<App />);
+		await waitFor(() => {
+			expect(screen.getByText("Thread error test")).toBeInTheDocument();
+		});
+		await userEvent.click(screen.getByText("Thread error test"));
+		await waitFor(() => {
+			expect(screen.getByText("Failed to load thread")).toBeInTheDocument();
+		});
+	});
 });
 
 // ------------------------------------------------------------------

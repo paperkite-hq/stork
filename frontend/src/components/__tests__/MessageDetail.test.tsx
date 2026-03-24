@@ -180,6 +180,26 @@ describe("MessageDetail", () => {
 		expect(screen.getByText("Show formatted")).toBeInTheDocument();
 	});
 
+	it("resets HTML/plain text toggle to HTML when switching messages", async () => {
+		const msgA = makeMessage({
+			id: 1,
+			html_body: "<p>Message A HTML</p>",
+			text_body: "Message A plain",
+		});
+		const msgB = makeMessage({
+			id: 2,
+			html_body: "<p>Message B HTML</p>",
+			text_body: "Message B plain",
+		});
+		const { rerender } = render(<MessageDetail {...defaultProps} message={msgA} />);
+		// Toggle to plain text view for message A
+		await userEvent.click(screen.getByText("Show plain text"));
+		expect(screen.getByText("Show formatted")).toBeInTheDocument();
+		// Switch to message B — should reset to HTML (show "Show plain text" again)
+		rerender(<MessageDetail {...defaultProps} message={msgB} />);
+		expect(screen.getByText("Show plain text")).toBeInTheDocument();
+	});
+
 	it("calls onReply when Reply button is clicked", async () => {
 		const onReply = vi.fn();
 		render(<MessageDetail {...defaultProps} onReply={onReply} />);
