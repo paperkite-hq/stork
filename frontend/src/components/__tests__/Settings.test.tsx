@@ -1484,6 +1484,43 @@ describe("Settings — AccountForm field interactions", () => {
 		expect(smtpPortInput.value).toBe("465");
 	});
 
+	it("IMAP port falls back to 993 on non-numeric input", async () => {
+		await openAddAccountForm();
+		const numberInputs = screen.getAllByRole("spinbutton");
+		const imapPortInput = numberInputs.find((el) =>
+			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
+		) as HTMLInputElement | undefined;
+		if (!imapPortInput) throw new Error("IMAP port input not found");
+		// Empty string → Number("") = 0 → fallback to 993
+		fireEvent.change(imapPortInput, { target: { value: "" } });
+		expect(imapPortInput.value).toBe("993");
+	});
+
+	it("SMTP port falls back to 587 on non-numeric input", async () => {
+		await openAddAccountForm();
+		const numberInputs = screen.getAllByRole("spinbutton");
+		const smtpPortInput = numberInputs.find((el) =>
+			el.closest("fieldset")?.textContent?.includes("Outgoing Mail"),
+		) as HTMLInputElement | undefined;
+		if (!smtpPortInput) throw new Error("SMTP port input not found");
+		// Empty string → Number("") = 0 → fallback to 587
+		fireEvent.change(smtpPortInput, { target: { value: "" } });
+		expect(smtpPortInput.value).toBe("587");
+	});
+
+	it("SMTP TLS can be re-enabled after being unchecked", async () => {
+		await openAddAccountForm();
+		const tlsCheckboxes = screen.getAllByRole("checkbox");
+		const smtpTlsCheckbox = tlsCheckboxes.find((cb) =>
+			cb.closest("fieldset")?.textContent?.includes("Outgoing Mail"),
+		) as HTMLInputElement | undefined;
+		if (!smtpTlsCheckbox) throw new Error("SMTP TLS checkbox not found");
+		await userEvent.click(smtpTlsCheckbox); // uncheck
+		expect(smtpTlsCheckbox.checked).toBe(false);
+		await userEvent.click(smtpTlsCheckbox); // re-check
+		expect(smtpTlsCheckbox.checked).toBe(true);
+	});
+
 	it("toggles SMTP TLS checkbox", async () => {
 		await openAddAccountForm();
 		const tlsCheckboxes = screen.getAllByRole("checkbox");
