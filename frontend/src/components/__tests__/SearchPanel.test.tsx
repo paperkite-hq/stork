@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SearchPanel } from "../SearchPanel";
 
 const mockSearch = vi.fn();
+const mockToast = vi.fn();
 
 vi.mock("../../api", () => ({
 	api: {
@@ -11,10 +12,15 @@ vi.mock("../../api", () => ({
 	},
 }));
 
+vi.mock("../Toast", () => ({
+	toast: (...args: unknown[]) => mockToast(...args),
+}));
+
 describe("SearchPanel", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockSearch.mockResolvedValue([]);
+		mockToast.mockClear();
 	});
 
 	it("renders search input with placeholder", () => {
@@ -495,6 +501,67 @@ describe("SearchPanel", () => {
 		await waitFor(() => expect(mockSearch).toHaveBeenCalled());
 		await waitFor(() => expect(screen.getByText("Result")).toBeInTheDocument());
 		expect(screen.queryByTestId("search-skeleton")).not.toBeInTheDocument();
+	});
+
+	it("fires search on mount when initialQuery is provided", async () => {
+		mockSearch.mockResolvedValue([]);
+		render(
+			<SearchPanel
+				onClose={vi.fn()}
+				onSelectMessage={vi.fn()}
+				accountId={null}
+				initialQuery="from:alice"
+			/>,
+		);
+		await waitFor(() => {
+			expect(mockSearch).toHaveBeenCalledWith("from:alice", expect.objectContaining({ limit: 30 }));
+		});
+		// Input should be pre-filled with the initial query
+		expect(screen.getByPlaceholderText("Search messages…")).toHaveValue("from:alice");
+	});
+
+	it("shows error toast when Load more fails", async () => {
+		const firstPage = Array.from({ length: 30 }, (_, i) => ({
+			id: i + 1,
+			subject: `Result ${i + 1}`,
+			from_address: `user${i}@test.com`,
+			from_name: `User ${i}`,
+			date: "2026-01-15T10:00:00Z",
+			snippet: "",
+		}));
+		mockSearch.mockResolvedValueOnce(firstPage);
+		mockSearch.mockRejectedValueOnce(new Error("Network error"));
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		const input = screen.getByPlaceholderText("Search messages…");
+		await userEvent.type(input, "test");
+		await waitFor(() => {
+			expect(screen.getByText(/Load more results/)).toBeInTheDocument();
+		});
+		await userEvent.click(screen.getByText(/Load more results/));
+		await waitFor(() => {
+			expect(mockToast).toHaveBeenCalledWith("Failed to load more results", "error");
+		});
+	});
+
+	it("toggles filter off by clicking same quick filter again", async () => {
+		mockSearch.mockResolvedValue([]);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} accountId={null} />);
+		// Click the quick filter button once to add
+		const starredButtons = screen.getAllByRole("button", { name: /Starred/ });
+		await userEvent.click(starredButtons[0] as HTMLElement);
+		await waitFor(() => {
+			expect(screen.getByLabelText("Remove Starred filter")).toBeInTheDocument();
+		});
+		// Click the quick filter button again to remove — exercises the `prev.filter()` branch
+		const updatedStarredButtons = screen.getAllByRole("button", { name: /Starred/ });
+		// The quick filter button is the one that does NOT have aria-label "Remove Starred filter"
+		const quickFilterBtn = updatedStarredButtons.find(
+			(b) => b.getAttribute("aria-label") !== "Remove Starred filter",
+		) as HTMLElement;
+		await userEvent.click(quickFilterBtn);
+		await waitFor(() => {
+			expect(screen.queryByLabelText("Remove Starred filter")).not.toBeInTheDocument();
+		});
 	});
 
 	it("shows search results and input value after typing", async () => {

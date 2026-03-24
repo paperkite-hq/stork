@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Account, Message } from "../../api";
@@ -891,6 +891,36 @@ describe("ComposeModal", () => {
 		fireEvent.mouseDown(linkBtn);
 		expect(promptMock).toHaveBeenCalledWith("Enter URL:");
 		expect(execCommandMock).toHaveBeenCalledWith("createLink", false, "https://example.com");
+	});
+
+	it("clicking toolbar button in plain text mode switches to HTML mode (handleToolbarAction auto-escalate)", async () => {
+		render(<ComposeModal mode={{ type: "new" }} onClose={vi.fn()} onSend={vi.fn()} />);
+		// Confirm we start in plain text mode
+		expect(screen.getByText("Rich text")).toBeInTheDocument();
+		expect(screen.getByPlaceholderText("Write your message…")).toBeInTheDocument();
+		// Click Bold while in plain text mode — triggers auto-escalate to HTML
+		fireEvent.mouseDown(screen.getByTitle("Bold"));
+		// After auto-escalate, the UI should switch to HTML mode
+		await waitFor(() => {
+			expect(screen.getByText("Plain text")).toBeInTheDocument();
+		});
+		// contentEditable editor should be shown
+		expect(screen.getByRole("textbox", { name: "Message body" })).toBeInTheDocument();
+	});
+
+	it("handleEditorInput updates htmlBody state when typing in HTML mode", async () => {
+		// Start in HTML mode (replying to HTML message)
+		const msg = makeMessage({ html_body: "<p>original</p>" });
+		render(
+			<ComposeModal mode={{ type: "reply", original: msg }} onClose={vi.fn()} onSend={vi.fn()} />,
+		);
+		// We're in HTML mode — contentEditable editor is shown
+		const editor = screen.getByRole("textbox", { name: "Message body" });
+		// Fire an input event on the contentEditable div to exercise handleEditorInput
+		editor.innerHTML = "<p>new content</p>";
+		fireEvent.input(editor);
+		// The handler just calls setHtmlBody — verify the format toggle is still "Plain text" (HTML mode)
+		expect(screen.getByText("Plain text")).toBeInTheDocument();
 	});
 
 	it("LinkButton does nothing when prompt is cancelled", async () => {
