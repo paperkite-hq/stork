@@ -409,6 +409,38 @@ describe("useFocusTrap", () => {
 		// autoFocus button should retain focus (not stolen by the trap)
 		expect(document.activeElement).toBe(screen.getByText("PreFocused"));
 	});
+
+	it("does not trap focus and does not crash when container has no focusable elements", () => {
+		function TestModalEmpty() {
+			const ref = useRef<HTMLDivElement>(null);
+			useFocusTrap(ref);
+			return (
+				<div ref={ref} data-testid="modal-empty">
+					<span>No focusable children</span>
+				</div>
+			);
+		}
+		render(<TestModalEmpty />);
+		const container = screen.getByTestId("modal-empty");
+		const tabEvent = new KeyboardEvent("keydown", { key: "Tab", bubbles: true });
+		const preventDefaultSpy = vi.spyOn(tabEvent, "preventDefault");
+		fireEvent(container, tabEvent);
+		expect(preventDefaultSpy).not.toHaveBeenCalled();
+	});
+
+	it("does not prevent default when Shift+Tab is pressed on a non-first element", () => {
+		render(<TestModal />);
+		const middleInput = screen.getByPlaceholderText("Middle");
+		const container = screen.getByTestId("modal");
+
+		middleInput.focus();
+
+		const tabEvent = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true });
+		const preventDefaultSpy = vi.spyOn(tabEvent, "preventDefault");
+		fireEvent(container, tabEvent);
+
+		expect(preventDefaultSpy).not.toHaveBeenCalled();
+	});
 });
 
 describe("useHistoryNavigation", () => {

@@ -294,6 +294,16 @@ describe("Welcome", () => {
 		expect(tlsCheckbox).not.toBeChecked();
 	});
 
+	it("IMAP TLS checkbox can be re-enabled after being unchecked", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		const tlsCheckbox = screen.getByLabelText(/Use TLS \(recommended\)/);
+		await userEvent.click(tlsCheckbox); // uncheck
+		expect(tlsCheckbox).not.toBeChecked();
+		await userEvent.click(tlsCheckbox); // re-check
+		expect(tlsCheckbox).toBeChecked();
+	});
+
 	it("auto-fills known providers: icloud.com", async () => {
 		render(<Welcome {...defaultProps} />);
 		await userEvent.click(screen.getByText("Add Your Email Account"));
@@ -345,6 +355,31 @@ describe("Welcome", () => {
 		}
 	});
 
+	it("SMTP TLS checkbox can be re-enabled after being unchecked", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
+		const smtpTls = screen.getAllByRole("checkbox").find((cb) => {
+			const label = cb.closest("label");
+			return label?.textContent === "Use TLS" && !label?.textContent?.includes("recommended");
+		}) as HTMLInputElement;
+		if (smtpTls) {
+			await userEvent.click(smtpTls); // uncheck
+			expect(smtpTls).not.toBeChecked();
+			await userEvent.click(smtpTls); // re-check
+			expect(smtpTls).toBeChecked();
+		}
+	});
+
+	it("Display Name field is editable", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		const nameInput = screen.getByPlaceholderText("Your Name") as HTMLInputElement;
+		await userEvent.clear(nameInput);
+		await userEvent.type(nameInput, "My Custom Name");
+		expect(nameInput.value).toBe("My Custom Name");
+	});
+
 	it("port field has correct default value", async () => {
 		render(<Welcome {...defaultProps} />);
 		await userEvent.click(screen.getByText("Add Your Email Account"));
@@ -379,6 +414,16 @@ describe("Welcome", () => {
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		const smtpPort = screen.getByDisplayValue("587") as HTMLInputElement;
 		expect(smtpPort.type).toBe("number");
+	});
+
+	it("SMTP port onChange falls back to 587 for non-numeric input", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
+		const smtpPort = screen.getByDisplayValue("587") as HTMLInputElement;
+		// Empty string → Number("") = 0 → falls back to 587
+		fireEvent.change(smtpPort, { target: { value: "" } });
+		expect(smtpPort.value).toBe("587");
 	});
 
 	it("IMAP port field is editable", async () => {

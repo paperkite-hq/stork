@@ -224,6 +224,57 @@ describe("App — Container state", () => {
 		render(<App />);
 		await waitForAppLayout();
 	});
+
+	it("transitions to unlocked state when SetupScreen calls onUnlocked", async () => {
+		const { api: mockApiModule } = await import("../api");
+		// Use Once so subsequent tests still see the default "unlocked" state
+		(mockApiModule.status as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ state: "setup" });
+		(mockApiModule.encryption.setup as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			recoveryMnemonic:
+				"alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray",
+		});
+		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.labels.list.mockResolvedValue([makeLabel()]);
+		mockApi.labels.messages.mockResolvedValue([]);
+		mockApi.folders.list.mockResolvedValue([]);
+		render(<App />);
+
+		// Complete setup flow
+		await waitFor(() => expect(screen.getByText("Set Up Encryption")).toBeInTheDocument());
+		await userEvent.type(screen.getByPlaceholderText("At least 12 characters"), "validpassword1!");
+		await userEvent.type(screen.getByPlaceholderText("Repeat your password"), "validpassword1!");
+		await userEvent.click(screen.getByRole("button", { name: "Create Encrypted Vault" }));
+		await waitFor(() => expect(screen.getByText("Save Your Recovery Phrase")).toBeInTheDocument());
+		await userEvent.click(screen.getByRole("checkbox"));
+		await userEvent.click(screen.getByRole("button", { name: "Continue to Stork" }));
+
+		// Should now show the main app (account has one label with INBOX)
+		await waitForAppLayout();
+	});
+
+	it("transitions to unlocked state when UnlockScreen calls onUnlocked", async () => {
+		const { api: mockApiModule } = await import("../api");
+		// Use Once so subsequent tests still see the default "unlocked" state
+		(mockApiModule.status as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ state: "locked" });
+		(mockApiModule.encryption.unlock as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			ok: true,
+		});
+		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.labels.list.mockResolvedValue([makeLabel()]);
+		mockApi.labels.messages.mockResolvedValue([]);
+		mockApi.folders.list.mockResolvedValue([]);
+		render(<App />);
+
+		await waitFor(() => expect(screen.getByText("Unlock Stork")).toBeInTheDocument());
+		await userEvent.type(
+			screen.getByPlaceholderText("Your encryption password"),
+			"validpassword1!",
+		);
+		await userEvent.click(screen.getByRole("button", { name: "Unlock" }));
+
+		// Should now show the main app
+		await waitForAppLayout();
+	});
 });
 
 // ------------------------------------------------------------------
@@ -449,6 +500,22 @@ describe("App — Search panel", () => {
 		await userEvent.click(screen.getByRole("button", { name: /search mail/i }));
 		await waitFor(() => {
 			expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument();
+		});
+	});
+
+	it("SearchPanel close button calls onClose and hides the panel", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+		// Open search
+		await userEvent.click(screen.getByRole("button", { name: /search mail/i }));
+		await waitFor(() => {
+			expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument();
+		});
+		// Click the X button inside the SearchPanel (calls onClose prop)
+		await userEvent.click(screen.getByRole("button", { name: "Close" }));
+		await waitFor(() => {
+			expect(screen.queryByPlaceholderText("Search messages…")).not.toBeInTheDocument();
 		});
 	});
 });
