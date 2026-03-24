@@ -103,6 +103,32 @@ describe("Accounts API", () => {
 			expect(status).toBe(400);
 		});
 
+		test("GET /api/accounts returns default_view on each account", async () => {
+			createTestAccount(db);
+			const { body } = await jsonRequest("/api/accounts");
+			expect(body).toHaveLength(1);
+			expect(body[0].default_view).toBe("inbox");
+		});
+
+		test("GET /api/accounts/:id returns default_view in detail", async () => {
+			const accountId = createTestAccount(db);
+			const { body } = await jsonRequest(`/api/accounts/${accountId}`);
+			expect(body.default_view).toBe("inbox");
+		});
+
+		test("PUT /api/accounts/:id updates default_view", async () => {
+			const accountId = createTestAccount(db);
+			const { status } = await jsonRequest(`/api/accounts/${accountId}`, {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ default_view: "unread" }),
+			});
+			expect(status).toBe(200);
+
+			const { body } = await jsonRequest(`/api/accounts/${accountId}`);
+			expect(body.default_view).toBe("unread");
+		});
+
 		test("DELETE /api/accounts/:id deletes account", async () => {
 			const accountId = createTestAccount(db);
 			const { status } = await jsonRequest(`/api/accounts/${accountId}`, {

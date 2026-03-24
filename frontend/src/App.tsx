@@ -90,8 +90,22 @@ export function App() {
 		[effectiveAccountId],
 	);
 
-	// Auto-select promoted Inbox view
-	const effectiveLabelId = selectedLabelId ?? (labels && labels.length > 0 ? INBOX_LABEL_ID : null);
+	// Resolve the default view for the effective account, honouring per-account setting
+	const effectiveAccount = accounts?.find((a) => a.id === effectiveAccountId) ?? null;
+	const defaultLabelId = useMemo(() => {
+		if (!effectiveAccount || !labels || labels.length === 0) return INBOX_LABEL_ID;
+		const dv = effectiveAccount.default_view ?? "inbox";
+		if (dv === "unread") return UNREAD_LABEL_ID;
+		if (dv === "all") return ALL_MAIL_LABEL_ID;
+		if (dv.startsWith("label:")) {
+			const id = Number.parseInt(dv.slice(6), 10);
+			return Number.isNaN(id) ? INBOX_LABEL_ID : id;
+		}
+		return INBOX_LABEL_ID; // 'inbox' or unknown
+	}, [effectiveAccount, labels]);
+
+	// Auto-select default view (uses per-account setting, falls back to Inbox)
+	const effectiveLabelId = selectedLabelId ?? (labels && labels.length > 0 ? defaultLabelId : null);
 
 	const isAllMail = effectiveLabelId === ALL_MAIL_LABEL_ID;
 	const isUnread = effectiveLabelId === UNREAD_LABEL_ID;
