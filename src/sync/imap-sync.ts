@@ -504,7 +504,12 @@ export class ImapSync {
 			// an empty mailbox returns "Invalid messageset")
 			if (mailboxStatus.exists > 0) {
 				try {
-					const fetchResult = await this.fetchNewMessages(folder.id, result, signal);
+					const fetchResult = await this.fetchNewMessages(
+						folder.id,
+						result,
+						signal,
+						deleteFromServerAfterSync,
+					);
 					result.newMessages = fetchResult.count;
 					syncedUids = fetchResult.syncedUids;
 				} catch (err) {
@@ -534,14 +539,24 @@ export class ImapSync {
 			}
 		}
 
-		// Phase 3: Delete synced messages from IMAP server (archive mode).
+		// Phase 3: Delete messages from IMAP server (archive mode).
 		// Must run AFTER releasing the fetch lock to avoid lock re-entrancy with ImapFlow.
-		// When enabled, stork is the single source of truth — the IMAP server
-		// is just the delivery edge and messages are removed after syncing.
-		if (deleteFromServerAfterSync && syncedUids.length > 0 && !signal?.aborted) {
+		// Queries the DB for pending_archive=1 messages rather than using the in-memory
+		// syncedUids list — this makes deletion crash-safe: if the process is killed
+		// after Phase 1 but before Phase 3, the next sync cycle picks up the pending
+		// deletions via this query.
+		if (deleteFromServerAfterSync && !signal?.aborted) {
 			try {
-				const deleted = await this.deleteFromServer(folderPath, syncedUids);
-				result.deletedFromServer = deleted;
+				const pendingRows = this.db
+					.prepare(
+						"SELECT uid FROM messages WHERE folder_id = ? AND pending_archive = 1 AND deleted_from_server = 0",
+					)
+					.all(folder.id) as { uid: number }[];
+				const pendingUids = pendingRows.map((r) => r.uid);
+				if (pendingUids.length > 0) {
+					const deleted = await this.deleteFromServer(folderPath, pendingUids);
+					result.deletedFromServer = deleted;
+				}
 			} catch (err) {
 				if (signal?.aborted) throw err;
 				this.recordError(result, {
@@ -568,6 +583,7 @@ export class ImapSync {
 		folderId: number,
 		result: SyncResult,
 		signal?: AbortSignal,
+		archiveMode = false,
 	): Promise<{ count: number; syncedUids: number[] }> {
 		const syncState = this.db
 			.prepare("SELECT last_uid FROM sync_state WHERE account_id = ? AND folder_id = ?")
@@ -689,6 +705,17 @@ export class ImapSync {
 					}
 
 					if (message.uid > maxUid) maxUid = message.uid;
+
+					// Mark message as pending server deletion for crash-safe archive mode.
+					// This must be set BEFORE Phase 3 runs so that a crash between Phase 1
+					// and Phase 3 is recoverable — the next sync will find pending_archive=1
+					// and retry the deletion.
+					if (archiveMode && dbResult.changes > 0) {
+						this.db
+							.prepare("UPDATE messages SET pending_archive = 1 WHERE folder_id = ? AND uid = ?")
+							.run(folderId, message.uid);
+					}
+
 					count++;
 					syncedUids.push(message.uid);
 
@@ -954,7 +981,7 @@ export class ImapSync {
 
 			if (folder) {
 				const markDeleted = this.db.prepare(
-					"UPDATE messages SET deleted_from_server = 1 WHERE folder_id = ? AND uid = ?",
+					"UPDATE messages SET deleted_from_server = 1, pending_archive = 0 WHERE folder_id = ? AND uid = ?",
 				);
 				const markMany = this.db.transaction(() => {
 					for (const uid of uids) {
