@@ -446,6 +446,26 @@ describe("Accounts API", () => {
 			expect(body.total).toBe(2);
 			expect(body.unread).toBe(1); // NULL flags message should count as unread
 		});
+
+		test("GET /api/accounts/:id/all-messages/count uses cached values when set", async () => {
+			const accountId = createTestAccount(db);
+			// Set cached counts directly (simulating refreshAccountCounts)
+			db.prepare(
+				"UPDATE accounts SET cached_message_count = 42, cached_unread_count = 7 WHERE id = ?",
+			).run(accountId);
+
+			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/all-messages/count`);
+			expect(status).toBe(200);
+			// Returns cached values, not live count (which would be 0)
+			expect(body.total).toBe(42);
+			expect(body.unread).toBe(7);
+		});
+
+		test("GET /api/accounts/:id/all-messages/count returns 404 for unknown account", async () => {
+			const { status, body } = await jsonRequest("/api/accounts/9999/all-messages/count");
+			expect(status).toBe(404);
+			expect(body.error).toMatch(/not found/i);
+		});
 	});
 
 	// ─── Connector type validation ─────────────────────────
@@ -671,6 +691,27 @@ describe("Accounts API", () => {
 			expect(body.error).toMatch(/accountId/);
 		});
 
+		test("GET /api/accounts/:id/labels returns cached message_count and unread_count", async () => {
+			const accountId = createTestAccount(db);
+			const folderId = createTestFolder(db, accountId, "INBOX");
+
+			// Create a label with messages — set counts directly (simulating refreshLabelCounts)
+			const labelId = createTestLabel(db, accountId, "INBOX");
+			const msgId1 = createTestMessage(db, accountId, folderId, 1, { flags: "" });
+			const msgId2 = createTestMessage(db, accountId, folderId, 2, { flags: "\\Seen" });
+			addMessageLabel(db, msgId1, labelId);
+			addMessageLabel(db, msgId2, labelId);
+			// Update the cached counts directly (as refreshLabelCounts would)
+			db.prepare("UPDATE labels SET message_count = 2, unread_count = 1 WHERE id = ?").run(labelId);
+
+			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/labels`);
+			expect(status).toBe(200);
+			expect(body).toHaveLength(1);
+			expect(body[0].name).toBe("INBOX");
+			expect(body[0].message_count).toBe(2);
+			expect(body[0].unread_count).toBe(1);
+		});
+
 		test("GET /api/accounts/1/folders/abc/messages returns 400 for non-numeric folderId", async () => {
 			const { status, body } = await jsonRequest("/api/accounts/1/folders/abc/messages");
 			expect(status).toBe(400);
@@ -722,6 +763,25 @@ describe("Accounts API", () => {
 			);
 			expect(status).toBe(200);
 			expect(body.total).toBe(1);
+		});
+
+		test("GET /api/accounts/:id/unread-messages/count uses cached value when set", async () => {
+			const accountId = createTestAccount(db);
+			// Set cached count directly (simulating refreshAccountCounts)
+			db.prepare("UPDATE accounts SET cached_unread_count = 15 WHERE id = ?").run(accountId);
+
+			const { status, body } = await jsonRequest(
+				`/api/accounts/${accountId}/unread-messages/count`,
+			);
+			expect(status).toBe(200);
+			// Returns cached value, not live count (which would be 0)
+			expect(body.total).toBe(15);
+		});
+
+		test("GET /api/accounts/:id/unread-messages/count returns 404 for unknown account", async () => {
+			const { status, body } = await jsonRequest("/api/accounts/9999/unread-messages/count");
+			expect(status).toBe(404);
+			expect(body.error).toMatch(/not found/i);
 		});
 	});
 });
