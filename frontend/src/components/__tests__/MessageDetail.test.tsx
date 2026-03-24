@@ -763,25 +763,80 @@ describe("MessageDetail — Delete error handling", () => {
 });
 
 describe("MessageDetail — Trust sender", () => {
-	it("calls api.trustedSenders.add when trusting a sender", async () => {
+	it("shows 'Always show from this sender' button for remote images and calls trustedSenders.add", async () => {
 		const { api } = await import("../../api");
 
+		// Use a non-tracking remote image (not 1x1, no /track path)
 		const msg = makeMessage({
 			id: 50,
 			from_address: "Alice@Test.Com",
-			html_body: '<img src="https://tracker.com/pixel.gif" width="1" height="1">',
+			html_body: '<img src="https://newsletter.example.com/banner.png" width="600" height="200">',
 		});
 		render(
 			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} accountId={1} />,
 		);
 
-		// Look for the "Always show images from" button if remote images are detected
-		const trustBtn = screen.queryByText(/Always show images from/i);
-		if (trustBtn) {
-			await userEvent.click(trustBtn);
-			await waitFor(() => {
-				expect(api.trustedSenders.add).toHaveBeenCalledWith(1, "alice@test.com");
-			});
-		}
+		// The remote images banner should be shown
+		await waitFor(() => {
+			expect(screen.getByText(/Remote images are hidden/i)).toBeInTheDocument();
+		});
+
+		// Click "Always show from this sender"
+		const trustBtn = screen.getByText(/Always show from this sender/i);
+		await userEvent.click(trustBtn);
+
+		await waitFor(() => {
+			expect(api.trustedSenders.add).toHaveBeenCalledWith(1, "alice@test.com");
+		});
+	});
+
+	it("hides the remote images banner when sender is already trusted", async () => {
+		const { api } = await import("../../api");
+		// Mock trusted senders to include the sender
+		(api.trustedSenders.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+			{ id: 1, sender_address: "newsletter@example.com", created_at: new Date().toISOString() },
+		]);
+
+		const msg = makeMessage({
+			id: 51,
+			from_address: "newsletter@example.com",
+			html_body: '<img src="https://newsletter.example.com/banner.png" width="600" height="200">',
+		});
+		render(
+			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} accountId={1} />,
+		);
+
+		// Banner should NOT show since sender is trusted
+		await waitFor(() => {
+			// Give the trusted senders list time to load
+			expect(api.trustedSenders.list).toHaveBeenCalledWith(1);
+		});
+		expect(screen.queryByText(/Remote images are hidden/i)).not.toBeInTheDocument();
+	});
+
+	it("shows error toast when trustedSenders.add fails", async () => {
+		const { api } = await import("../../api");
+		const { toast } = await import("../Toast");
+		(api.trustedSenders.add as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Network error"),
+		);
+
+		const msg = makeMessage({
+			id: 52,
+			from_address: "sender@example.com",
+			html_body: '<img src="https://cdn.example.com/image.jpg" width="800" height="400">',
+		});
+		render(
+			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} accountId={1} />,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText(/Remote images are hidden/i)).toBeInTheDocument();
+		});
+
+		await userEvent.click(screen.getByText(/Always show from this sender/i));
+		await waitFor(() => {
+			expect(toast).toHaveBeenCalledWith("Failed to trust sender", "error");
+		});
 	});
 });
