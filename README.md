@@ -117,7 +117,7 @@ docker compose up --build
 - [x] Label-based organization (Gmail-style)
 - [x] Encryption at rest (AES-256 via SQLCipher, BIP39 recovery key)
 - [ ] Pluggable connector architecture
-- [ ] Delete-from-server workflow
+- [x] Delete-from-server workflow
 - [ ] Multi-account support
 
 ## Documentation
