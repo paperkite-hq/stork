@@ -73,6 +73,8 @@ export type SpecialUse =
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 const FETCH_BATCH_SIZE = 50;
+/** Max UIDs per IMAP messageDelete call. Prevents overly-long UID-set strings on large initial syncs. */
+const DELETE_BATCH_SIZE = 100;
 /** Apply folder labels to messages after every this-many new messages within a folder.
  *  Keeps the UI responsive during large-folder syncs (e.g. Archive with 50k messages). */
 const DEFAULT_SUB_BATCH_LABEL_SIZE = 500;
@@ -967,34 +969,51 @@ export class ImapSync {
 	/**
 	 * Deletes messages from the server that have been synced locally.
 	 * Only operates on messages explicitly marked for server deletion.
+	 *
+	 * Deletes in batches of DELETE_BATCH_SIZE to avoid overly-long IMAP UID-set
+	 * strings on large initial syncs (e.g. a mailbox with thousands of messages).
+	 * Each batch is fully deleted and marked in the DB before the next batch starts,
+	 * so a crash mid-batch only loses progress on the current batch — pending_archive
+	 * records for unprocessed batches remain and are picked up on the next sync cycle.
 	 */
 	async deleteFromServer(folderPath: string, uids: number[]): Promise<number> {
 		if (uids.length === 0) return 0;
 
-		const lock = await this.client.getMailboxLock(folderPath);
-		try {
-			await this.client.messageDelete(uids, { uid: true });
+		const folder = this.db
+			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = ?")
+			.get(this.accountId, folderPath) as { id: number } | undefined;
 
-			const folder = this.db
-				.prepare("SELECT id FROM folders WHERE account_id = ? AND path = ?")
-				.get(this.accountId, folderPath) as { id: number } | undefined;
-
-			if (folder) {
-				const markDeleted = this.db.prepare(
+		const markDeleted = folder
+			? this.db.prepare(
 					"UPDATE messages SET deleted_from_server = 1, pending_archive = 0 WHERE folder_id = ? AND uid = ?",
-				);
-				const markMany = this.db.transaction(() => {
-					for (const uid of uids) {
-						markDeleted.run(folder.id, uid);
-					}
-				});
-				markMany();
-			}
+				)
+			: null;
 
-			return uids.length;
-		} finally {
-			lock.release();
+		let totalDeleted = 0;
+
+		for (let i = 0; i < uids.length; i += DELETE_BATCH_SIZE) {
+			const batch = uids.slice(i, i + DELETE_BATCH_SIZE);
+
+			const lock = await this.client.getMailboxLock(folderPath);
+			try {
+				await this.client.messageDelete(batch, { uid: true });
+
+				if (folder && markDeleted) {
+					const markMany = this.db.transaction(() => {
+						for (const uid of batch) {
+							markDeleted.run(folder.id, uid);
+						}
+					});
+					markMany();
+				}
+
+				totalDeleted += batch.length;
+			} finally {
+				lock.release();
+			}
 		}
+
+		return totalDeleted;
 	}
 }
 
