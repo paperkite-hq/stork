@@ -20,8 +20,15 @@ vi.mock("../Toast", () => ({
 
 // Mock LabelManager since it has its own tests
 vi.mock("../LabelManager", () => ({
-	MessageLabelPicker: ({ messageId }: { messageId: number }) => (
-		<div data-testid={`label-picker-${messageId}`}>Label Picker</div>
+	MessageLabelPicker: ({
+		messageId,
+		onLabelsChanged,
+	}: { messageId: number; onLabelsChanged?: () => void }) => (
+		<div data-testid={`label-picker-${messageId}`}>
+			<button type="button" onClick={onLabelsChanged}>
+				Change Labels
+			</button>
+		</div>
 	),
 }));
 
@@ -207,6 +214,33 @@ describe("MessageHeaderActions", () => {
 	it("does not render label picker when accountId is null", () => {
 		render(<MessageHeaderActions {...defaultProps({ accountId: null })} />);
 		expect(screen.queryByTestId("label-picker-1")).not.toBeInTheDocument();
+	});
+
+	it("shows error toast when move fails", async () => {
+		const { api } = await import("../../api");
+		const { toast } = await import("../Toast");
+		(api.messages.move as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Network error"),
+		);
+		render(<MessageHeaderActions {...defaultProps()} />);
+		fireEvent.click(screen.getByTitle("Move to folder"));
+		fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+		await waitFor(() => expect(toast).toHaveBeenCalledWith("Failed to move message", "error"));
+	});
+
+	it("fires onLabelsChanged and onMessageChanged when label picker callback fires", async () => {
+		const onLabelsChanged = vi.fn();
+		const onMessageChanged = vi.fn();
+		render(
+			<MessageHeaderActions
+				{...defaultProps({ accountId: 1, onLabelsChanged, onMessageChanged })}
+			/>,
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Change Labels" }));
+		await waitFor(() => {
+			expect(onLabelsChanged).toHaveBeenCalled();
+			expect(onMessageChanged).toHaveBeenCalled();
+		});
 	});
 
 	it("has correct aria-expanded on move button", () => {
