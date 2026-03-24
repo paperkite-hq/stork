@@ -4,7 +4,7 @@
 
 **Not by default.** The sync engine is read-only unless you opt in. Out of the box, Stork fetches messages and flags but never modifies anything on your IMAP server — safe to use against a production mailbox.
 
-If you want deletions to sync both ways, enable **Sync deletions** in Settings > Accounts for that account. With this enabled, deleting a message in Stork also deletes it from your IMAP server, and messages deleted on the server are removed locally on the next sync. This setting is per-account and off by default.
+If you want to use Stork as your permanent email archive, enable **Archive mode** in Settings > Accounts for that account. With this enabled, Stork automatically removes messages from the IMAP server after it has successfully synced them locally. Your IMAP provider becomes a transient delivery edge — mail arrives there, Stork picks it up and stores it encrypted locally, then clears it from the server. This setting is per-account and off by default.
 
 ## Will full-text search scale to a large mailbox?
 
