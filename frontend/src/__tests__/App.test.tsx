@@ -73,6 +73,7 @@ vi.mock("../api", () => ({
 			add: vi.fn().mockResolvedValue({ id: 1 }),
 			remove: vi.fn().mockResolvedValue({ ok: true }),
 		},
+		search: vi.fn().mockResolvedValue([]),
 	},
 }));
 
@@ -163,6 +164,7 @@ const mockApi = api as unknown as {
 		bulk: ReturnType<typeof vi.fn>;
 	};
 	sync: { status: ReturnType<typeof vi.fn>; trigger: ReturnType<typeof vi.fn> };
+	search: ReturnType<typeof vi.fn>;
 };
 
 function setupWithAccounts(
@@ -1998,6 +2000,171 @@ describe("App — Escape closes settings before other modals", () => {
 		fireEvent.keyDown(window, { key: "Escape" });
 		await waitFor(() =>
 			expect(screen.queryByRole("heading", { name: "Settings" })).not.toBeInTheDocument(),
+		);
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Back from search — reopens search panel (App.tsx lines 779-780)
+// ------------------------------------------------------------------
+
+describe("App — Back from search-opened message", () => {
+	it("back button returns to search panel when message was opened from search results", async () => {
+		const msg = makeMessage({ id: 99, subject: "Search hit", text_body: "Found body" });
+		mockApi.messages.get.mockResolvedValue(msg);
+		mockApi.messages.getThread.mockResolvedValue([msg]);
+		mockApi.search.mockResolvedValue([
+			{
+				id: 99,
+				subject: "Search hit",
+				from_address: "sender@test.com",
+				from_name: "Sender",
+				date: new Date().toISOString(),
+				snippet: "Found body",
+			},
+		]);
+		setupWithAccounts([makeAccount()], [makeLabel()]);
+		render(<App />);
+		await waitForAppLayout();
+
+		// Open search
+		fireEvent.keyDown(window, { key: "/" });
+		await waitFor(() =>
+			expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument(),
+		);
+
+		// Type to trigger the debounced search
+		await userEvent.type(screen.getByPlaceholderText("Search messages…"), "hit");
+
+		// Wait for the search result to render
+		await waitFor(
+			() =>
+				expect(screen.getByRole("button", { name: /Search hit from Sender/ })).toBeInTheDocument(),
+			{ timeout: 2000 },
+		);
+
+		// Click the search result — sets selectedMessageId + openedFromSearch=true
+		await userEvent.click(screen.getByRole("button", { name: /Search hit from Sender/ }));
+
+		// Wait for message detail to render — back button shows "← Search results" when openedFromSearch=true
+		await waitFor(() => expect(screen.getByText("← Search results")).toBeInTheDocument(), {
+			timeout: 3000,
+		});
+
+		// Click the back button — triggers lines 779-780 (setShowSearch(true) + setOpenedFromSearch(false))
+		await userEvent.click(screen.getByText("← Search results"));
+
+		// Message detail should be gone (back button "← Search results" is unique to the detail view)
+		await waitFor(() => expect(screen.queryByText("← Search results")).not.toBeInTheDocument());
+		// Search panel should still be visible (showSearch remains true after onBack)
+		expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument();
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: onMessageChanged triggers refetches (App.tsx lines 783-787)
+// ------------------------------------------------------------------
+
+describe("App — onMessageChanged callback", () => {
+	it("starring a message from the detail view triggers message and label refetches", async () => {
+		const msg = makeMessage({ id: 88, subject: "Refetch trigger test", flags: null });
+		mockApi.messages.get.mockResolvedValue(msg);
+		mockApi.messages.getThread.mockResolvedValue([msg]);
+		setupWithAccounts(
+			[makeAccount()],
+			[makeLabel()],
+			[makeMessageSummary({ id: 88, subject: "Refetch trigger test", flags: null })],
+		);
+		render(<App />);
+		// Wait for the message subject to appear in the list (messages load async)
+		await waitFor(() => expect(screen.getByText("Refetch trigger test")).toBeInTheDocument());
+
+		// Select the message to open it in the detail view
+		await userEvent.click(screen.getByText("Refetch trigger test"));
+		await waitFor(() => expect(mockApi.messages.get).toHaveBeenCalledWith(88));
+
+		// Record call counts before the action
+		const getCallsBefore = mockApi.messages.get.mock.calls.length;
+		const labelsCallsBefore = mockApi.labels.list.mock.calls.length;
+
+		// Click the "Star message" button in the message detail header
+		await waitFor(() => expect(screen.getByTitle("Star message")).toBeInTheDocument());
+		await userEvent.click(screen.getByTitle("Star message"));
+
+		// onMessageChanged should trigger refetchMessage (messages.get) and refetchLabels (labels.list)
+		await waitFor(() => {
+			expect(mockApi.messages.get.mock.calls.length).toBeGreaterThan(getCallsBefore);
+			expect(mockApi.labels.list.mock.calls.length).toBeGreaterThan(labelsCallsBefore);
+		});
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Modal X-button onClose props (App.tsx lines 809, 813, 814)
+// ------------------------------------------------------------------
+
+describe("App — Modal onClose via X button", () => {
+	it("clicking X button in ShortcutsHelp calls onClose and closes the modal", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+
+		// Open shortcuts help
+		fireEvent.keyDown(window, { key: "?" });
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Keyboard Shortcuts" })).toBeInTheDocument(),
+		);
+
+		// Click the X button inside ShortcutsHelp (title="Close" from XIcon)
+		await userEvent.click(screen.getByTitle("Close"));
+
+		// Modal should close (onClose prop was called → setShowShortcuts(false))
+		await waitFor(() =>
+			expect(screen.queryByRole("heading", { name: "Keyboard Shortcuts" })).not.toBeInTheDocument(),
+		);
+	});
+
+	it("clicking Close settings button in Settings modal calls onClose", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+
+		// Open settings via settings button
+		const settingsBtns = screen.getAllByTitle("Settings");
+		await userEvent.click(settingsBtns[0] as HTMLElement);
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument(),
+		);
+
+		// Click the "Close settings" button inside the Settings modal
+		await userEvent.click(screen.getByRole("button", { name: "Close settings" }));
+
+		// Modal should close (onClose prop was called → setShowSettings(false))
+		await waitFor(() =>
+			expect(screen.queryByRole("heading", { name: "Settings" })).not.toBeInTheDocument(),
+		);
+	});
+
+	it("clicking X button in ComposeModal calls onClose prop", async () => {
+		setupWithAccounts();
+		render(<App />);
+		await waitForAppLayout();
+
+		// Open compose modal
+		fireEvent.keyDown(window, { key: "c" });
+		await waitFor(() =>
+			expect(screen.getByPlaceholderText("recipient@example.com")).toBeInTheDocument(),
+		);
+
+		// Find and click the X/close button inside the ComposeModal
+		// ComposeModal header has an X button with title "Close" from XIcon
+		const closeBtns = screen.getAllByTitle("Close");
+		const composeCloseBtn = closeBtns[0] as HTMLElement;
+		await userEvent.click(composeCloseBtn);
+
+		// Compose modal should close (onClose prop was called → setComposeMode(null))
+		await waitFor(() =>
+			expect(screen.queryByPlaceholderText("recipient@example.com")).not.toBeInTheDocument(),
 		);
 	});
 });

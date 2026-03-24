@@ -21,10 +21,16 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 			.replace(/[/\\]/g, "_")
 			.replace(/["\r\n]/g, "")
 			.replace(/[^\x20-\x7E]/g, "_");
+		// RFC 5987: if the original name contains non-ASCII characters, include
+		// filename*=UTF-8''<pct-encoded> so modern browsers use the real name.
+		const hasNonAscii = /[^\x20-\x7E]/.test(rawName);
+		const contentDisposition = hasNonAscii
+			? `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(rawName)}`
+			: `attachment; filename="${safeName}"`;
 		return new Response(attachment.data ? new Uint8Array(attachment.data) : null, {
 			headers: {
 				"Content-Type": contentType,
-				"Content-Disposition": `attachment; filename="${safeName}"`,
+				"Content-Disposition": contentDisposition,
 			},
 		});
 	});

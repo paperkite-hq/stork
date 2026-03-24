@@ -184,15 +184,15 @@ test.describe("Keyboard shortcuts", () => {
 
 	test("j/k navigate message list", async ({ page }) => {
 		await page.goto("/");
+		// Wait for message list to load before pressing keyboard shortcuts
+		await expect(page.getByText("E2E Test Email #1", { exact: true })).toBeVisible();
 		await page.locator("body").click();
 		// Press j to move down in the message list
 		await page.keyboard.press("j");
 		// Press Enter to open the selected message
 		await page.keyboard.press("Enter");
-		// Message detail should appear (sender email visible)
-		await expect(
-			page.locator("[class*='text-gray']").filter({ hasText: /@/ }).first(),
-		).toBeVisible();
+		// Message detail should appear — any @example.com address in the from/to fields
+		await expect(page.getByText(/@example\.com/).first()).toBeVisible();
 	});
 });
 
