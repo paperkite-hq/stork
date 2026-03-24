@@ -241,4 +241,49 @@ describe("useMessageActions", () => {
 		await act(() => result.current.star());
 		expect(mockUpdateFlags).not.toHaveBeenCalled();
 	});
+
+	it("archive undo callback re-adds the label", async () => {
+		// Verify that the undo button passed to toast actually calls addLabels
+		const { result } = renderActions({ effectiveLabelId: 1, isAllMail: false });
+		await act(() => result.current.archive());
+
+		// Archive should pass an action object with label: "Undo" and onClick callback
+		expect(mockToast).toHaveBeenCalledWith(
+			"Archived",
+			"success",
+			expect.objectContaining({ label: "Undo", onClick: expect.any(Function) }),
+		);
+
+		// Extract and invoke the undo callback
+		const toastCall = mockToast.mock.calls.find(
+			(c) => c[0] === "Archived" && c[2]?.label === "Undo",
+		);
+		expect(toastCall).toBeTruthy();
+		const undoCallback = toastCall?.[2]?.onClick;
+
+		await act(async () => {
+			await undoCallback?.();
+		});
+
+		expect(mockAddLabels).toHaveBeenCalledWith(1, [1]);
+		expect(refetchMessages).toHaveBeenCalled();
+		expect(refetchLabels).toHaveBeenCalledTimes(2); // once for archive, once for undo
+	});
+
+	it("archive undo callback shows error toast on addLabels failure", async () => {
+		mockAddLabels.mockRejectedValueOnce(new Error("Network error"));
+		const { result } = renderActions({ effectiveLabelId: 1, isAllMail: false });
+		await act(() => result.current.archive());
+
+		const toastCall = mockToast.mock.calls.find(
+			(c) => c[0] === "Archived" && c[2]?.label === "Undo",
+		);
+		const undoCallback = toastCall?.[2]?.onClick;
+
+		await act(async () => {
+			await undoCallback?.();
+		});
+
+		expect(mockToast).toHaveBeenCalledWith("Failed to undo", "error");
+	});
 });

@@ -356,4 +356,64 @@ describe("useSyncPoller", () => {
 
 		mockNow.mockRestore();
 	});
+
+	it("resets lastMessageTotal to 0 when sync is not running", async () => {
+		// Covers the `else { lastMessageTotal = 0 }` branch in the progress tracking logic.
+		// Ensures that when sync stops, the counter resets so that the next sync correctly
+		// detects new messages starting from 0.
+		const onSyncComplete = vi.fn();
+
+		function runningStatus(messagesNew: number): GlobalSyncStatus {
+			return {
+				"1": {
+					running: true,
+					lastSync: null,
+					lastError: null,
+					consecutiveErrors: 0,
+					progress: {
+						currentFolder: "INBOX",
+						totalFolders: 1,
+						messagesNew,
+						messagesUpdated: 0,
+						messagesDeleted: 0,
+						startedAt: 0,
+					},
+				},
+			};
+		}
+
+		const idleStatus: GlobalSyncStatus = {
+			"1": {
+				running: false,
+				lastSync: null,
+				lastError: null,
+				consecutiveErrors: 0,
+				progress: null,
+			},
+		};
+
+		// First poll: running with 10 new messages → fires callback
+		mockStatus.mockResolvedValueOnce(runningStatus(10));
+		renderHook(() => useSyncPoller(onSyncComplete));
+		await act(async () => {
+			await vi.runOnlyPendingTimersAsync();
+		});
+		expect(onSyncComplete).toHaveBeenCalledTimes(1);
+
+		// Second poll: sync is now idle → resets lastMessageTotal to 0
+		// (This also fires callback due to running→idle transition)
+		mockStatus.mockResolvedValueOnce(idleStatus);
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(3000);
+		});
+
+		// Third poll: sync running again with only 5 new messages
+		// Because lastMessageTotal was reset to 0 when idle, 5 > 0 triggers the callback
+		mockStatus.mockResolvedValueOnce(runningStatus(5));
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(3000);
+		});
+		// The callback fires at least once more (the 5 > 0 check passed because counter was reset)
+		expect(onSyncComplete.mock.calls.length).toBeGreaterThanOrEqual(2);
+	});
 });

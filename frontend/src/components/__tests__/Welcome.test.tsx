@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Welcome } from "../Welcome";
@@ -386,6 +386,23 @@ describe("Welcome", () => {
 		await userEvent.click(screen.getByText("Add Your Email Account"));
 		const imapPort = screen.getByDisplayValue("993") as HTMLInputElement;
 		expect(imapPort.type).toBe("number");
+	});
+
+	it("IMAP port onChange updates form value", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		const imapPort = screen.getByDisplayValue("993") as HTMLInputElement;
+		fireEvent.change(imapPort, { target: { value: "143" } });
+		expect(imapPort.value).toBe("143");
+	});
+
+	it("IMAP port onChange falls back to 993 for non-numeric input", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		const imapPort = screen.getByDisplayValue("993") as HTMLInputElement;
+		// Empty string → Number("") = 0 → falls back to 993
+		fireEvent.change(imapPort, { target: { value: "" } });
+		expect(imapPort.value).toBe("993");
 	});
 
 	it("does not overwrite manually edited IMAP username", async () => {
