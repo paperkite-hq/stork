@@ -424,6 +424,17 @@ describe("Sidebar", () => {
 		expect(screen.queryByText("Sync failed")).not.toBeInTheDocument();
 	});
 
+	it("calls onSelectLabel with INBOX_LABEL_ID when Inbox promoted view is clicked", async () => {
+		const onSelectLabel = vi.fn();
+		const labels = [makeLabel({ id: 1, name: "Inbox" })];
+		render(<Sidebar {...defaultProps} labels={labels} onSelectLabel={onSelectLabel} />);
+		// The promoted Inbox button is a nav button; find it by text content
+		const navButtons = screen.getAllByRole("button");
+		const inboxBtn = navButtons.find((b) => b.textContent?.includes("Inbox") && b.closest("nav"));
+		await userEvent.click(inboxBtn as HTMLElement);
+		expect(onSelectLabel).toHaveBeenCalledWith(INBOX_LABEL_ID);
+	});
+
 	it("shows Unread promoted view with count badge", () => {
 		const labels = [makeLabel({ id: 1, name: "Inbox" })];
 		render(<Sidebar {...defaultProps} labels={labels} unreadCount={{ total: 12 }} />);

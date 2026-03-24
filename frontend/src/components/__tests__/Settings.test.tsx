@@ -1495,6 +1495,29 @@ describe("Settings — AccountForm field interactions", () => {
 		expect(smtpTlsCheckbox.checked).toBe(false);
 	});
 
+	it("updates SMTP username via onChange", async () => {
+		await openAddAccountForm();
+		const usernameInputs = screen.getAllByPlaceholderText("you@example.com");
+		// SMTP Username is the second 'you@example.com' placeholder (IMAP user is first)
+		const smtpUserInput = usernameInputs[usernameInputs.length - 1] as HTMLInputElement;
+		fireEvent.change(smtpUserInput, { target: { value: "smtp-user@test.com" } });
+		expect(smtpUserInput.value).toBe("smtp-user@test.com");
+	});
+
+	it("updates SMTP password via onChange", async () => {
+		await openAddAccountForm();
+		const passwordInputs = screen.getAllByPlaceholderText("");
+		// Find the SMTP password input: type=password AND in the Outgoing Mail fieldset
+		const smtpPassInput = Array.from(passwordInputs).find(
+			(el) =>
+				el.getAttribute("type") === "password" &&
+				el.closest("fieldset")?.textContent?.includes("Outgoing Mail"),
+		) as HTMLInputElement | undefined;
+		if (!smtpPassInput) throw new Error("SMTP password input not found");
+		fireEvent.change(smtpPassInput, { target: { value: "smtp-secret" } });
+		expect(smtpPassInput.value).toBe("smtp-secret");
+	});
+
 	it("switches to General tab via desktop sidebar tab button", async () => {
 		// Both mobile and desktop tab bars render; index 0 is mobile, index 1 is desktop.
 		// Click the desktop TabButton (second occurrence) to cover those onClick handlers.
