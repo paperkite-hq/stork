@@ -1494,4 +1494,24 @@ describe("Settings — AccountForm field interactions", () => {
 		await userEvent.click(smtpTlsCheckbox);
 		expect(smtpTlsCheckbox.checked).toBe(false);
 	});
+
+	it("switches to General tab via desktop sidebar tab button", async () => {
+		// Both mobile and desktop tab bars render; index 0 is mobile, index 1 is desktop.
+		// Click the desktop TabButton (second occurrence) to cover those onClick handlers.
+		render(<Settings onClose={vi.fn()} />);
+		const generalButtons = screen.getAllByText("General");
+		// Click the desktop tab button (if multiple exist — mobile appears before desktop)
+		const desktopBtn = generalButtons[generalButtons.length - 1] as HTMLElement;
+		await userEvent.click(desktopBtn);
+		expect(screen.getByText("General Settings")).toBeInTheDocument();
+	});
+
+	it("switches to Security tab via desktop sidebar tab button", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		const securityButtons = screen.getAllByText("Security");
+		const desktopBtn = securityButtons[securityButtons.length - 1] as HTMLElement;
+		await userEvent.click(desktopBtn);
+		// SecurityTab renders the Security section heading
+		expect(screen.getAllByText("Change Password").length).toBeGreaterThan(0);
+	});
 });
