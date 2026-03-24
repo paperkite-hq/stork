@@ -1,4 +1,4 @@
-import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -304,25 +304,69 @@ describe("useFocusTrap", () => {
 		);
 	}
 
-	it("traps Tab at the last element, cycling to first", async () => {
+	it("traps Tab at the last element, cycling to first", () => {
 		render(<TestModal />);
 		const lastBtn = screen.getByText("Last");
+		const firstBtn = screen.getByText("First");
+		const container = screen.getByTestId("modal");
+
 		lastBtn.focus();
 		expect(document.activeElement).toBe(lastBtn);
 
-		await userEvent.tab();
-		// Should cycle to the first focusable element
-		expect(document.activeElement).toBe(screen.getByText("First"));
+		// Use fireEvent to actually trigger the container's keydown listener
+		const tabEvent = new KeyboardEvent("keydown", { key: "Tab", bubbles: true });
+		const preventDefaultSpy = vi.spyOn(tabEvent, "preventDefault");
+		fireEvent(container, tabEvent);
+
+		expect(preventDefaultSpy).toHaveBeenCalled();
+		expect(document.activeElement).toBe(firstBtn);
 	});
 
-	it("traps Shift+Tab at the first element, cycling to last", async () => {
+	it("traps Shift+Tab at the first element, cycling to last", () => {
 		render(<TestModal />);
 		const firstBtn = screen.getByText("First");
+		const lastBtn = screen.getByText("Last");
+		const container = screen.getByTestId("modal");
+
 		firstBtn.focus();
 		expect(document.activeElement).toBe(firstBtn);
 
-		await userEvent.tab({ shift: true });
-		expect(document.activeElement).toBe(screen.getByText("Last"));
+		const tabEvent = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true });
+		const preventDefaultSpy = vi.spyOn(tabEvent, "preventDefault");
+		fireEvent(container, tabEvent);
+
+		expect(preventDefaultSpy).toHaveBeenCalled();
+		expect(document.activeElement).toBe(lastBtn);
+	});
+
+	it("does not call preventDefault when Tab is pressed on a non-boundary element", () => {
+		render(<TestModal />);
+		const middleInput = screen.getByPlaceholderText("Middle");
+		const container = screen.getByTestId("modal");
+
+		middleInput.focus();
+
+		const tabEvent = new KeyboardEvent("keydown", { key: "Tab", bubbles: true });
+		const preventDefaultSpy = vi.spyOn(tabEvent, "preventDefault");
+		fireEvent(container, tabEvent);
+
+		expect(preventDefaultSpy).not.toHaveBeenCalled();
+	});
+
+	it("ignores non-Tab key presses", () => {
+		render(<TestModal />);
+		const lastBtn = screen.getByText("Last");
+		const container = screen.getByTestId("modal");
+
+		lastBtn.focus();
+
+		const keyEvent = new KeyboardEvent("keydown", { key: "Enter", bubbles: true });
+		const preventDefaultSpy = vi.spyOn(keyEvent, "preventDefault");
+		fireEvent(container, keyEvent);
+
+		// Focus should remain unchanged, no preventDefault
+		expect(preventDefaultSpy).not.toHaveBeenCalled();
+		expect(document.activeElement).toBe(lastBtn);
 	});
 
 	it("restores focus to previously focused element on unmount", () => {
@@ -346,6 +390,24 @@ describe("useFocusTrap", () => {
 	it("auto-focuses first focusable element on mount", () => {
 		render(<TestModal />);
 		expect(document.activeElement).toBe(screen.getByText("First"));
+	});
+
+	it("does not auto-focus if an element inside is already focused", () => {
+		function TestModalPreFocused() {
+			const ref = useRef<HTMLDivElement>(null);
+			useFocusTrap(ref);
+			return (
+				<div ref={ref} data-testid="modal-prefocused">
+					<button type="button" autoFocus>
+						PreFocused
+					</button>
+					<button type="button">Second</button>
+				</div>
+			);
+		}
+		render(<TestModalPreFocused />);
+		// autoFocus button should retain focus (not stolen by the trap)
+		expect(document.activeElement).toBe(screen.getByText("PreFocused"));
 	});
 });
 
@@ -604,5 +666,18 @@ describe("useDesktopNotifications", () => {
 		const { result } = renderHook(() => useDesktopNotifications());
 		act(() => result.current.notifyNewMail(2));
 		expect(NotificationMock).not.toHaveBeenCalled();
+	});
+
+	it("requestPermission returns 'denied' when Notification is unavailable", async () => {
+		// @ts-expect-error — simulate unsupported browser
+		global.Notification = undefined;
+		const { result } = renderHook(() => useDesktopNotifications());
+		let permResult: string | undefined;
+		await act(async () => {
+			permResult = await result.current.requestPermission();
+		});
+		expect(permResult).toBe("denied");
+		// @ts-expect-error — restore
+		global.Notification = NotificationMock;
 	});
 });

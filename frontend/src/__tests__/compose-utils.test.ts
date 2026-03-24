@@ -192,6 +192,13 @@ describe("buildForwardHtmlBody", () => {
 		const html = buildForwardHtmlBody(msg);
 		expect(html).toContain("unknown date");
 	});
+
+	it("handles null html_body and null text_body", () => {
+		const msg = makeMessage({ html_body: null, text_body: null });
+		const html = buildForwardHtmlBody(msg);
+		// Should not crash; forwarded content will be empty string
+		expect(html).toContain("---------- Forwarded message ----------");
+	});
 });
 
 describe("escapeHtml", () => {
@@ -277,6 +284,38 @@ describe("buildReplyAllCc", () => {
 
 	it("handles null cc_addresses", () => {
 		const msg = makeMessage({ cc_addresses: null, to_addresses: '["bob@test.com"]' });
+		const cc = buildReplyAllCc(msg);
+		expect(cc).toBe("bob@test.com");
+	});
+
+	it("excludes sender from CC addresses", () => {
+		const msg = makeMessage({
+			from_address: "alice@test.com",
+			to_addresses: '["bob@test.com"]',
+			cc_addresses: '["alice@test.com","carol@test.com"]',
+		});
+		const cc = buildReplyAllCc(msg);
+		expect(cc).toContain("carol@test.com");
+		expect(cc).not.toContain("alice@test.com");
+	});
+
+	it("excludes user from CC addresses when user is in CC", () => {
+		const msg = makeMessage({
+			from_address: "alice@test.com",
+			to_addresses: '["bob@test.com"]',
+			cc_addresses: '["me@myaccount.com","carol@test.com"]',
+		});
+		const cc = buildReplyAllCc(msg, "me@myaccount.com");
+		expect(cc).toContain("carol@test.com");
+		expect(cc).not.toContain("me@myaccount.com");
+	});
+
+	it("handles null from_address without excluding anything from sender", () => {
+		const msg = makeMessage({
+			from_address: null,
+			to_addresses: '["bob@test.com"]',
+			cc_addresses: null,
+		});
 		const cc = buildReplyAllCc(msg);
 		expect(cc).toBe("bob@test.com");
 	});
