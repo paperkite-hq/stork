@@ -731,6 +731,126 @@ describe("Messages API", () => {
 		});
 	});
 
+	// ─── Bulk delete-from-server ────────────────────────────
+	describe("Bulk delete-from-server", () => {
+		let bulkDeleteDb: Database.Database;
+		let mockBulkImapDelete: ReturnType<typeof vi.fn>;
+		let bulkDeleteApp: Hono;
+
+		beforeEach(() => {
+			bulkDeleteDb = createTestDb();
+			mockBulkImapDelete = vi.fn().mockResolvedValue(undefined);
+			const routeApp = new Hono();
+			routeApp.route(
+				"/messages",
+				messageRoutes(() => bulkDeleteDb, mockBulkImapDelete),
+			);
+			bulkDeleteApp = routeApp;
+		});
+
+		afterEach(() => {
+			bulkDeleteDb.close();
+		});
+
+		async function bulkReq(payload: unknown) {
+			const res = await bulkDeleteApp.request("/messages/bulk", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+			const body = await res.json().catch(() => ({}));
+			return { status: res.status, body };
+		}
+
+		test("calls IMAP for messages with sync_delete_from_server=1", async () => {
+			const syncAccountId = bulkDeleteDb
+				.prepare(
+					`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
+					 smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, sync_delete_from_server)
+					 VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, 0, NULL, NULL, 1)`,
+				)
+				.run("Sync Account", "sync@example.com", "imap.example.com", 993, "syncuser", "syncpass")
+				.lastInsertRowid as number;
+			const syncFolderId = createTestFolder(bulkDeleteDb, syncAccountId, "INBOX");
+			const msg1 = createTestMessage(bulkDeleteDb, syncAccountId, syncFolderId, 101);
+			const msg2 = createTestMessage(bulkDeleteDb, syncAccountId, syncFolderId, 102);
+
+			const { status, body } = await bulkReq({ ids: [msg1, msg2], action: "delete" });
+
+			expect(status).toBe(200);
+			expect(body.ok).toBe(true);
+			expect(mockBulkImapDelete).toHaveBeenCalledOnce();
+			const [info, uids] = mockBulkImapDelete.mock.calls[0] as [{ folder_path: string }, number[]];
+			expect(info.folder_path).toBe("INBOX");
+			expect(uids).toContain(101);
+			expect(uids).toContain(102);
+		});
+
+		test("does not call IMAP for messages with sync_delete_from_server=0", async () => {
+			const accountId = createTestAccount(bulkDeleteDb);
+			const folderId = createTestFolder(bulkDeleteDb, accountId, "INBOX");
+			const msg1 = createTestMessage(bulkDeleteDb, accountId, folderId, 1);
+			const msg2 = createTestMessage(bulkDeleteDb, accountId, folderId, 2);
+
+			const { status } = await bulkReq({ ids: [msg1, msg2], action: "delete" });
+
+			expect(status).toBe(200);
+			expect(mockBulkImapDelete).not.toHaveBeenCalled();
+		});
+
+		test("still deletes locally when IMAP bulk delete fails", async () => {
+			mockBulkImapDelete.mockRejectedValueOnce(new Error("IMAP connection refused"));
+			const syncAccountId = bulkDeleteDb
+				.prepare(
+					`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
+					 smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, sync_delete_from_server)
+					 VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, 0, NULL, NULL, 1)`,
+				)
+				.run(
+					"Sync Account2",
+					"sync2@example.com",
+					"imap.example.com",
+					993,
+					"syncuser2",
+					"syncpass2",
+				).lastInsertRowid as number;
+			const syncFolderId = createTestFolder(bulkDeleteDb, syncAccountId, "INBOX");
+			const msgId = createTestMessage(bulkDeleteDb, syncAccountId, syncFolderId, 201);
+
+			const { status } = await bulkReq({ ids: [msgId], action: "delete" });
+
+			expect(status).toBe(200);
+			const gone = bulkDeleteDb.prepare("SELECT id FROM messages WHERE id = ?").get(msgId);
+			expect(gone).toBeUndefined();
+		});
+
+		test("groups messages by folder for efficient IMAP deletion", async () => {
+			const syncAccountId = bulkDeleteDb
+				.prepare(
+					`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
+					 smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, sync_delete_from_server)
+					 VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, 0, NULL, NULL, 1)`,
+				)
+				.run(
+					"Sync Account3",
+					"sync3@example.com",
+					"imap.example.com",
+					993,
+					"syncuser3",
+					"syncpass3",
+				).lastInsertRowid as number;
+			const inboxId = createTestFolder(bulkDeleteDb, syncAccountId, "INBOX");
+			const sentId = createTestFolder(bulkDeleteDb, syncAccountId, "Sent");
+			const inboxMsg = createTestMessage(bulkDeleteDb, syncAccountId, inboxId, 301);
+			const sentMsg = createTestMessage(bulkDeleteDb, syncAccountId, sentId, 302);
+
+			await bulkReq({ ids: [inboxMsg, sentMsg], action: "delete" });
+
+			// Two calls — one per folder
+			expect(mockBulkImapDelete).toHaveBeenCalledTimes(2);
+		});
+	});
+
 	// ─── Route parameter validation ─────────────────────────
 	describe("Route parameter validation", () => {
 		test("GET /api/messages/abc returns 400 for non-numeric messageId", async () => {
