@@ -30,6 +30,8 @@ export interface SyncResult {
 	updatedFlags: number;
 	deletedFolders: number;
 	attachmentsSaved: number;
+	/** Number of messages deleted from the IMAP server after syncing (archive mode) */
+	deletedFromServer: number;
 	errors: SyncError[];
 }
 
@@ -274,6 +276,12 @@ export class ImapSync {
 			// Ensure labels exist for all synced folders
 			this.ensureLabelsForFolders();
 
+			// Read archive mode setting once per sync run (can change between syncs)
+			const accountRow = this.db
+				.prepare("SELECT sync_delete_from_server FROM accounts WHERE id = ?")
+				.get(this.accountId) as { sync_delete_from_server: number } | undefined;
+			const deleteFromServerAfterSync = accountRow?.sync_delete_from_server === 1;
+
 			const totalFolders = folders.length;
 			let foldersCompleted = 0;
 
@@ -289,7 +297,7 @@ export class ImapSync {
 					errors: result.totalErrors,
 				});
 
-				const folderResult = await this.syncFolder(folderPath, signal);
+				const folderResult = await this.syncFolder(folderPath, signal, deleteFromServerAfterSync);
 				result.folders.push(folderResult);
 				result.totalNew += folderResult.newMessages;
 				result.totalErrors += folderResult.errors.length;
@@ -407,13 +415,18 @@ export class ImapSync {
 	 * Fetches new messages (incremental via UID), updates flags on existing messages,
 	 * and extracts attachments.
 	 */
-	async syncFolder(folderPath: string, signal?: AbortSignal): Promise<SyncResult> {
+	async syncFolder(
+		folderPath: string,
+		signal?: AbortSignal,
+		deleteFromServerAfterSync = false,
+	): Promise<SyncResult> {
 		const result: SyncResult = {
 			folder: folderPath,
 			newMessages: 0,
 			updatedFlags: 0,
 			deletedFolders: 0,
 			attachmentsSaved: 0,
+			deletedFromServer: 0,
 			errors: [],
 		};
 
@@ -445,6 +458,9 @@ export class ImapSync {
 			});
 			return result;
 		}
+
+		// Declared outside the try block so Phase 3 can reference it after lock release
+		let syncedUids: number[] = [];
 
 		try {
 			const mailboxStatus = this.client.mailbox;
@@ -483,8 +499,9 @@ export class ImapSync {
 			// an empty mailbox returns "Invalid messageset")
 			if (mailboxStatus.exists > 0) {
 				try {
-					const newCount = await this.fetchNewMessages(folder.id, result, signal);
-					result.newMessages = newCount;
+					const fetchResult = await this.fetchNewMessages(folder.id, result, signal);
+					result.newMessages = fetchResult.count;
+					syncedUids = fetchResult.syncedUids;
 				} catch (err) {
 					// Don't let a single folder FETCH failure kill the entire sync —
 					// record the error and continue to the next folder
@@ -512,18 +529,41 @@ export class ImapSync {
 			}
 		}
 
+		// Phase 3: Delete synced messages from IMAP server (archive mode).
+		// Must run AFTER releasing the fetch lock to avoid lock re-entrancy with ImapFlow.
+		// When enabled, stork is the single source of truth — the IMAP server
+		// is just the delivery edge and messages are removed after syncing.
+		if (deleteFromServerAfterSync && syncedUids.length > 0 && !signal?.aborted) {
+			try {
+				const deleted = await this.deleteFromServer(folderPath, syncedUids);
+				result.deletedFromServer = deleted;
+			} catch (err) {
+				if (signal?.aborted) throw err;
+				this.recordError(result, {
+					folderPath,
+					uid: null,
+					errorType: "folder",
+					message: `Failed to delete synced messages from server: ${formatImapError(err)} [STORK-E005]`,
+					retriable: true,
+				});
+			}
+		}
+
 		return result;
 	}
 
 	/**
 	 * Fetches messages newer than the last synced UID, parses MIME,
 	 * stores messages, and extracts attachments.
+	 *
+	 * Returns the count of processed messages and the UIDs that were
+	 * successfully stored (used by archive mode to delete from server).
 	 */
 	private async fetchNewMessages(
 		folderId: number,
 		result: SyncResult,
 		signal?: AbortSignal,
-	): Promise<number> {
+	): Promise<{ count: number; syncedUids: number[] }> {
 		const syncState = this.db
 			.prepare("SELECT last_uid FROM sync_state WHERE account_id = ? AND folder_id = ?")
 			.get(this.accountId, folderId) as { last_uid: number } | undefined;
@@ -546,16 +586,21 @@ export class ImapSync {
 
 		let maxUid = lastUid;
 		let count = 0;
+		const syncedUids: number[] = [];
 
 		try {
-			for await (const message of this.client.fetch(range, {
-				uid: true,
-				envelope: true,
-				bodyStructure: true,
-				flags: true,
-				size: true,
-				source: true,
-			})) {
+			for await (const message of this.client.fetch(
+				range,
+				{
+					uid: true,
+					envelope: true,
+					bodyStructure: true,
+					flags: true,
+					size: true,
+					source: true,
+				},
+				{ uid: true },
+			)) {
 				// Check abort signal between messages for graceful cancellation
 				if (signal?.aborted) break;
 
@@ -640,6 +685,7 @@ export class ImapSync {
 
 					if (message.uid > maxUid) maxUid = message.uid;
 					count++;
+					syncedUids.push(message.uid);
 
 					// Apply labels periodically within large folders so messages become
 					// queryable by label before the entire folder finishes syncing
@@ -677,7 +723,7 @@ export class ImapSync {
 				.run(this.accountId, folderId, maxUid);
 		}
 
-		return count;
+		return { count, syncedUids };
 	}
 
 	/**

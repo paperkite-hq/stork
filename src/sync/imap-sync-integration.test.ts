@@ -826,3 +826,243 @@ describe("SyncScheduler abort integration with mock IMAP server", () => {
 		expect(status.get(accountId)?.running).toBe(false);
 	});
 });
+
+describe("archive mode (auto-delete from server after sync)", () => {
+	let server: MockImapServer;
+	let port: number;
+	let db: Database.Database;
+	let accountId: number;
+
+	beforeEach(async () => {
+		server = new MockImapServer({
+			user: "testuser",
+			pass: "testpass",
+			mailboxes: [
+				{
+					path: "INBOX",
+					name: "Inbox",
+					delimiter: "/",
+					flags: ["\\HasNoChildren"],
+					specialUse: "\\Inbox",
+					uidValidity: 1,
+					uidNext: 4,
+					messages: [
+						{
+							uid: 1,
+							flags: [],
+							internalDate: "2026-01-15T10:00:00Z",
+							source: buildRawEmail({
+								from: "a@example.com",
+								to: "test@example.com",
+								subject: "First",
+								body: "First message",
+								messageId: "<first@ex.com>",
+								date: "Wed, 15 Jan 2026 10:00:00 +0000",
+							}),
+						},
+						{
+							uid: 2,
+							flags: [],
+							internalDate: "2026-01-16T10:00:00Z",
+							source: buildRawEmail({
+								from: "b@example.com",
+								to: "test@example.com",
+								subject: "Second",
+								body: "Second message",
+								messageId: "<second@ex.com>",
+								date: "Thu, 16 Jan 2026 10:00:00 +0000",
+							}),
+						},
+						{
+							uid: 3,
+							flags: [],
+							internalDate: "2026-01-17T10:00:00Z",
+							source: buildRawEmail({
+								from: "c@example.com",
+								to: "test@example.com",
+								subject: "Third",
+								body: "Third message",
+								messageId: "<third@ex.com>",
+								date: "Fri, 17 Jan 2026 10:00:00 +0000",
+							}),
+						},
+					],
+				},
+			],
+		});
+		port = await server.start();
+		db = createTestDb();
+	});
+
+	afterEach(async () => {
+		db.close();
+		await server.stop();
+	});
+
+	function makeAccount(syncDeleteFromServer: 0 | 1): number {
+		db.prepare(`
+			INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
+			VALUES ('Test', 'test@example.com', '127.0.0.1', ?, 0, 'testuser', 'testpass', ?)
+		`).run(port, syncDeleteFromServer);
+		return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
+	}
+
+	function makeSync(accId: number): ImapSync {
+		return new ImapSync(
+			{ host: "127.0.0.1", port, secure: false, auth: { user: "testuser", pass: "testpass" } },
+			db,
+			accId,
+		);
+	}
+
+	test("syncAll with archive mode off leaves messages on server", async () => {
+		accountId = makeAccount(0);
+		const sync = makeSync(accountId);
+		await sync.connect();
+		const result = await sync.syncAll();
+		await sync.disconnect();
+
+		// All 3 messages stored locally
+		const folder = db
+			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
+			.get(accountId) as { id: number };
+		const msgs = db
+			.prepare("SELECT uid, deleted_from_server FROM messages WHERE folder_id = ?")
+			.all(folder.id) as { uid: number; deleted_from_server: number }[];
+
+		expect(msgs).toHaveLength(3);
+		expect(msgs.every((m) => m.deleted_from_server === 0)).toBe(true);
+
+		// Server still has all 3 messages
+		let serverMsgCount = 0;
+		server.updateMailbox("INBOX", (mb) => {
+			serverMsgCount = mb.messages.length;
+		});
+		expect(serverMsgCount).toBe(3);
+
+		// Result counts
+		const inboxResult = result.folders.find((f) => f.folder === "INBOX");
+		expect(inboxResult?.deletedFromServer).toBe(0);
+	});
+
+	test("syncAll with archive mode on deletes synced messages from server", async () => {
+		accountId = makeAccount(1);
+		const sync = makeSync(accountId);
+		await sync.connect();
+		const result = await sync.syncAll();
+		await sync.disconnect();
+
+		// All 3 messages stored locally
+		const folder = db
+			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
+			.get(accountId) as { id: number };
+		const msgs = db
+			.prepare("SELECT uid, deleted_from_server FROM messages WHERE folder_id = ?")
+			.all(folder.id) as { uid: number; deleted_from_server: number }[];
+
+		expect(msgs).toHaveLength(3);
+		expect(msgs.every((m) => m.deleted_from_server === 1)).toBe(true);
+
+		// Server should have no messages left
+		let remainingOnServer = -1;
+		server.updateMailbox("INBOX", (mb) => {
+			remainingOnServer = mb.messages.length;
+		});
+		expect(remainingOnServer).toBe(0);
+
+		// Result counts
+		const inboxResult = result.folders.find((f) => f.folder === "INBOX");
+		expect(inboxResult?.deletedFromServer).toBe(3);
+		expect(inboxResult?.newMessages).toBe(3);
+	});
+
+	test("archive mode only deletes newly synced messages, not messages already in stork", async () => {
+		accountId = makeAccount(1);
+
+		// First sync: gets uid=1 and uid=2 (simulate server having only 2 messages initially)
+		// We'll do this by syncing, then adding uid=3 to the server and syncing again.
+		// The key is: on the second sync, uid=3 is new — only uid=3 should be deleted.
+		// uid=1 and uid=2 were already deleted in the first sync.
+
+		const sync = makeSync(accountId);
+		await sync.connect();
+		await sync.syncAll();
+		await sync.disconnect();
+
+		// Server should have 0 messages after first sync
+		let afterFirstSync = -1;
+		server.updateMailbox("INBOX", (mb) => {
+			afterFirstSync = mb.messages.length;
+		});
+		expect(afterFirstSync).toBe(0);
+
+		// Add a new message to the server (simulating a new incoming email)
+		server.updateMailbox("INBOX", (mb) => {
+			mb.messages.push({
+				uid: 10,
+				flags: [],
+				internalDate: "2026-01-20T10:00:00Z",
+				source: buildRawEmail({
+					from: "new@example.com",
+					to: "test@example.com",
+					subject: "New arrival",
+					body: "New email after first sync",
+					messageId: "<new@ex.com>",
+					date: "Mon, 20 Jan 2026 10:00:00 +0000",
+				}),
+			});
+			mb.uidNext = 11;
+		});
+		let afterAdd = -1;
+		server.updateMailbox("INBOX", (mb) => {
+			afterAdd = mb.messages.length;
+		});
+		expect(afterAdd).toBe(1);
+
+		// Verify DB state before second sync
+		const folder1 = db
+			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
+			.get(accountId) as { id: number } | undefined;
+		const syncState = db
+			.prepare("SELECT last_uid FROM sync_state WHERE account_id = ? AND folder_id = ?")
+			.get(accountId, folder1?.id) as { last_uid: number } | undefined;
+		// After first sync, last_uid should be 3 (max uid seen: 1,2,3)
+		expect(syncState?.last_uid).toBe(3);
+
+		// Second sync: should pick up uid=10 and delete it
+		const sync2 = makeSync(accountId);
+		await sync2.connect();
+		const result2 = await sync2.syncAll();
+		await sync2.disconnect();
+
+		// Diagnostics first: check for errors and whether delete was attempted
+		// (Uncomment if debugging: console.error("result2", JSON.stringify(result2, null, 2)));
+		expect(result2.totalErrors).toBe(0);
+		const inboxResult2 = result2.folders.find((f) => f.folder === "INBOX");
+		if (inboxResult2?.newMessages !== 1) {
+			console.error("DEBUG result2.folders:", JSON.stringify(result2.folders));
+		}
+		expect(inboxResult2?.newMessages).toBe(1);
+		expect(inboxResult2?.deletedFromServer).toBe(1);
+
+		// Server should be empty again
+		let afterSecondSync = -1;
+		server.updateMailbox("INBOX", (mb) => {
+			afterSecondSync = mb.messages.length;
+		});
+		expect(afterSecondSync).toBe(0);
+
+		const inboxResult = result2.folders.find((f) => f.folder === "INBOX");
+		expect(inboxResult?.newMessages).toBe(1);
+		expect(inboxResult?.deletedFromServer).toBe(1);
+
+		// All 4 messages (3 original + 1 new) are in local storage
+		const folder = db
+			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
+			.get(accountId) as { id: number };
+		const total = db
+			.prepare("SELECT COUNT(*) as n FROM messages WHERE folder_id = ?")
+			.get(folder.id) as { n: number };
+		expect(total.n).toBe(4);
+	});
+});

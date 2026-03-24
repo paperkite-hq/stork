@@ -128,7 +128,7 @@ Sync behavior is configured per-account via the API or Settings UI.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Sync interval | 5 minutes | How often Stork checks for new mail |
-| Delete from server | Off | Whether to remove messages from the IMAP server after syncing |
+| Archive mode | Off | Auto-delete messages from the IMAP server after syncing them locally (treats IMAP as a transient delivery edge) |
 
 ### Connection Pool
 
