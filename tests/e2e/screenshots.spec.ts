@@ -8,8 +8,11 @@ import { test } from "@playwright/test";
 
 test("inbox screenshot", async ({ page }) => {
 	await page.goto("/");
-	// Wait for message list to fully load
-	await page.waitForSelector('[role="button"]');
+	// Wait for message list to fully load. Use "button" (element selector), not
+	// '[role="button"]' (attribute selector) — <button> elements have an implicit
+	// ARIA role of "button" but no explicit role attribute, so the attribute
+	// selector never matches.
+	await page.waitForSelector("button");
 	await page.waitForTimeout(300);
 	await page.screenshot({ path: "docs/screenshots/inbox.png" });
 });
