@@ -553,6 +553,8 @@ export function App() {
 	useEffect(() => {
 		if (!accountsError) return;
 		let active = true;
+		// Sequential scheduling: wait for each probe to complete before
+		// scheduling the next, so slow responses don't stack up.
 		async function probe() {
 			if (!active) return;
 			try {
@@ -566,12 +568,11 @@ export function App() {
 			} catch {
 				// Still unreachable — keep polling
 			}
+			if (active) setTimeout(probe, 3000);
 		}
-		const interval = setInterval(probe, 3000);
 		probe();
 		return () => {
 			active = false;
-			clearInterval(interval);
 		};
 	}, [accountsError, containerState, refetchAccounts]);
 
