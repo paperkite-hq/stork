@@ -6,17 +6,18 @@ export default {
 		extend: {
 			colors: {
 				stork: {
-					50: "#f0f5ff",
-					100: "#e0eaff",
-					200: "#c7d7fe",
-					300: "#a4bcfd",
-					400: "#8098f9",
-					500: "#6172f3",
-					600: "#444ce7",
-					700: "#3538cd",
-					800: "#2d31a6",
-					900: "#2b2f83",
-					950: "#1a1d50",
+					// Rose→purple palette matching the T9 logo gradient (#BE185D → #6B21A8)
+					50: "#fff1f2", // subtle rose tint (selected item bg light mode)
+					100: "#ffe4e6", // light rose (selected item bg, badge bg)
+					200: "#fecdd3", // light rose (borders, dividers)
+					300: "#fda4af", // medium rose (dark mode text accents)
+					400: "#fb7185", // bright coral-rose (dark mode lighter accents)
+					500: "#f43f5e", // vivid rose (focus rings, progress bars)
+					600: "#be185d", // LOGO ROSE — primary buttons, active text, badges
+					700: "#9d174d", // darker rose — button hover states
+					800: "#6b21a8", // LOGO PURPLE — deep accent, dark mode active bg
+					900: "#581c87", // deep purple — dark text, dark mode containers
+					950: "#3b0764", // darkest purple — dark mode selected item bg
 				},
 			},
 		},
