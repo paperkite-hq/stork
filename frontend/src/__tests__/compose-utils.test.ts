@@ -7,6 +7,7 @@ import {
 	buildReplyBody,
 	buildReplyHtmlBody,
 	buildReplySubject,
+	buildThreadingHeaders,
 	clearDraft,
 	draftKey,
 	escapeHtml,
@@ -311,5 +312,58 @@ describe("draft management", () => {
 	it("loadDraft returns null for corrupted JSON", () => {
 		localStorage.setItem("bad-key", "{not valid json{{");
 		expect(loadDraft("bad-key")).toBeNull();
+	});
+});
+
+describe("buildThreadingHeaders", () => {
+	it("returns undefined when original has no message_id", () => {
+		const msg = makeMessage({ message_id: null });
+		const result = buildThreadingHeaders(msg);
+		expect(result.inReplyTo).toBeUndefined();
+		expect(result.references).toBeUndefined();
+	});
+
+	it("returns inReplyTo and references for a message with no prior references", () => {
+		const msg = makeMessage({ message_id: "<abc@test>", references: null });
+		const result = buildThreadingHeaders(msg);
+		expect(result.inReplyTo).toBe("<abc@test>");
+		expect(result.references).toEqual(["<abc@test>"]);
+	});
+
+	it("parses JSON array references (IMAP sync format)", () => {
+		const msg = makeMessage({
+			message_id: "<msg3@test>",
+			references: '["<ref1@test>","<ref2@test>"]',
+		});
+		const result = buildThreadingHeaders(msg);
+		expect(result.inReplyTo).toBe("<msg3@test>");
+		expect(result.references).toEqual(["<ref1@test>", "<ref2@test>", "<msg3@test>"]);
+	});
+
+	it("parses space-separated references", () => {
+		const msg = makeMessage({
+			message_id: "<msg4@test>",
+			references: "<ref1@test> <ref2@test>",
+		});
+		const result = buildThreadingHeaders(msg);
+		expect(result.references).toEqual(["<ref1@test>", "<ref2@test>", "<msg4@test>"]);
+	});
+
+	it("handles malformed JSON by falling back to space-split", () => {
+		const msg = makeMessage({
+			message_id: "<msg5@test>",
+			references: "[broken json",
+		});
+		const result = buildThreadingHeaders(msg);
+		expect(result.references).toEqual(["[broken", "json", "<msg5@test>"]);
+	});
+
+	it("filters empty strings from references", () => {
+		const msg = makeMessage({
+			message_id: "<msg6@test>",
+			references: '["","<ref1@test>",""]',
+		});
+		const result = buildThreadingHeaders(msg);
+		expect(result.references).toEqual(["<ref1@test>", "<msg6@test>"]);
 	});
 });
