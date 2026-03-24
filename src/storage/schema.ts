@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 11;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -247,5 +247,35 @@ CREATE INDEX IF NOT EXISTS idx_messages_account_date ON messages(account_id, dat
 	// Defaults to 'inbox' so existing accounts keep current behavior.
 	`
 ALTER TABLE accounts ADD COLUMN default_view TEXT NOT NULL DEFAULT 'inbox';
+`,
+	// Version 10: Add cached message_count and unread_count to labels table.
+	// The labels API endpoint previously computed these via an expensive JOIN across
+	// message_labels and messages on every request — on a 15 GB database this took
+	// 18+ seconds and blocked the synchronous event loop, starving concurrent requests.
+	// These columns are maintained by refreshLabelCounts() at the end of each sync
+	// cycle. The backfill here covers existing databases; future updates happen in sync.
+	`
+ALTER TABLE labels ADD COLUMN message_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE labels ADD COLUMN unread_count INTEGER NOT NULL DEFAULT 0;
+UPDATE labels SET message_count = (
+	SELECT COUNT(*) FROM message_labels WHERE label_id = labels.id
+);
+UPDATE labels SET unread_count = (
+	SELECT COUNT(*) FROM message_labels ml
+	JOIN messages m ON m.id = ml.message_id
+	WHERE ml.label_id = labels.id
+	AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%')
+);
+`,
+	// Version 11: Add cached_message_count and cached_unread_count to accounts table.
+	// The GET /accounts/:id/all-messages/count and GET /accounts/:id/unread-messages/count
+	// endpoints previously did a full messages table scan with a LIKE flags filter on every
+	// request. On a 15 GB database this blocked the event loop for 10-30 seconds.
+	// These columns are maintained by refreshAccountCounts() at the end of each sync cycle.
+	// NULL means "not yet computed" — the endpoint falls back to a live query once, then
+	// stores the result. Subsequent requests return the cached value instantly.
+	`
+ALTER TABLE accounts ADD COLUMN cached_message_count INTEGER DEFAULT NULL;
+ALTER TABLE accounts ADD COLUMN cached_unread_count INTEGER DEFAULT NULL;
 `,
 ];

@@ -292,6 +292,164 @@ describe("applyFolderLabelsToMessages", () => {
 	});
 });
 
+// ─── refreshLabelCounts ────────────────────────────────────────────────────
+
+describe("refreshLabelCounts", () => {
+	let db: ReturnType<typeof createTestDb>;
+	let accountId: number;
+
+	beforeEach(() => {
+		db = createTestDb();
+		accountId = createTestAccount(db);
+	});
+
+	test("no labels → no-op", () => {
+		makeSync(accountId, db).refreshLabelCounts();
+		// Just verify it doesn't throw
+	});
+
+	test("sets message_count and unread_count correctly", () => {
+		const folderId = createTestFolder(db, accountId, "INBOX");
+		const sync = makeSync(accountId, db);
+		sync.ensureLabelsForFolders();
+
+		// 2 unread, 1 read
+		createTestMessage(db, accountId, folderId, 1, { flags: "" });
+		createTestMessage(db, accountId, folderId, 2, { flags: "" });
+		createTestMessage(db, accountId, folderId, 3, { flags: "\\Seen" });
+		sync.applyFolderLabelsToMessages();
+		sync.refreshLabelCounts();
+
+		const label = db
+			.prepare(
+				"SELECT message_count, unread_count FROM labels WHERE account_id = ? AND name = 'INBOX'",
+			)
+			.get(accountId) as { message_count: number; unread_count: number };
+		expect(label.message_count).toBe(3);
+		expect(label.unread_count).toBe(2);
+	});
+
+	test("updates counts after additional messages are applied", () => {
+		const folderId = createTestFolder(db, accountId, "INBOX");
+		const sync = makeSync(accountId, db);
+		sync.ensureLabelsForFolders();
+
+		createTestMessage(db, accountId, folderId, 1, { flags: "" });
+		sync.applyFolderLabelsToMessages();
+		sync.refreshLabelCounts();
+
+		const before = db
+			.prepare(
+				"SELECT message_count, unread_count FROM labels WHERE account_id = ? AND name = 'INBOX'",
+			)
+			.get(accountId) as { message_count: number; unread_count: number };
+		expect(before.message_count).toBe(1);
+		expect(before.unread_count).toBe(1);
+
+		createTestMessage(db, accountId, folderId, 2, { flags: "\\Seen" });
+		sync.applyFolderLabelsToMessages();
+		sync.refreshLabelCounts();
+
+		const after = db
+			.prepare(
+				"SELECT message_count, unread_count FROM labels WHERE account_id = ? AND name = 'INBOX'",
+			)
+			.get(accountId) as { message_count: number; unread_count: number };
+		expect(after.message_count).toBe(2);
+		expect(after.unread_count).toBe(1);
+	});
+
+	test("multi-account isolation — only updates labels for the correct account", () => {
+		const otherAccountId = createTestAccount(db);
+		const folderId = createTestFolder(db, accountId, "INBOX");
+		const otherFolderId = createTestFolder(db, otherAccountId, "INBOX");
+		const sync = makeSync(accountId, db);
+		const otherSync = makeSync(otherAccountId, db);
+
+		sync.ensureLabelsForFolders();
+		otherSync.ensureLabelsForFolders();
+
+		createTestMessage(db, accountId, folderId, 1, { flags: "" });
+		createTestMessage(db, otherAccountId, otherFolderId, 1, { flags: "" });
+		createTestMessage(db, otherAccountId, otherFolderId, 2, { flags: "" });
+		sync.applyFolderLabelsToMessages();
+		otherSync.applyFolderLabelsToMessages();
+
+		// Only refresh account, not otherAccount
+		sync.refreshLabelCounts();
+
+		const myLabel = db
+			.prepare("SELECT message_count FROM labels WHERE account_id = ? AND name = 'INBOX'")
+			.get(accountId) as { message_count: number };
+		expect(myLabel.message_count).toBe(1);
+
+		const otherLabel = db
+			.prepare("SELECT message_count FROM labels WHERE account_id = ? AND name = 'INBOX'")
+			.get(otherAccountId) as { message_count: number };
+		// Other account not refreshed — counts stay at default 0
+		expect(otherLabel.message_count).toBe(0);
+	});
+});
+
+// ─── refreshAccountCounts ─────────────────────────────────────────────────
+
+describe("refreshAccountCounts", () => {
+	let db: ReturnType<typeof createTestDb>;
+	let accountId: number;
+
+	beforeEach(() => {
+		db = createTestDb();
+		accountId = createTestAccount(db);
+	});
+
+	test("no messages → sets counts to 0", () => {
+		makeSync(accountId, db).refreshAccountCounts();
+		const row = db
+			.prepare("SELECT cached_message_count, cached_unread_count FROM accounts WHERE id = ?")
+			.get(accountId) as { cached_message_count: number; cached_unread_count: number };
+		expect(row.cached_message_count).toBe(0);
+		expect(row.cached_unread_count).toBe(0);
+	});
+
+	test("sets total and unread counts correctly", () => {
+		const folderId = createTestFolder(db, accountId, "INBOX");
+		createTestMessage(db, accountId, folderId, 1, { flags: "" });
+		createTestMessage(db, accountId, folderId, 2, { flags: "" });
+		createTestMessage(db, accountId, folderId, 3, { flags: "\\Seen" });
+
+		makeSync(accountId, db).refreshAccountCounts();
+
+		const row = db
+			.prepare("SELECT cached_message_count, cached_unread_count FROM accounts WHERE id = ?")
+			.get(accountId) as { cached_message_count: number; cached_unread_count: number };
+		expect(row.cached_message_count).toBe(3);
+		expect(row.cached_unread_count).toBe(2);
+	});
+
+	test("multi-account isolation — only updates the correct account", () => {
+		const otherAccountId = createTestAccount(db);
+		const folderId = createTestFolder(db, accountId, "INBOX");
+		const otherFolderId = createTestFolder(db, otherAccountId, "INBOX");
+		createTestMessage(db, accountId, folderId, 1, { flags: "" });
+		createTestMessage(db, otherAccountId, otherFolderId, 1, { flags: "" });
+		createTestMessage(db, otherAccountId, otherFolderId, 2, { flags: "" });
+
+		// Only refresh accountId, not otherAccountId
+		makeSync(accountId, db).refreshAccountCounts();
+
+		const myRow = db
+			.prepare("SELECT cached_message_count FROM accounts WHERE id = ?")
+			.get(accountId) as { cached_message_count: number };
+		expect(myRow.cached_message_count).toBe(1);
+
+		const otherRow = db
+			.prepare("SELECT cached_message_count FROM accounts WHERE id = ?")
+			.get(otherAccountId) as { cached_message_count: number | null };
+		// Other account not refreshed — stays NULL
+		expect(otherRow.cached_message_count).toBeNull();
+	});
+});
+
 // ─── syncAll integration via mock IMAP ─────────────────────────────────────
 
 import { afterEach } from "vitest";

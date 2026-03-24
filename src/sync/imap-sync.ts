@@ -330,6 +330,11 @@ export class ImapSync {
 			// Final pass: catch any messages that may have been missed
 			this.applyFolderLabelsToMessages();
 
+			// Update cached label and account counts so API endpoints stay O(1)
+			// regardless of database size. Runs once per sync cycle.
+			this.refreshLabelCounts();
+			this.refreshAccountCounts();
+
 			if (signal?.aborted) {
 				result.aborted = true;
 			}
@@ -829,6 +834,76 @@ export class ImapSync {
 			WHERE m.account_id = ? AND ml.message_id IS NULL
 		`)
 			.run(this.accountId);
+	}
+
+	/**
+	 * Recomputes and caches message_count and unread_count on the labels table.
+	 * Called at the end of each sync cycle. This keeps the GET /labels API
+	 * endpoint O(labels) — a simple column read — instead of forcing it to
+	 * re-join all of message_labels × messages on every request.
+	 *
+	 * Uses a single GROUP BY scan instead of N correlated subqueries, so the
+	 * full message_labels × messages join happens once (not once per label).
+	 */
+	refreshLabelCounts(): void {
+		// One pass: count total and unread per label for this account
+		const counts = this.db
+			.prepare(`
+				SELECT ml.label_id,
+					COUNT(*) AS message_count,
+					SUM(CASE WHEN m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%' THEN 1 ELSE 0 END) AS unread_count
+				FROM message_labels ml
+				JOIN messages m ON m.id = ml.message_id
+				JOIN labels l ON l.id = ml.label_id
+				WHERE l.account_id = ?
+				GROUP BY ml.label_id
+			`)
+			.all(this.accountId) as Array<{
+			label_id: number;
+			message_count: number;
+			unread_count: number;
+		}>;
+
+		const updateStmt = this.db.prepare(
+			"UPDATE labels SET message_count = ?, unread_count = ? WHERE id = ?",
+		);
+
+		const applyUpdate = this.db.transaction(
+			(rows: Array<{ label_id: number; message_count: number; unread_count: number }>) => {
+				// Reset all labels for this account to 0 (labels with no messages won't appear in counts)
+				this.db
+					.prepare("UPDATE labels SET message_count = 0, unread_count = 0 WHERE account_id = ?")
+					.run(this.accountId);
+				for (const row of rows) {
+					updateStmt.run(row.message_count, row.unread_count, row.label_id);
+				}
+			},
+		);
+		applyUpdate(counts);
+	}
+
+	/**
+	 * Recomputes and caches total message count and unread count on the accounts table.
+	 * Called at the end of each sync cycle alongside refreshLabelCounts(). This keeps
+	 * the GET /all-messages/count and GET /unread-messages/count endpoints O(1) —
+	 * a single row read — instead of a full messages table scan on every request.
+	 */
+	refreshAccountCounts(): void {
+		this.db
+			.prepare(`
+				UPDATE accounts
+				SET
+					cached_message_count = (
+						SELECT COUNT(*) FROM messages WHERE account_id = ?
+					),
+					cached_unread_count = (
+						SELECT COUNT(*) FROM messages
+						WHERE account_id = ?
+						AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')
+					)
+				WHERE id = ?
+			`)
+			.run(this.accountId, this.accountId, this.accountId);
 	}
 
 	/**
