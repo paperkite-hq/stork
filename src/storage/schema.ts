@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -235,4 +235,11 @@ export const MIGRATIONS = [
 	ALTER TABLE accounts ADD COLUMN ses_access_key_id TEXT;
 	ALTER TABLE accounts ADD COLUMN ses_secret_access_key TEXT;
 	`,
+	// Version 8: Add composite index for account+date queries.
+	// The separate indexes on account_id and date required a full account scan
+	// followed by a sort on large databases. The composite index lets SQLite
+	// satisfy ORDER BY date DESC for a given account in a single index scan.
+	`
+CREATE INDEX IF NOT EXISTS idx_messages_account_date ON messages(account_id, date DESC);
+`,
 ];

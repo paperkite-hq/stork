@@ -473,4 +473,36 @@ describe("Welcome", () => {
 		await userEvent.type(serverInput, "my.custom.server.com");
 		expect(serverInput.value).toBe("my.custom.server.com");
 	});
+
+	it("SMTP server field is editable when SMTP section is expanded", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
+		const smtpServerInput = screen.getByPlaceholderText("smtp.example.com") as HTMLInputElement;
+		await userEvent.type(smtpServerInput, "smtp.custom.com");
+		expect(smtpServerInput.value).toBe("smtp.custom.com");
+	});
+
+	it("SMTP username field is manually editable", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
+		// SMTP username is the second 'you@example.com' placeholder field
+		const usernameInputs = screen.getAllByPlaceholderText("you@example.com");
+		const smtpUsernameInput = usernameInputs[usernameInputs.length - 1] as HTMLInputElement;
+		await userEvent.clear(smtpUsernameInput);
+		await userEvent.type(smtpUsernameInput, "custom@smtp.com");
+		expect(smtpUsernameInput.value).toBe("custom@smtp.com");
+	});
+
+	it("SMTP port field has correct initial value and type", async () => {
+		render(<Welcome {...defaultProps} />);
+		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
+		const smtpPort = screen.getByDisplayValue("587") as HTMLInputElement;
+		expect(smtpPort.type).toBe("number");
+		// Trigger onChange by firing a change event directly
+		fireEvent.change(smtpPort, { target: { value: "465" } });
+		expect(smtpPort.value).toBe("465");
+	});
 });

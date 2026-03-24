@@ -531,4 +531,34 @@ describe("Sidebar", () => {
 		await userEvent.pointer({ keys: "[MouseRight]", target: btn });
 		// No context menu items should appear (LabelManager handles user labels only)
 	});
+
+	it("shows context menu on right-click for user labels", async () => {
+		const labels = [
+			makeLabel({ id: 1, name: "Inbox", source: "imap" }),
+			makeLabel({ id: 2, name: "MyLabel", source: "user" }),
+		];
+		render(
+			<Sidebar {...defaultProps} labels={labels} selectedAccountId={1} onLabelsChanged={vi.fn()} />,
+		);
+		// Find the user label button in the non-Inbox label list
+		const labelSpan = screen
+			.getAllByText("MyLabel")
+			.find((el) => el.tagName === "SPAN") as HTMLElement;
+		const btn = labelSpan.closest("button") as HTMLElement;
+		// Right-click on user label
+		await userEvent.pointer({ keys: "[MouseRight]", target: btn });
+		// Context menu should appear with Edit/Delete options
+		expect(screen.getByText("Edit label")).toBeInTheDocument();
+		expect(screen.getByText("Delete label")).toBeInTheDocument();
+	});
+
+	it("shows syncing text for empty label list when syncing", () => {
+		render(<Sidebar {...defaultProps} labels={[]} syncing={true} />);
+		expect(screen.getByText("Waiting for initial sync…")).toBeInTheDocument();
+	});
+
+	it("shows no-labels text for empty label list when not syncing", () => {
+		render(<Sidebar {...defaultProps} labels={[]} syncing={false} />);
+		expect(screen.getByText("No labels yet")).toBeInTheDocument();
+	});
 });

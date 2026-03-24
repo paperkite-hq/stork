@@ -155,6 +155,13 @@ describe("formatAddressList", () => {
 		expect(formatAddressList("<alice@example.com>")).toBe("alice@example.com");
 	});
 
+	test("empty display name and empty email → falls back to raw addr", () => {
+		// Exercises the `return name || match[2] || addr` fallback to addr.
+		// "<>" matches the regex but both match[1] (name after quote strip) and
+		// match[2] (email) are empty strings, so addr ("<>") is returned.
+		expect(formatAddressList("<>")).toBe("<>");
+	});
+
 	test("skips empty segments from trailing commas", () => {
 		expect(formatAddressList("alice@example.com, , bob@example.com")).toBe(
 			"alice@example.com, bob@example.com",
