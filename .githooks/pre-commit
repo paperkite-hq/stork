@@ -46,4 +46,28 @@ echo "=== Pre-commit: running e2e tests ==="
 npx playwright test
 echo "=== Pre-commit: e2e tests passed ==="
 
+echo "=== Pre-commit: checking documentation ==="
+# Warn if source files changed but no docs/ files changed.
+# New features, API changes, and behavior changes should almost always touch docs/.
+_staged_src=$(git diff --cached --name-only | grep -E '^src/|^frontend/src/' || true)
+_staged_docs=$(git diff --cached --name-only | grep '^docs/' || true)
+if [[ -n "$_staged_src" && -z "$_staged_docs" ]]; then
+  echo ""
+  echo "WARNING: source files changed but no docs/ files were updated."
+  echo "  Changed source files:"
+  echo "$_staged_src" | sed 's/^/    /'
+  echo ""
+  echo "  Docs should be updated for: new features, API changes, behavior changes,"
+  echo "  new config options, and anything user-facing. Internal refactors and"
+  echo "  bug fixes with no visible behavior change may skip docs."
+  echo ""
+  # In interactive mode, require explicit confirmation. In non-interactive (CI, dispatch), auto-pass.
+  if [[ -t 1 ]]; then
+    read -r -p "  Proceed without docs update? [y/N] " _confirm
+    if [[ ! "$_confirm" =~ ^[Yy]$ ]]; then
+      echo "Commit aborted. Update docs/ and re-commit."
+      exit 1
+    fi
+  fi
+fi
 echo "=== Pre-commit: all checks passed ==="

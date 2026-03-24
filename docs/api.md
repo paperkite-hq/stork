@@ -582,7 +582,7 @@ Moves a message to a different folder.
 DELETE /api/messages/:messageId
 ```
 
-Permanently deletes a message from local storage. Does not affect the IMAP server.
+Permanently deletes a message from local storage. If **Sync deletions** is enabled for the account, also deletes the message from the IMAP server (best-effort — local deletion proceeds even if the server delete fails).
 
 **Response**: `200 OK` | `404 Not Found`
 
