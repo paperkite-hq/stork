@@ -42,6 +42,11 @@ You run [Mailcow](https://mailcow.email/) for your family or small team and want
        volumes:
          - stork-data:/app/data
        restart: unless-stopped
+       mem_swappiness: 0
+       ulimits:
+         core: 0
+       security_opt:
+         - no-new-privileges:true
 
    volumes:
      stork-data:

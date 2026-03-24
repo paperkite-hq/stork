@@ -11,6 +11,9 @@ docker run -d --init \
   -p 127.0.0.1:3100:3100 \
   -v ~/stork-data:/app/data \
   --restart unless-stopped \
+  --memory-swappiness=0 \
+  --ulimit core=0 \
+  --security-opt no-new-privileges:true \
   ghcr.io/paperkite-hq/stork:latest
 ```
 
