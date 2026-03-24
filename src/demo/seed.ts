@@ -533,4 +533,32 @@ export function seedDemoData(db: Database.Database): void {
 	});
 
 	insertAll();
+
+	// Refresh cached label and account counts so the UI shows correct badges immediately.
+	// (These columns are normally maintained by refreshLabelCounts/refreshAccountCounts at
+	// the end of each sync cycle, but the demo DB has no sync — seed them directly.)
+	db.prepare(`
+		UPDATE labels
+		SET
+			message_count = (SELECT COUNT(*) FROM message_labels WHERE label_id = labels.id),
+			unread_count = (
+				SELECT COUNT(*) FROM message_labels ml
+				JOIN messages m ON m.id = ml.message_id
+				WHERE ml.label_id = labels.id
+				AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%')
+			)
+		WHERE account_id = ?
+	`).run(accountId);
+
+	db.prepare(`
+		UPDATE accounts
+		SET
+			cached_message_count = (SELECT COUNT(*) FROM messages WHERE account_id = ?),
+			cached_unread_count = (
+				SELECT COUNT(*) FROM messages
+				WHERE account_id = ?
+				AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')
+			)
+		WHERE id = ?
+	`).run(accountId, accountId, accountId);
 }

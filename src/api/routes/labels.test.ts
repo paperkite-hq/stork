@@ -182,6 +182,8 @@ describe("Labels API", () => {
 			const msg2 = createTestMessage(db, accountId, folderId, 2, { flags: "" });
 			addMessageLabel(db, msg1, labelId);
 			addMessageLabel(db, msg2, labelId);
+			// Counts are cached columns — populate them as refreshLabelCounts() would
+			db.prepare("UPDATE labels SET message_count = 2, unread_count = 1 WHERE id = ?").run(labelId);
 
 			const { body: labels } = await jsonRequest(`/api/accounts/${accountId}/labels`);
 			expect(labels).toHaveLength(1);

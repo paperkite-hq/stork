@@ -172,6 +172,34 @@ db.prepare("UPDATE folders SET message_count = ?, unread_count = ? WHERE id = ?"
 );
 db.prepare("UPDATE folders SET message_count = 1, unread_count = 0 WHERE id = ?").run(sentId);
 
+// Refresh cached label counts so the UI shows correct unread badges.
+// (Normally maintained by refreshLabelCounts() at the end of each sync cycle.)
+db.prepare(`
+	UPDATE labels
+	SET
+		message_count = (SELECT COUNT(*) FROM message_labels WHERE label_id = labels.id),
+		unread_count = (
+			SELECT COUNT(*) FROM message_labels ml
+			JOIN messages m ON m.id = ml.message_id
+			WHERE ml.label_id = labels.id
+			AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%')
+		)
+	WHERE account_id = ?
+`).run(accountId);
+
+// Refresh cached account counts so count endpoints return correct values.
+db.prepare(`
+	UPDATE accounts
+	SET
+		cached_message_count = (SELECT COUNT(*) FROM messages WHERE account_id = ?),
+		cached_unread_count = (
+			SELECT COUNT(*) FROM messages
+			WHERE account_id = ?
+			AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')
+		)
+	WHERE id = ?
+`).run(accountId, accountId, accountId);
+
 const context = createTestContext(db);
 const { app } = createApp(context);
 

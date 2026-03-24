@@ -267,17 +267,9 @@ export function accountRoutes(
 		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
 		if (accountId instanceof Response) return accountId;
 		const labels = getDb()
-			.prepare(`
-				SELECT l.id, l.name, l.color, l.source, l.created_at,
-					COUNT(ml.message_id) as message_count,
-					SUM(CASE WHEN ml.message_id IS NOT NULL AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%') THEN 1 ELSE 0 END) as unread_count
-				FROM labels l
-				LEFT JOIN message_labels ml ON ml.label_id = l.id
-				LEFT JOIN messages m ON m.id = ml.message_id
-				WHERE l.account_id = ?
-				GROUP BY l.id
-				ORDER BY l.name
-			`)
+			.prepare(
+				"SELECT id, name, color, source, created_at, message_count, unread_count FROM labels WHERE account_id = ? ORDER BY name",
+			)
 			.all(accountId);
 		return c.json(labels);
 	});
@@ -351,12 +343,24 @@ export function accountRoutes(
 		return c.json(messages);
 	});
 
-	// Count of unread messages for an account (for "Unread" badge)
+	// Count of unread messages for an account (for "Unread" badge).
+	// Returns the cached value from accounts.cached_unread_count (O(1)).
+	// On first call after migration, computes and stores the count (one-time scan).
 	api.get("/:accountId/unread-messages/count", (c) => {
 		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
 		if (accountId instanceof Response) return accountId;
 		const db = getDb();
 
+		const account = db
+			.prepare("SELECT cached_unread_count FROM accounts WHERE id = ?")
+			.get(accountId) as { cached_unread_count: number | null } | undefined;
+		if (!account) return c.json({ error: "Account not found" }, 404);
+
+		if (account.cached_unread_count !== null) {
+			return c.json({ total: account.cached_unread_count });
+		}
+
+		// First call after migration — compute and cache
 		const row = db
 			.prepare(`
 				SELECT COUNT(*) as total
@@ -364,16 +368,36 @@ export function accountRoutes(
 				AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')
 			`)
 			.get(accountId) as { total: number };
-
+		db.prepare("UPDATE accounts SET cached_unread_count = ? WHERE id = ?").run(
+			row.total,
+			accountId,
+		);
 		return c.json(row);
 	});
 
-	// Total message count for an account (for "All Mail" badge)
+	// Total message count for an account (for "All Mail" badge).
+	// Returns the cached value from accounts.cached_message_count/cached_unread_count (O(1)).
+	// On first call after migration, computes and stores the counts (one-time scan).
 	api.get("/:accountId/all-messages/count", (c) => {
 		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
 		if (accountId instanceof Response) return accountId;
 		const db = getDb();
 
+		const account = db
+			.prepare("SELECT cached_message_count, cached_unread_count FROM accounts WHERE id = ?")
+			.get(accountId) as
+			| {
+					cached_message_count: number | null;
+					cached_unread_count: number | null;
+			  }
+			| undefined;
+		if (!account) return c.json({ error: "Account not found" }, 404);
+
+		if (account.cached_message_count !== null && account.cached_unread_count !== null) {
+			return c.json({ total: account.cached_message_count, unread: account.cached_unread_count });
+		}
+
+		// First call after migration — compute and cache
 		const row = db
 			.prepare(`
 				SELECT
@@ -383,7 +407,9 @@ export function accountRoutes(
 				WHERE account_id = ?
 			`)
 			.get(accountId) as { total: number; unread: number };
-
+		db.prepare(
+			"UPDATE accounts SET cached_message_count = ?, cached_unread_count = ? WHERE id = ?",
+		).run(row.total, row.unread, accountId);
 		return c.json(row);
 	});
 
