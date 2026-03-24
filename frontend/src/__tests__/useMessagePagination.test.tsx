@@ -224,4 +224,23 @@ describe("useMessagePagination", () => {
 		// Should not have made any additional API calls beyond initial
 		expect(mockLabelMessages).not.toHaveBeenCalled();
 	});
+
+	it("returns empty for negative non-special label ID (getFetchFn fallback path)", async () => {
+		// effectiveLabelId = -5 is truthy (so guard at line 584 doesn't apply)
+		// but not > 0, so getFetchFn falls through to Promise.resolve([])
+		const { result } = renderHook(() =>
+			useMessagePagination({
+				effectiveLabelId: -5,
+				effectiveAccountId: 1,
+				isAllMail: false,
+				isUnread: false,
+			}),
+		);
+
+		await waitFor(() => {
+			expect(result.current.messagesLoading).toBe(false);
+		});
+		expect(result.current.allMessages).toEqual([]);
+		expect(mockLabelMessages).not.toHaveBeenCalled();
+	});
 });

@@ -20,6 +20,10 @@ export function openDatabase(
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
 	db.exec("PRAGMA busy_timeout = 5000");
+	db.exec("PRAGMA cache_size = -65536"); // 64 MB page cache (default is 2 MB)
+	db.exec("PRAGMA temp_store = MEMORY"); // Use RAM for temp tables during sorts/joins
+	db.exec("PRAGMA synchronous = NORMAL"); // Safe with WAL; avoids fsync on every commit
+	db.exec("PRAGMA mmap_size = 268435456"); // 256 MB memory-mapped I/O
 
 	ensureSchema(db);
 	return db;

@@ -355,4 +355,76 @@ describe("useBulkSelection", () => {
 		expect(result.current.selectedIds.has(1)).toBe(true);
 		expect(result.current.selectedIds.has(3)).toBe(true);
 	});
+
+	// ---- archive ----
+
+	it("archive does nothing when selection is empty", async () => {
+		const { result } = renderBulk({ effectiveLabelId: 5 });
+		await act(async () => result.current.archive());
+		expect(mockBulk).not.toHaveBeenCalled();
+		expect(mockToast).not.toHaveBeenCalled();
+	});
+
+	it("archive calls bulk remove_label and shows success toast", async () => {
+		const { result } = renderBulk({ effectiveLabelId: 5, isAllMail: false });
+		act(() => result.current.toggle(1));
+		act(() => result.current.toggle(2));
+		await act(async () => result.current.archive());
+		expect(mockBulk).toHaveBeenCalledWith([1, 2], "remove_label", { label_id: 5 });
+		expect(mockToast).toHaveBeenCalledWith("Archived 2 messages", "success");
+	});
+
+	it("archive pluralizes toast correctly for single message", async () => {
+		const { result } = renderBulk({ effectiveLabelId: 5, isAllMail: false });
+		act(() => result.current.toggle(1));
+		await act(async () => result.current.archive());
+		expect(mockToast).toHaveBeenCalledWith("Archived 1 message", "success");
+	});
+
+	it("archive clears selection and refetches on success", async () => {
+		const refetchAllMailCount = vi.fn();
+		const { result } = renderBulk({ effectiveLabelId: 5, isAllMail: false, refetchAllMailCount });
+		act(() => result.current.toggle(1));
+		await act(async () => result.current.archive());
+		expect(result.current.selectedIds.size).toBe(0);
+		expect(refetchMessages).toHaveBeenCalled();
+		expect(refetchLabels).toHaveBeenCalled();
+		expect(refetchAllMailCount).toHaveBeenCalled();
+		expect(refetchUnreadCount).toHaveBeenCalled();
+	});
+
+	it("archive clears selectedMessageId when archived message was selected", async () => {
+		const { result } = renderBulk({
+			effectiveLabelId: 5,
+			isAllMail: false,
+			selectedMessageId: 1,
+		});
+		act(() => result.current.toggle(1));
+		await act(async () => result.current.archive());
+		expect(setSelectedMessageId).toHaveBeenCalledWith(null);
+	});
+
+	it("archive shows error toast on failure", async () => {
+		mockBulk.mockRejectedValueOnce(new Error("Network error"));
+		const { result } = renderBulk({ effectiveLabelId: 5, isAllMail: false });
+		act(() => result.current.toggle(1));
+		await act(async () => result.current.archive());
+		expect(mockToast).toHaveBeenCalledWith("Failed to archive: Network error", "error");
+	});
+
+	it("archive shows 'only available from Inbox' error when isAllMail=true", async () => {
+		const { result } = renderBulk({ effectiveLabelId: 5, isAllMail: true });
+		act(() => result.current.toggle(1));
+		await act(async () => result.current.archive());
+		expect(mockBulk).not.toHaveBeenCalled();
+		expect(mockToast).toHaveBeenCalledWith("Archive is only available from Inbox", "error");
+	});
+
+	it("archive shows 'only available from Inbox' error when no effectiveLabelId", async () => {
+		const { result } = renderBulk({ effectiveLabelId: null });
+		act(() => result.current.toggle(1));
+		await act(async () => result.current.archive());
+		expect(mockBulk).not.toHaveBeenCalled();
+		expect(mockToast).toHaveBeenCalledWith("Archive is only available from Inbox", "error");
+	});
 });

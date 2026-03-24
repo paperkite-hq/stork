@@ -269,12 +269,10 @@ export function accountRoutes(
 			.prepare(`
 				SELECT l.id, l.name, l.color, l.source, l.created_at,
 					COUNT(ml.message_id) as message_count,
-					(SELECT COUNT(*) FROM message_labels ml2
-						JOIN messages m ON m.id = ml2.message_id
-						WHERE ml2.label_id = l.id
-						AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%')) as unread_count
+					SUM(CASE WHEN ml.message_id IS NOT NULL AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%') THEN 1 ELSE 0 END) as unread_count
 				FROM labels l
 				LEFT JOIN message_labels ml ON ml.label_id = l.id
+				LEFT JOIN messages m ON m.id = ml.message_id
 				WHERE l.account_id = ?
 				GROUP BY l.id
 				ORDER BY l.name
@@ -377,11 +375,13 @@ export function accountRoutes(
 
 		const row = db
 			.prepare(`
-				SELECT COUNT(*) as total,
-					(SELECT COUNT(*) FROM messages WHERE account_id = ? AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')) as unread
-				FROM messages WHERE account_id = ?
+				SELECT
+					COUNT(*) as total,
+					COALESCE(SUM(CASE WHEN flags IS NULL OR flags NOT LIKE '%\\Seen%' THEN 1 ELSE 0 END), 0) as unread
+				FROM messages
+				WHERE account_id = ?
 			`)
-			.get(accountId, accountId) as { total: number; unread: number };
+			.get(accountId) as { total: number; unread: number };
 
 		return c.json(row);
 	});
