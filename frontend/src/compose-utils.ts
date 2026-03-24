@@ -150,6 +150,41 @@ export function getInitialFormat(mode: ComposeMode, saved: Draft | null): Compos
 	return "plain";
 }
 
+/**
+ * Parse a `references` field (stored as JSON array from IMAP sync or space-separated)
+ * and build the In-Reply-To + References headers for replies/forwards.
+ */
+export function buildThreadingHeaders(original: Message): {
+	inReplyTo: string | undefined;
+	references: string[] | undefined;
+} {
+	if (!original.message_id) return { inReplyTo: undefined, references: undefined };
+
+	const inReplyTo = original.message_id;
+	const rawRefs = original.references ?? "";
+	let existingRefs: string[] = [];
+	if (rawRefs) {
+		const t = rawRefs.trim();
+		if (t.startsWith("[")) {
+			try {
+				const parsed = JSON.parse(t);
+				existingRefs = Array.isArray(parsed)
+					? parsed.filter(Boolean)
+					: t.split(/\s+/).filter(Boolean);
+			} catch {
+				existingRefs = t.split(/\s+/).filter(Boolean);
+			}
+		} else {
+			existingRefs = t.split(/\s+/).filter(Boolean);
+		}
+	}
+
+	return {
+		inReplyTo,
+		references: [...existingRefs, original.message_id],
+	};
+}
+
 export function buildReplyAllCc(msg: Message, userEmail?: string): string {
 	// Include all To and CC addresses except the sender (who goes in To)
 	// and the current user (who is sending the reply)
