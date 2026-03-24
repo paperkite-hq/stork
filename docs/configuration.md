@@ -24,6 +24,11 @@ services:
     environment:
       - STORK_PORT=3100
     restart: unless-stopped
+    mem_swappiness: 0
+    ulimits:
+      core: 0
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   stork-data:
@@ -47,6 +52,11 @@ services:
     environment:
       - STORK_PORT=3100
     restart: unless-stopped
+    mem_swappiness: 0
+    ulimits:
+      core: 0
+    security_opt:
+      - no-new-privileges:true
 ```
 
 ### Changing the port
