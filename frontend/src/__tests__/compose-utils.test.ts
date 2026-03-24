@@ -284,4 +284,9 @@ describe("draft management", () => {
 		clearDraft("test-key");
 		expect(loadDraft("test-key")).toBeNull();
 	});
+
+	it("loadDraft returns null for corrupted JSON", () => {
+		localStorage.setItem("bad-key", "{not valid json{{");
+		expect(loadDraft("bad-key")).toBeNull();
+	});
 });
