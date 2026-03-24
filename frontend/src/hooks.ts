@@ -146,11 +146,20 @@ export function useSyncPoller(onSyncComplete: () => void): {
 			}
 		}
 
-		poll();
-		const interval = setInterval(poll, 3000);
+		// Use sequential scheduling (setTimeout after completion) instead of
+		// setInterval to avoid concurrent in-flight requests when the server
+		// is slow to respond (e.g. large database on first UI load after restart).
+		let timeoutId: ReturnType<typeof setTimeout> | null = null;
+		async function scheduleNextPoll() {
+			await poll();
+			if (active) {
+				timeoutId = setTimeout(scheduleNextPoll, 3000);
+			}
+		}
+		scheduleNextPoll();
 		return () => {
 			active = false;
-			clearInterval(interval);
+			if (timeoutId !== null) clearTimeout(timeoutId);
 		};
 	}, []);
 
