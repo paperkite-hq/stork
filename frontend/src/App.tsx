@@ -142,13 +142,17 @@ export function App() {
 	);
 
 	// Fetch thread for selected message
-	const { data: thread } = useAsync(
-		() =>
-			selectedMessageId
-				? api.messages.getThread(selectedMessageId).catch(() => [])
-				: Promise.resolve([]),
+	const { data: thread, error: threadError } = useAsync(
+		() => (selectedMessageId ? api.messages.getThread(selectedMessageId) : Promise.resolve([])),
 		[selectedMessageId],
 	);
+
+	// Show toast when thread fails to load
+	useEffect(() => {
+		if (threadError) {
+			toast("Failed to load thread", "error");
+		}
+	}, [threadError]);
 
 	// Poll sync status — auto-refresh labels & messages when sync completes
 	const {

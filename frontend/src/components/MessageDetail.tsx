@@ -56,10 +56,12 @@ export function MessageDetail({
 
 	// When the selected message changes, expand it in the thread view.
 	// This ensures clicking a search result that isn't the last thread message still shows it.
+	// Also reset HTML/plain text toggle to default (HTML) for each new message.
 	const messageId = message?.id;
 	useEffect(() => {
 		if (messageId != null) {
 			setExpandedIds(new Set([messageId]));
+			setShowHtml(true);
 		}
 	}, [messageId]);
 	const [confirmDelete, setConfirmDelete] = useState<Message | null>(null);
