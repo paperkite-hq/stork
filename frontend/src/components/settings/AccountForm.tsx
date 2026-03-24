@@ -17,6 +17,7 @@ export interface AccountFormData {
 	smtp_user: string;
 	smtp_pass: string;
 	sync_delete_from_server: number;
+	default_view: string;
 }
 
 export const emptyForm: AccountFormData = {
@@ -33,6 +34,7 @@ export const emptyForm: AccountFormData = {
 	smtp_user: "",
 	smtp_pass: "",
 	sync_delete_from_server: 0,
+	default_view: "inbox",
 };
 
 export function AccountForm({
@@ -79,6 +81,7 @@ export function AccountForm({
 				smtp_user: detail.smtp_user ?? "",
 				smtp_pass: "",
 				sync_delete_from_server: detail.sync_delete_from_server,
+				default_view: detail.default_view ?? "inbox",
 			});
 			setLoaded(true);
 		} catch (e) {
@@ -333,6 +336,21 @@ export function AccountForm({
 					/>
 					Sync deletions from server (remove locally when deleted on server)
 				</label>
+				<div className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
+					<label htmlFor="default_view_select" className="whitespace-nowrap">
+						Default view on open
+					</label>
+					<select
+						id="default_view_select"
+						value={form.default_view}
+						onChange={(e) => setField("default_view", e.target.value)}
+						className="flex-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1 text-sm text-gray-900 dark:text-gray-100"
+					>
+						<option value="inbox">Inbox</option>
+						<option value="unread">Unread</option>
+						<option value="all">All Mail</option>
+					</select>
+				</div>
 			</fieldset>
 
 			{/* Test connection results */}

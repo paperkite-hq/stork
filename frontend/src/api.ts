@@ -56,6 +56,7 @@ export interface Account {
 	email: string;
 	imap_host: string;
 	smtp_host: string | null;
+	default_view?: string;
 	created_at: string;
 }
 
@@ -68,6 +69,7 @@ export interface AccountDetail extends Account {
 	smtp_user: string | null;
 	sync_delete_from_server: number;
 	updated_at: string;
+	// default_view is inherited from Account
 }
 
 export interface SyncStatus {
@@ -228,6 +230,7 @@ export interface CreateAccountRequest {
 	ses_access_key_id?: string;
 	ses_secret_access_key?: string;
 	sync_delete_from_server?: number;
+	default_view?: string;
 }
 
 export interface UpdateAccountRequest {
@@ -250,6 +253,7 @@ export interface UpdateAccountRequest {
 	ses_access_key_id?: string;
 	ses_secret_access_key?: string;
 	sync_delete_from_server?: number;
+	default_view?: string;
 }
 
 export interface TestConnectionRequest {
