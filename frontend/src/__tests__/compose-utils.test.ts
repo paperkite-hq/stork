@@ -154,6 +154,13 @@ describe("buildReplyHtmlBody", () => {
 		const html = buildReplyHtmlBody(msg);
 		expect(html).toContain("unknown date");
 	});
+
+	it("uses empty string when html_body is null and text_body is null", () => {
+		const msg = makeMessage({ html_body: null, text_body: null });
+		const html = buildReplyHtmlBody(msg);
+		// quotedContent falls back to escapeHtml(null || "") = ""
+		expect(html).toContain("<blockquote");
+	});
 });
 
 describe("buildForwardHtmlBody", () => {
@@ -168,6 +175,17 @@ describe("buildForwardHtmlBody", () => {
 		const msg = makeMessage({ from_name: null as unknown as string });
 		const html = buildForwardHtmlBody(msg);
 		expect(html).toContain("sender@test.com");
+	});
+
+	it("uses 'unknown' when from_name is set but from_address is null", () => {
+		const msg = makeMessage({
+			from_name: "Alice",
+			from_address: null as unknown as string,
+		});
+		const html = buildForwardHtmlBody(msg);
+		// The `from_address || "unknown"` fallback on line 117
+		expect(html).toContain("Alice");
+		expect(html).toContain("unknown");
 	});
 
 	it("formats JSON array to_addresses as human-readable", () => {

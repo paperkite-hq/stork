@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type React from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ErrorBoundary } from "../ErrorBoundary";
 
@@ -77,5 +78,17 @@ describe("ErrorBoundary", () => {
 		);
 
 		expect(screen.getByText("Recovered content")).toBeInTheDocument();
+	});
+
+	it("shows default message when error has no message property", () => {
+		function ThrowNoMessage(): React.ReactElement {
+			throw new Error("");
+		}
+		render(
+			<ErrorBoundary>
+				<ThrowNoMessage />
+			</ErrorBoundary>,
+		);
+		expect(screen.getByText("An unexpected error occurred.")).toBeInTheDocument();
 	});
 });
