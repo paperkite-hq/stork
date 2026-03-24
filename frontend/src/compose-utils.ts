@@ -167,10 +167,8 @@ export function buildThreadingHeaders(original: Message): {
 		const t = rawRefs.trim();
 		if (t.startsWith("[")) {
 			try {
-				const parsed = JSON.parse(t);
-				existingRefs = Array.isArray(parsed)
-					? parsed.filter(Boolean)
-					: t.split(/\s+/).filter(Boolean);
+				const parsed = JSON.parse(t) as unknown;
+				existingRefs = Array.isArray(parsed) ? (parsed as string[]).filter(Boolean) : [];
 			} catch {
 				existingRefs = t.split(/\s+/).filter(Boolean);
 			}
