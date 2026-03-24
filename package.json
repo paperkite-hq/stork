@@ -13,6 +13,7 @@
 		"test:frontend": "cd frontend && npm test",
 		"test:e2e": "vitest run tests/e2e-container.test.ts",
 		"test:e2e-ui": "npx playwright test",
+		"screenshots:generate": "npx playwright test --config playwright.screenshots.config.ts",
 		"lint": "biome check .",
 		"format": "biome format --write .",
 		"db:migrate": "tsx src/storage/migrate.ts"
