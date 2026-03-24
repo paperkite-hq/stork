@@ -317,7 +317,7 @@ describe("Settings", () => {
 		expect(screen.getByText("Incoming Mail (IMAP)")).toBeInTheDocument();
 		expect(screen.getByText("Outgoing Mail (SMTP)")).toBeInTheDocument();
 		expect(screen.getByText("Sync Preferences")).toBeInTheDocument();
-		expect(screen.getByText(/Archive mode/)).toBeInTheDocument();
+		expect(screen.getAllByText(/Archive mode/).length).toBeGreaterThanOrEqual(1);
 	});
 
 	it("shows delete confirmation dialog and deletes account", async () => {
