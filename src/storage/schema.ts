@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -241,5 +241,11 @@ export const MIGRATIONS = [
 	// satisfy ORDER BY date DESC for a given account in a single index scan.
 	`
 CREATE INDEX IF NOT EXISTS idx_messages_account_date ON messages(account_id, date DESC);
+`,
+	// Version 9: Add default_view column for per-account configurable landing view.
+	// Stores the view to auto-select on load: 'inbox', 'unread', 'all', or 'label:<id>'.
+	// Defaults to 'inbox' so existing accounts keep current behavior.
+	`
+ALTER TABLE accounts ADD COLUMN default_view TEXT NOT NULL DEFAULT 'inbox';
 `,
 ];

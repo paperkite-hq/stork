@@ -23,7 +23,7 @@ export function accountRoutes(
 		const accounts = getDb()
 			.prepare(
 				`SELECT id, name, email, ingest_connector_type, send_connector_type,
-					imap_host, smtp_host, created_at
+					imap_host, smtp_host, default_view, created_at
 				FROM accounts ORDER BY name`,
 			)
 			.all();
@@ -151,7 +151,7 @@ export function accountRoutes(
 				smtp_host, smtp_port, smtp_tls, smtp_user,
 				cf_email_webhook_secret,
 				ses_region, ses_access_key_id,
-				sync_delete_from_server, created_at, updated_at
+				sync_delete_from_server, default_view, created_at, updated_at
 			FROM accounts WHERE id = ?
 		`)
 			.get(accountId);
@@ -185,6 +185,7 @@ export function accountRoutes(
 			"ses_access_key_id",
 			"ses_secret_access_key",
 			"sync_delete_from_server",
+			"default_view",
 		];
 		const sets: string[] = [];
 		const values: (string | number | null)[] = [];
