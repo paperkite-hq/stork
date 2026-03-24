@@ -1,8 +1,40 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
+import { ImapIngestConnector } from "../../connectors/imap.js";
 import { parseIntParam } from "../validation.js";
 
-export function messageRoutes(getDb: () => Database.Database): Hono {
+interface ImapAccountInfo {
+	uid: number;
+	folder_path: string;
+	imap_host: string;
+	imap_port: number;
+	imap_tls: number;
+	imap_user: string;
+	imap_pass: string;
+}
+
+/** Deletes messages from an IMAP server. Injectable for testing. */
+export type ImapDeleteFn = (info: ImapAccountInfo, uids: number[]) => Promise<void>;
+
+async function defaultImapDelete(info: ImapAccountInfo, uids: number[]): Promise<void> {
+	const connector = new ImapIngestConnector({
+		host: info.imap_host,
+		port: info.imap_port,
+		secure: info.imap_tls === 1,
+		auth: { user: info.imap_user, pass: info.imap_pass },
+	});
+	await connector.connect();
+	try {
+		await connector.deleteMessages(info.folder_path, uids);
+	} finally {
+		await connector.disconnect();
+	}
+}
+
+export function messageRoutes(
+	getDb: () => Database.Database,
+	imapDelete: ImapDeleteFn = defaultImapDelete,
+): Hono {
 	const api = new Hono();
 
 	api.get("/:messageId", (c) => {
@@ -127,10 +159,42 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 		return c.json({ ok: true });
 	});
 
-	api.delete("/:messageId", (c) => {
+	api.delete("/:messageId", async (c) => {
+		const db = getDb();
 		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
 		if (messageId instanceof Response) return messageId;
-		const result = getDb().prepare("DELETE FROM messages WHERE id = ?").run(messageId);
+
+		// Fetch message with folder and account info for optional server-side deletion
+		const message = db
+			.prepare(
+				`SELECT m.uid, f.path AS folder_path,
+				        a.ingest_connector_type, a.sync_delete_from_server,
+				        a.imap_host, a.imap_port, a.imap_tls, a.imap_user, a.imap_pass
+				 FROM messages m
+				 JOIN folders f ON f.id = m.folder_id
+				 JOIN accounts a ON a.id = m.account_id
+				 WHERE m.id = ?`,
+			)
+			.get(messageId) as
+			| (ImapAccountInfo & {
+					ingest_connector_type: string;
+					sync_delete_from_server: number;
+			  })
+			| undefined;
+
+		if (!message) return c.json({ error: "Message not found" }, 404);
+
+		// Delete from IMAP server when the account is IMAP and sync deletions is enabled
+		if (message.ingest_connector_type === "imap" && message.sync_delete_from_server === 1) {
+			try {
+				await imapDelete(message, [message.uid]);
+			} catch (err) {
+				console.error("Failed to delete message from IMAP server:", err);
+				// Fall through — delete locally even if server delete fails
+			}
+		}
+
+		const result = db.prepare("DELETE FROM messages WHERE id = ?").run(messageId);
 		if (result.changes === 0) return c.json({ error: "Message not found" }, 404);
 		return c.json({ ok: true });
 	});
@@ -157,13 +221,46 @@ export function messageRoutes(getDb: () => Database.Database): Hono {
 		const placeholders = ids.map(() => "?").join(",");
 
 		if (action === "delete") {
-			const matched = (
-				db
-					.prepare(`SELECT COUNT(*) as n FROM messages WHERE id IN (${placeholders})`)
-					.get(...ids) as { n: number }
-			).n;
+			// Fetch messages with folder/account info for server-side deletion
+			const toDelete = db
+				.prepare(
+					`SELECT m.id, m.uid, f.path AS folder_path,
+					        a.ingest_connector_type, a.sync_delete_from_server,
+					        a.imap_host, a.imap_port, a.imap_tls, a.imap_user, a.imap_pass
+					 FROM messages m
+					 JOIN folders f ON f.id = m.folder_id
+					 JOIN accounts a ON a.id = m.account_id
+					 WHERE m.id IN (${placeholders})`,
+				)
+				.all(...ids) as (ImapAccountInfo & {
+				id: number;
+				ingest_connector_type: string;
+				sync_delete_from_server: number;
+			})[];
+
+			// Group IMAP messages by folder for efficient server-side deletion
+			const imapByFolder = new Map<string, ImapAccountInfo & { folderKey: string }[]>();
+			for (const msg of toDelete) {
+				if (msg.ingest_connector_type === "imap" && msg.sync_delete_from_server === 1) {
+					const key = `${msg.imap_host}:${msg.imap_port}:${msg.imap_user}:${msg.folder_path}`;
+					if (!imapByFolder.has(key)) imapByFolder.set(key, []);
+					imapByFolder.get(key)?.push({ ...msg, folderKey: key });
+				}
+			}
+
+			// Delete from IMAP server (best-effort — failures don't block local delete)
+			for (const group of imapByFolder.values()) {
+				const first = group[0];
+				const uids = group.map((m) => m.uid);
+				try {
+					await imapDelete(first, uids);
+				} catch (err) {
+					console.error("Failed to bulk-delete messages from IMAP server:", err);
+				}
+			}
+
 			db.prepare(`DELETE FROM messages WHERE id IN (${placeholders})`).run(...ids);
-			return c.json({ ok: true, count: matched });
+			return c.json({ ok: true, count: toDelete.length });
 		}
 
 		if (action === "flag") {

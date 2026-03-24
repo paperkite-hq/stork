@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
-import type { Hono } from "hono";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { Hono } from "hono";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createApp } from "../../api/server.js";
 import {
 	createTestAccount,
@@ -9,6 +9,7 @@ import {
 	createTestFolder,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
+import { messageRoutes } from "./messages.js";
 
 describe("Messages API", () => {
 	let db: Database.Database;
@@ -110,6 +111,83 @@ describe("Messages API", () => {
 		test("DELETE /api/messages/:id returns 404 for missing", async () => {
 			const { status } = await jsonRequest("/api/messages/999", { method: "DELETE" });
 			expect(status).toBe(404);
+		});
+	});
+
+	// ─── Delete-from-server ──────────────────────────────────
+	describe("Delete-from-server", () => {
+		let deleteDb: Database.Database;
+		let mockImapDelete: ReturnType<typeof vi.fn>;
+		let deleteApp: Hono;
+
+		beforeEach(() => {
+			deleteDb = createTestDb();
+			mockImapDelete = vi.fn().mockResolvedValue(undefined);
+			const routeApp = new Hono();
+			routeApp.route(
+				"/messages",
+				messageRoutes(() => deleteDb, mockImapDelete),
+			);
+			deleteApp = routeApp;
+		});
+
+		afterEach(() => {
+			deleteDb.close();
+		});
+
+		async function req(path: string, init?: RequestInit) {
+			const res = await deleteApp.request(path, init);
+			const body = await res.json().catch(() => ({}));
+			return { status: res.status, body };
+		}
+
+		test("does not call IMAP when sync_delete_from_server is 0", async () => {
+			const accountId = createTestAccount(deleteDb);
+			const folderId = createTestFolder(deleteDb, accountId, "INBOX");
+			const msgId = createTestMessage(deleteDb, accountId, folderId, 1);
+
+			await req(`/messages/${msgId}`, { method: "DELETE" });
+			expect(mockImapDelete).not.toHaveBeenCalled();
+		});
+
+		test("calls IMAP delete with correct folder and uid when sync_delete_from_server is 1", async () => {
+			const syncAccountId = deleteDb
+				.prepare(
+					`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
+					 smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, sync_delete_from_server)
+					 VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, 0, NULL, NULL, 1)`,
+				)
+				.run("Sync Account", "sync@example.com", "imap.example.com", 993, "syncuser", "syncpass")
+				.lastInsertRowid as number;
+			const syncFolderId = createTestFolder(deleteDb, syncAccountId, "INBOX");
+			const msgId = createTestMessage(deleteDb, syncAccountId, syncFolderId, 42);
+
+			const { status } = await req(`/messages/${msgId}`, { method: "DELETE" });
+			expect(status).toBe(200);
+			expect(mockImapDelete).toHaveBeenCalledOnce();
+			const [info, uids] = mockImapDelete.mock.calls[0];
+			expect(info.folder_path).toBe("INBOX");
+			expect(uids).toEqual([42]);
+		});
+
+		test("still deletes locally when IMAP delete fails", async () => {
+			mockImapDelete.mockRejectedValueOnce(new Error("IMAP connection refused"));
+			const syncAccountId = deleteDb
+				.prepare(
+					`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
+					 smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, sync_delete_from_server)
+					 VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, 0, NULL, NULL, 1)`,
+				)
+				.run("Sync Account", "sync@example.com", "imap.example.com", 993, "syncuser", "syncpass")
+				.lastInsertRowid as number;
+			const syncFolderId = createTestFolder(deleteDb, syncAccountId, "INBOX");
+			const msgId = createTestMessage(deleteDb, syncAccountId, syncFolderId, 7);
+
+			const { status } = await req(`/messages/${msgId}`, { method: "DELETE" });
+			expect(status).toBe(200);
+			// Verify message is gone from DB
+			const gone = deleteDb.prepare("SELECT id FROM messages WHERE id = ?").get(msgId);
+			expect(gone).toBeUndefined();
 		});
 	});
 
