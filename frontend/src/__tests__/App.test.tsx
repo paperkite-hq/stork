@@ -2235,3 +2235,113 @@ describe("App — Modal onClose via X button", () => {
 		);
 	});
 });
+
+// ------------------------------------------------------------------
+// Tests: Escape key reopens search when message opened from search (App.tsx lines 469-470)
+// ------------------------------------------------------------------
+
+describe("App — Escape key from search-opened message", () => {
+	it("Escape key re-opens search panel when message was opened from search results", async () => {
+		const msg = makeMessage({ id: 99, subject: "Search hit", text_body: "Found body" });
+		mockApi.messages.get.mockResolvedValue(msg);
+		mockApi.messages.getThread.mockResolvedValue([msg]);
+		mockApi.search.mockResolvedValue([
+			{
+				id: 99,
+				subject: "Search hit",
+				from_address: "sender@test.com",
+				from_name: "Sender",
+				date: new Date().toISOString(),
+				snippet: "Found body",
+			},
+		]);
+		setupWithAccounts([makeAccount()], [makeLabel()]);
+		render(<App />);
+		await waitForAppLayout();
+
+		// Open search panel
+		fireEvent.keyDown(window, { key: "/" });
+		await waitFor(() =>
+			expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument(),
+		);
+
+		// Type to trigger the debounced search
+		await userEvent.type(screen.getByPlaceholderText("Search messages…"), "hit");
+
+		// Wait for search result to render
+		await waitFor(
+			() =>
+				expect(screen.getByRole("button", { name: /Search hit from Sender/ })).toBeInTheDocument(),
+			{ timeout: 2000 },
+		);
+
+		// Click the search result — sets selectedMessageId + openedFromSearch=true
+		await userEvent.click(screen.getByRole("button", { name: /Search hit from Sender/ }));
+
+		// Wait for message detail to render (search panel closes, back button appears)
+		await waitFor(() => expect(screen.getByText("← Search results")).toBeInTheDocument(), {
+			timeout: 3000,
+		});
+
+		// After clicking a search result, showSearch is still true (search panel visible alongside detail)
+		// First Escape closes the search panel (showSearch → false), leaving message detail open
+		fireEvent.keyDown(window, { key: "Escape" });
+
+		// Search panel should close but message detail ("← Search results") should still be there
+		await waitFor(() =>
+			expect(screen.queryByPlaceholderText("Search messages…")).not.toBeInTheDocument(),
+		);
+		expect(screen.getByText("← Search results")).toBeInTheDocument();
+
+		// Second Escape should close message detail and re-open search panel (lines 469-470)
+		fireEvent.keyDown(window, { key: "Escape" });
+
+		// Message detail should close
+		await waitFor(() => expect(screen.queryByText("← Search results")).not.toBeInTheDocument());
+		// Search panel should reopen (setShowSearch(true) was called because openedFromSearch was true)
+		expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument();
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Browser back/forward navigation with searchActive state (App.tsx lines 272-278)
+// ------------------------------------------------------------------
+
+describe("App — History navigation with searchActive", () => {
+	it("popstate with searchActive=true opens search panel", async () => {
+		setupWithAccounts([makeAccount()], [makeLabel()]);
+		render(<App />);
+		await waitForAppLayout();
+
+		// Initially search panel is closed
+		expect(screen.queryByPlaceholderText("Search messages…")).not.toBeInTheDocument();
+
+		// Fire a popstate event simulating browser back to a state where search was open (lines 272-278)
+		const navState = {
+			accountId: 1,
+			labelId: 1,
+			messageId: null,
+			searchActive: true,
+		};
+		window.dispatchEvent(new PopStateEvent("popstate", { state: navState }));
+
+		// Search panel should now be shown
+		await waitFor(() =>
+			expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument(),
+		);
+	});
+
+	it("popstate without searchActive leaves search panel closed", async () => {
+		setupWithAccounts([makeAccount()], [makeLabel()]);
+		render(<App />);
+		await waitForAppLayout();
+
+		// Fire popstate without searchActive
+		const navState = { accountId: 1, labelId: 1, messageId: null };
+		window.dispatchEvent(new PopStateEvent("popstate", { state: navState }));
+
+		// Wait a tick and verify search panel remains closed
+		await new Promise((r) => setTimeout(r, 50));
+		expect(screen.queryByPlaceholderText("Search messages…")).not.toBeInTheDocument();
+	});
+});
