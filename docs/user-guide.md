@@ -188,9 +188,9 @@ Stork syncs mail using the IMAP protocol:
 
 Sync runs automatically every 5 minutes per account. You can also trigger a manual sync from the UI.
 
-### What Stork Does NOT Do
+### What Stork Does NOT Do (by default)
 
-- **Stork never deletes mail from your server** by default. The sync is strictly read-only. A delete-from-server feature is planned as an explicit opt-in.
+- **Stork does not delete mail from your server by default.** The sync is strictly read-only. To enable two-way deletion sync, turn on **Sync deletions** in Settings > Accounts for each account. With it enabled, deleting a message in Stork also deletes it from your IMAP server, and messages deleted on the server are removed locally on the next sync.
 - **Stork does not modify flags on the server.** Marking a message as read in Stork only affects local storage. Your IMAP server's flags remain unchanged.
 
 ### Sync Errors

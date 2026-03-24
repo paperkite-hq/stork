@@ -2,7 +2,9 @@
 
 ## Will Stork delete email from my IMAP server?
 
-**No.** The sync engine is strictly read-only by default. It fetches messages and flags from your IMAP server but never modifies or deletes anything on the server. A "delete from server" feature is planned as an opt-in workflow — it will only run when you explicitly enable it per account and confirm the action. Safe for testing against a production mailbox.
+**Not by default.** The sync engine is read-only unless you opt in. Out of the box, Stork fetches messages and flags but never modifies anything on your IMAP server — safe to use against a production mailbox.
+
+If you want deletions to sync both ways, enable **Sync deletions** in Settings > Accounts for that account. With this enabled, deleting a message in Stork also deletes it from your IMAP server, and messages deleted on the server are removed locally on the next sync. This setting is per-account and off by default.
 
 ## Will full-text search scale to a large mailbox?
 
