@@ -168,6 +168,29 @@ describe("buildForwardHtmlBody", () => {
 		const html = buildForwardHtmlBody(msg);
 		expect(html).toContain("sender@test.com");
 	});
+
+	it("formats JSON array to_addresses as human-readable", () => {
+		const msg = makeMessage({
+			to_addresses: '["Alice Smith <alice@example.com>","bob@example.com"]',
+		});
+		const html = buildForwardHtmlBody(msg);
+		// Should show display names/bare emails, not raw JSON
+		expect(html).toContain("Alice Smith");
+		expect(html).toContain("bob@example.com");
+		expect(html).not.toContain('["Alice');
+	});
+
+	it("shows 'unknown date' for null date", () => {
+		const msg = makeMessage({ date: null as unknown as string });
+		const html = buildForwardHtmlBody(msg);
+		expect(html).toContain("unknown date");
+	});
+
+	it("shows 'unknown date' for invalid date", () => {
+		const msg = makeMessage({ date: "not-a-date" });
+		const html = buildForwardHtmlBody(msg);
+		expect(html).toContain("unknown date");
+	});
 });
 
 describe("escapeHtml", () => {

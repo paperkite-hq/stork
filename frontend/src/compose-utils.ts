@@ -1,5 +1,5 @@
 import type { Message } from "./api";
-import { parseAddressField } from "./utils";
+import { formatAddressList, parseAddressField } from "./utils";
 
 export type ComposeFormat = "plain" | "html";
 
@@ -116,9 +116,11 @@ export function buildForwardHtmlBody(msg: Message): string {
 	const from = msg.from_name
 		? `${escapeHtml(msg.from_name)} &lt;${escapeHtml(msg.from_address || "unknown")}&gt;`
 		: escapeHtml(msg.from_address || "unknown");
-	const date = new Date(msg.date).toLocaleString();
+	const d = msg.date ? new Date(msg.date) : null;
+	const date = d && !Number.isNaN(d.getTime()) ? d.toLocaleString() : "unknown date";
 	const forwardedContent = msg.html_body || escapeHtml(msg.text_body || "").replace(/\n/g, "<br>");
-	return `<br><br><div>---------- Forwarded message ----------</div><div>From: ${from}</div><div>Date: ${escapeHtml(date)}</div><div>Subject: ${escapeHtml(msg.subject || "(no subject)")}</div><div>To: ${escapeHtml(msg.to_addresses || "")}</div><br>${forwardedContent}`;
+	const toDisplay = formatAddressList(msg.to_addresses);
+	return `<br><br><div>---------- Forwarded message ----------</div><div>From: ${from}</div><div>Date: ${escapeHtml(date)}</div><div>Subject: ${escapeHtml(msg.subject || "(no subject)")}</div><div>To: ${escapeHtml(toDisplay)}</div><br>${forwardedContent}`;
 }
 
 /** Convert HTML to plain text (strips tags, decodes entities) */
