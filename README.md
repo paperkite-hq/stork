@@ -25,6 +25,8 @@ Stork syncs your email from any IMAP server, stores it locally with **AES-256 en
 - **Full-text search** — FTS5-powered search across your entire mailbox, instantly
 - **Compose & send** — reply, reply-all, forward, and compose via your SMTP server
 - **Labels, not folders** — Gmail-style labels replace rigid folder hierarchies ([why?](docs/design-decisions.md))
+- **Mirror & Vault modes** — test the waters with your provider as backup, then flip to Vault when you're ready to commit
+- **Desktop notifications** — new mail alerts as messages arrive
 - **Recovery key** — 24-word BIP39 mnemonic so a forgotten password doesn't mean lost mail
 - **Single container** — `docker compose up` and you're running. No PHP, no external DB.
 
@@ -121,7 +123,7 @@ docker compose up --build
 - [x] Docker single-container deployment
 - [x] Label-based organization (Gmail-style)
 - [x] Encryption at rest (AES-256 via SQLCipher, BIP39 recovery key)
-- [ ] Pluggable connector architecture
+- [x] Pluggable connector architecture
 - [x] Delete-from-server workflow
 - [ ] Multi-account support
 
