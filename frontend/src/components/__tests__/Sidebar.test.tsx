@@ -11,6 +11,7 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
 		email: "test@example.com",
 		imap_host: "imap.example.com",
 		smtp_host: null,
+		sync_delete_from_server: 1,
 		created_at: new Date().toISOString(),
 		...overrides,
 	};

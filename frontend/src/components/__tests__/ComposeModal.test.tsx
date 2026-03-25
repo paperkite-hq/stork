@@ -37,6 +37,7 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
 		email: "test@example.com",
 		imap_host: "imap.example.com",
 		smtp_host: "smtp.example.com",
+		sync_delete_from_server: 1,
 		created_at: "2026-01-01T00:00:00Z",
 		...overrides,
 	};
@@ -565,6 +566,7 @@ describe("ComposeModal", () => {
 						email: "me@myaccount.com",
 						imap_host: "",
 						smtp_host: null,
+						sync_delete_from_server: 1,
 						created_at: "",
 					},
 				]}

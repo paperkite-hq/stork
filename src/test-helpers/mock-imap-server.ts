@@ -8,6 +8,7 @@ import { type Server, type Socket, createServer } from "node:net";
  * - LIST
  * - SELECT
  * - UID FETCH
+ * - UID SEARCH (UID range criteria)
  * - FETCH
  * - LOGOUT
  * - CAPABILITY
@@ -359,9 +360,51 @@ export class MockImapServer {
 			this.handleStore(socket, tag, subArgs, state, true);
 		} else if (subCommand === "EXPUNGE") {
 			this.handleExpunge(socket, tag, subArgs, state, true);
+		} else if (subCommand === "SEARCH") {
+			this.handleSearch(socket, tag, subArgs, state);
 		} else {
 			socket.write(`${tag} BAD Unknown UID subcommand\r\n`);
 		}
+	}
+
+	/**
+	 * Handles UID SEARCH. Supports the UID criteria used by ImapFlow's client.search():
+	 * e.g. "UID 1:*" or "UID 5:*". Returns matching UIDs as an IMAP SEARCH response.
+	 */
+	private handleSearch(
+		socket: Socket,
+		tag: string,
+		args: string,
+		state: { authenticated: boolean; selectedMailbox: MockMailbox | null },
+	) {
+		if (!state.authenticated || !state.selectedMailbox) {
+			socket.write(`${tag} NO Not authenticated or no mailbox selected\r\n`);
+			return;
+		}
+
+		const mb = state.selectedMailbox;
+		// Parse "UID range" from args — ImapFlow sends "UID <range>" for uid-mode search
+		const parts = args.trim().split(/\s+/);
+		let matchingUids: number[];
+
+		if (parts[0]?.toUpperCase() === "UID" && parts[1]) {
+			// UID range search: return UIDs matching the range
+			const rangeStr = parts[1];
+			const matched = this.resolveRange(mb.messages, rangeStr, true);
+			matchingUids = matched.map((m) => m.uid);
+		} else if (parts[0]?.toUpperCase() === "ALL" || args.trim() === "") {
+			matchingUids = mb.messages.map((m) => m.uid);
+		} else {
+			// Unknown criteria — return empty (safe fallback)
+			matchingUids = [];
+		}
+
+		if (matchingUids.length > 0) {
+			socket.write(`* SEARCH ${matchingUids.join(" ")}\r\n`);
+		} else {
+			socket.write("* SEARCH\r\n");
+		}
+		socket.write(`${tag} OK UID SEARCH completed\r\n`);
 	}
 
 	private handleStore(

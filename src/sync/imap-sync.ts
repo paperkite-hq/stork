@@ -30,7 +30,7 @@ export interface SyncResult {
 	updatedFlags: number;
 	deletedFolders: number;
 	attachmentsSaved: number;
-	/** Number of messages deleted from the IMAP server after syncing (archive mode) */
+	/** Number of messages deleted from the IMAP server after syncing (vault mode) */
 	deletedFromServer: number;
 	errors: SyncError[];
 }
@@ -73,7 +73,8 @@ export type SpecialUse =
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 const FETCH_BATCH_SIZE = 50;
-/** Max UIDs per IMAP messageDelete call. Prevents overly-long UID-set strings on large initial syncs. */
+/** Max UIDs per IMAP messageDelete call. Prevents overly-long UID-set strings on large initial syncs.
+ *  Also used as the fetch batch size for interleaved fetch+delete in vault mode. */
 const DELETE_BATCH_SIZE = 100;
 /** Apply folder labels to messages after every this-many new messages within a folder.
  *  Keeps the UI responsive during large-folder syncs (e.g. Archive with 50k messages). */
@@ -278,7 +279,7 @@ export class ImapSync {
 			// Ensure labels exist for all synced folders
 			this.ensureLabelsForFolders();
 
-			// Read archive mode setting once per sync run (can change between syncs)
+			// Read vault mode setting once per sync run (can change between syncs)
 			const accountRow = this.db
 				.prepare("SELECT sync_delete_from_server FROM accounts WHERE id = ?")
 				.get(this.accountId) as { sync_delete_from_server: number } | undefined;
@@ -418,9 +419,16 @@ export class ImapSync {
 	}
 
 	/**
-	 * Syncs messages from a specific folder.
-	 * Fetches new messages (incremental via UID), updates flags on existing messages,
-	 * and extracts attachments.
+	 * Syncs messages from a specific folder using an interleaved fetch+delete design.
+	 *
+	 * Phase 0: Acquire lock → get mailbox status, check UIDVALIDITY, update metadata
+	 *          → search for new UIDs → release lock.
+	 * Phase 1 (per-batch): For each batch of DELETE_BATCH_SIZE UIDs:
+	 *   a. acquire lock → fetchUidBatch() → release lock
+	 *   b. if vault mode: deleteFromServer() for this batch (acquires its own lock)
+	 * Phase 2: Acquire lock → sync flags → release lock.
+	 * Phase 3 (crash recovery): Delete any pending_archive=1, deleted_from_server=0
+	 *          messages not handled in Phase 1 (from previous incomplete cycles).
 	 */
 	async syncFolder(
 		folderPath: string,
@@ -452,71 +460,132 @@ export class ImapSync {
 			return result;
 		}
 
-		let lock: { release: () => void };
-		try {
-			lock = await withRetry(() => this.client.getMailboxLock(folderPath), `lock ${folderPath}`);
-		} catch (err) {
-			this.recordError(result, {
-				folderPath,
-				uid: null,
-				errorType: "folder",
-				message: `Could not lock mailbox ${folderPath}: ${formatImapError(err)} [STORK-E001]`,
-				retriable: true,
-			});
-			return result;
-		}
-
-		// Declared outside the try block so Phase 3 can reference it after lock release
-		let syncedUids: number[] = [];
-
-		try {
-			const mailboxStatus = this.client.mailbox;
-			if (!mailboxStatus) {
+		// Phase 0: acquire lock → get mailbox status, check UIDVALIDITY, update
+		// metadata → search for new UIDs → release lock.
+		let newUids: number[] = [];
+		{
+			let lock: { release: () => void };
+			try {
+				lock = await withRetry(() => this.client.getMailboxLock(folderPath), `lock ${folderPath}`);
+			} catch (err) {
 				this.recordError(result, {
 					folderPath,
 					uid: null,
 					errorType: "folder",
-					message: `Could not open mailbox: ${folderPath}`,
+					message: `Could not lock mailbox ${folderPath}: ${formatImapError(err)} [STORK-E001]`,
 					retriable: true,
 				});
 				return result;
 			}
 
-			// Check UIDVALIDITY — if it changed, the folder was recreated; full resync needed
-			if (folder.uid_validity && BigInt(folder.uid_validity) !== mailboxStatus.uidValidity) {
-				this.db.prepare("DELETE FROM messages WHERE folder_id = ?").run(folder.id);
+			try {
+				const mailboxStatus = this.client.mailbox;
+				if (!mailboxStatus) {
+					this.recordError(result, {
+						folderPath,
+						uid: null,
+						errorType: "folder",
+						message: `Could not open mailbox: ${folderPath}`,
+						retriable: true,
+					});
+					return result;
+				}
+
+				// Check UIDVALIDITY — if it changed, the folder was recreated; full resync needed
+				if (folder.uid_validity && BigInt(folder.uid_validity) !== mailboxStatus.uidValidity) {
+					this.db.prepare("DELETE FROM messages WHERE folder_id = ?").run(folder.id);
+					this.db
+						.prepare("DELETE FROM sync_state WHERE account_id = ? AND folder_id = ?")
+						.run(this.accountId, folder.id);
+				}
+
+				// Update folder metadata
 				this.db
-					.prepare("DELETE FROM sync_state WHERE account_id = ? AND folder_id = ?")
-					.run(this.accountId, folder.id);
-			}
+					.prepare(`
+					UPDATE folders SET
+						uid_validity = ?,
+						uid_next = ?,
+						message_count = ?,
+						last_synced_at = datetime('now')
+					WHERE id = ?
+				`)
+					.run(mailboxStatus.uidValidity, mailboxStatus.uidNext, mailboxStatus.exists, folder.id);
 
-			// Update folder metadata
-			this.db
-				.prepare(`
-				UPDATE folders SET
-					uid_validity = ?,
-					uid_next = ?,
-					message_count = ?,
-					last_synced_at = datetime('now')
-				WHERE id = ?
-			`)
-				.run(mailboxStatus.uidValidity, mailboxStatus.uidNext, mailboxStatus.exists, folder.id);
+				// Search for new UIDs (skip empty folders — IMAP SEARCH/FETCH on
+				// an empty mailbox returns "Invalid messageset")
+				if (mailboxStatus.exists > 0) {
+					const syncState = this.db
+						.prepare("SELECT last_uid FROM sync_state WHERE account_id = ? AND folder_id = ?")
+						.get(this.accountId, folder.id) as { last_uid: number } | undefined;
 
-			// Phase 1: Fetch new messages (skip empty folders — IMAP FETCH on
-			// an empty mailbox returns "Invalid messageset")
-			if (mailboxStatus.exists > 0) {
+					const lastUid = syncState?.last_uid ?? 0;
+					const range = lastUid > 0 ? `${lastUid + 1}:*` : "1:*";
+
+					try {
+						const searchResult = await this.client.search({ uid: range }, { uid: true });
+						// ImapFlow returns false when search finds nothing or fails
+						if (searchResult && Array.isArray(searchResult) && searchResult.length > 0) {
+							newUids = searchResult as number[];
+						}
+					} catch (err) {
+						if (signal?.aborted) throw err;
+						this.recordError(result, {
+							folderPath,
+							uid: null,
+							errorType: "folder",
+							message: `Search failed for ${folderPath}: ${formatImapError(err)} [STORK-E002]`,
+							retriable: true,
+						});
+					}
+				}
+			} finally {
 				try {
-					const fetchResult = await this.fetchNewMessages(
+					lock.release();
+				} catch {
+					// Lock release may fail if connection was force-closed during shutdown
+				}
+			}
+		}
+
+		// Phase 1 (per-batch loop): fetch+delete interleaved in batches of DELETE_BATCH_SIZE.
+		// Track a running label-application counter across all batches.
+		let runningLabelCount = 0;
+
+		for (let i = 0; i < newUids.length; i += DELETE_BATCH_SIZE) {
+			if (signal?.aborted) break;
+
+			const batchUids = newUids.slice(i, i + DELETE_BATCH_SIZE);
+
+			// Phase 1a: acquire lock → fetch this batch → release lock
+			let batchCount = 0;
+			{
+				let lock: { release: () => void };
+				try {
+					lock = await withRetry(
+						() => this.client.getMailboxLock(folderPath),
+						`lock ${folderPath}`,
+					);
+				} catch (err) {
+					if (signal?.aborted) break;
+					this.recordError(result, {
+						folderPath,
+						uid: null,
+						errorType: "folder",
+						message: `Could not lock mailbox ${folderPath} for fetch: ${formatImapError(err)} [STORK-E001]`,
+						retriable: true,
+					});
+					break;
+				}
+
+				try {
+					batchCount = await this.fetchUidBatch(
 						folder.id,
+						batchUids,
 						result,
 						signal,
 						deleteFromServerAfterSync,
 					);
-					result.newMessages = fetchResult.count;
-					syncedUids = fetchResult.syncedUids;
 				} catch (err) {
-					// Don't let a single folder FETCH failure kill the entire sync —
-					// record the error and continue to the next folder
 					if (signal?.aborted) throw err;
 					this.recordError(result, {
 						folderPath,
@@ -525,28 +594,77 @@ export class ImapSync {
 						message: `Fetch failed for ${folderPath}: ${formatImapError(err)} [STORK-E002]`,
 						retriable: true,
 					});
+				} finally {
+					try {
+						lock.release();
+					} catch {
+						// Lock release may fail if connection was force-closed during shutdown
+					}
 				}
 			}
 
-			// Phase 2: Sync flags on existing messages (skip if aborted)
-			if (!signal?.aborted) {
-				const flagCount = await this.syncFlags(folder.id, result, signal);
-				result.updatedFlags = flagCount;
+			result.newMessages += batchCount;
+			runningLabelCount += batchCount;
+
+			// Apply labels periodically across batches so messages become queryable
+			// by label before the entire folder finishes syncing
+			if (runningLabelCount >= this.subBatchLabelSize) {
+				this.applyFolderLabelsToMessages();
+				runningLabelCount = 0;
 			}
-		} finally {
-			try {
-				lock?.release();
-			} catch {
-				// Lock release may fail if connection was force-closed during shutdown
+
+			// Phase 1b: if vault mode, delete this batch from the server.
+			// deleteFromServer() acquires its own lock per batch internally.
+			if (deleteFromServerAfterSync && !signal?.aborted) {
+				try {
+					const deleted = await this.deleteFromServer(folderPath, batchUids);
+					result.deletedFromServer += deleted;
+				} catch (err) {
+					if (signal?.aborted) throw err;
+					this.recordError(result, {
+						folderPath,
+						uid: null,
+						errorType: "folder",
+						message: `Failed to delete synced messages from server: ${formatImapError(err)} [STORK-E005]`,
+						retriable: true,
+					});
+				}
 			}
 		}
 
-		// Phase 3: Delete messages from IMAP server (archive mode).
-		// Must run AFTER releasing the fetch lock to avoid lock re-entrancy with ImapFlow.
-		// Queries the DB for pending_archive=1 messages rather than using the in-memory
-		// syncedUids list — this makes deletion crash-safe: if the process is killed
-		// after Phase 1 but before Phase 3, the next sync cycle picks up the pending
-		// deletions via this query.
+		// Phase 2: sync flags on existing messages (skip if aborted).
+		// Acquires and releases its own lock internally.
+		if (!signal?.aborted) {
+			let lock: { release: () => void } | null = null;
+			try {
+				lock = await withRetry(
+					() => this.client.getMailboxLock(folderPath),
+					`lock ${folderPath} for flags`,
+				);
+				const flagCount = await this.syncFlags(folder.id, result, signal);
+				result.updatedFlags = flagCount;
+			} catch (err) {
+				if (signal?.aborted) throw err;
+				this.recordError(result, {
+					folderPath,
+					uid: null,
+					errorType: "flags",
+					message: `Could not acquire lock for flag sync on ${folderPath}: ${formatImapError(err)} [STORK-E003]`,
+					retriable: true,
+				});
+			} finally {
+				try {
+					lock?.release();
+				} catch {
+					// Lock release may fail if connection was force-closed during shutdown
+				}
+			}
+		}
+
+		// Phase 3 (crash recovery): delete any pending_archive=1, deleted_from_server=0
+		// messages not already handled in Phase 1. These are from previous incomplete
+		// cycles where the process was killed after fetch but before delete.
+		// Only runs in vault mode and when not aborted.
 		if (deleteFromServerAfterSync && !signal?.aborted) {
 			try {
 				const pendingRows = this.db
@@ -554,10 +672,16 @@ export class ImapSync {
 						"SELECT uid FROM messages WHERE folder_id = ? AND pending_archive = 1 AND deleted_from_server = 0",
 					)
 					.all(folder.id) as { uid: number }[];
-				const pendingUids = pendingRows.map((r) => r.uid);
-				if (pendingUids.length > 0) {
-					const deleted = await this.deleteFromServer(folderPath, pendingUids);
-					result.deletedFromServer = deleted;
+
+				// Filter out UIDs already processed in Phase 1 (avoid double-delete)
+				const phase1UidSet = new Set(newUids);
+				const crashRecoveryUids = pendingRows
+					.map((r) => r.uid)
+					.filter((uid) => !phase1UidSet.has(uid));
+
+				if (crashRecoveryUids.length > 0) {
+					const deleted = await this.deleteFromServer(folderPath, crashRecoveryUids);
+					result.deletedFromServer += deleted;
 				}
 			} catch (err) {
 				if (signal?.aborted) throw err;
@@ -565,7 +689,7 @@ export class ImapSync {
 					folderPath,
 					uid: null,
 					errorType: "folder",
-					message: `Failed to delete synced messages from server: ${formatImapError(err)} [STORK-E005]`,
+					message: `Failed to delete crash-recovery messages from server: ${formatImapError(err)} [STORK-E005]`,
 					retriable: true,
 				});
 			}
@@ -575,24 +699,31 @@ export class ImapSync {
 	}
 
 	/**
-	 * Fetches messages newer than the last synced UID, parses MIME,
-	 * stores messages, and extracts attachments.
+	 * Fetches a specific list of UIDs, parses MIME, stores messages, and extracts attachments.
 	 *
-	 * Returns the count of processed messages and the UIDs that were
-	 * successfully stored (used by archive mode to delete from server).
+	 * Takes an explicit list of UIDs to fetch (used by the interleaved fetch+delete loop
+	 * in syncFolder). Updates last_uid in sync_state after processing the batch.
+	 *
+	 * In vault mode, marks each newly-stored message as pending_archive=1 so that
+	 * a crash between fetch and delete is recoverable — the next sync cycle picks
+	 * up pending_archive=1 records and retries the deletion (Phase 3 crash recovery).
+	 *
+	 * Returns the count of new messages stored.
 	 */
-	private async fetchNewMessages(
+	private async fetchUidBatch(
 		folderId: number,
+		uids: number[],
 		result: SyncResult,
 		signal?: AbortSignal,
-		archiveMode = false,
-	): Promise<{ count: number; syncedUids: number[] }> {
+		vaultMode = false,
+	): Promise<number> {
+		if (uids.length === 0) return 0;
+
 		const syncState = this.db
 			.prepare("SELECT last_uid FROM sync_state WHERE account_id = ? AND folder_id = ?")
 			.get(this.accountId, folderId) as { last_uid: number } | undefined;
 
 		const lastUid = syncState?.last_uid ?? 0;
-		const range = lastUid > 0 ? `${lastUid + 1}:*` : "1:*";
 
 		const insertMessage = this.db.prepare(`
 			INSERT OR IGNORE INTO messages (
@@ -609,11 +740,10 @@ export class ImapSync {
 
 		let maxUid = lastUid;
 		let count = 0;
-		const syncedUids: number[] = [];
 
 		try {
 			for await (const message of this.client.fetch(
-				range,
+				uids,
 				{
 					uid: true,
 					envelope: true,
@@ -708,24 +838,17 @@ export class ImapSync {
 
 					if (message.uid > maxUid) maxUid = message.uid;
 
-					// Mark message as pending server deletion for crash-safe archive mode.
-					// This must be set BEFORE Phase 3 runs so that a crash between Phase 1
-					// and Phase 3 is recoverable — the next sync will find pending_archive=1
-					// and retry the deletion.
-					if (archiveMode && dbResult.changes > 0) {
+					// Mark message as pending server deletion for crash-safe vault mode.
+					// This must be set BEFORE Phase 1b (deleteFromServer) runs so that a
+					// crash between fetch and delete is recoverable — the next sync cycle's
+					// Phase 3 will find pending_archive=1 and retry the deletion.
+					if (vaultMode && dbResult.changes > 0) {
 						this.db
 							.prepare("UPDATE messages SET pending_archive = 1 WHERE folder_id = ? AND uid = ?")
 							.run(folderId, message.uid);
 					}
 
 					count++;
-					syncedUids.push(message.uid);
-
-					// Apply labels periodically within large folders so messages become
-					// queryable by label before the entire folder finishes syncing
-					if (count % this.subBatchLabelSize === 0) {
-						this.applyFolderLabelsToMessages();
-					}
 				} catch (err) {
 					this.recordError(result, {
 						folderPath: result.folder,
@@ -744,7 +867,7 @@ export class ImapSync {
 			}
 		}
 
-		// Update sync state
+		// Update sync state to the max UID seen in this batch
 		if (maxUid > lastUid) {
 			this.db
 				.prepare(`
@@ -757,7 +880,7 @@ export class ImapSync {
 				.run(this.accountId, folderId, maxUid);
 		}
 
-		return { count, syncedUids };
+		return count;
 	}
 
 	/**
