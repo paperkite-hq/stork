@@ -23,7 +23,7 @@ export function accountRoutes(
 		const accounts = getDb()
 			.prepare(
 				`SELECT id, name, email, ingest_connector_type, send_connector_type,
-					imap_host, smtp_host, default_view, created_at
+					imap_host, smtp_host, default_view, sync_delete_from_server, created_at
 				FROM accounts ORDER BY name`,
 			)
 			.all();

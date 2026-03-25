@@ -47,6 +47,12 @@ vi.mock("../api", () => ({
 			addLabels: vi.fn().mockResolvedValue({ ok: true }),
 			removeLabel: vi.fn().mockResolvedValue({ ok: true }),
 		},
+		inbox: {
+			unified: {
+				list: vi.fn().mockResolvedValue([]),
+				count: vi.fn().mockResolvedValue({ total: 0, unread: 0 }),
+			},
+		},
 		allMessages: {
 			list: vi.fn().mockResolvedValue([]),
 			count: vi.fn().mockResolvedValue({ total: 0, unread: 0 }),

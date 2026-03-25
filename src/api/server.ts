@@ -9,6 +9,7 @@ import { accountRoutes } from "./routes/accounts.js";
 import { attachmentRoutes } from "./routes/attachments.js";
 import { draftRoutes } from "./routes/drafts.js";
 import { encryptionRoutes } from "./routes/encryption.js";
+import { inboxRoutes } from "./routes/inbox.js";
 import { labelRoutes } from "./routes/labels.js";
 import { messageRoutes } from "./routes/messages.js";
 import { searchRoutes } from "./routes/search.js";
@@ -92,6 +93,7 @@ export function createApp(context: ContainerContext): { app: Hono } {
 	}
 
 	api.route("/accounts", accountRoutes(getDb, getScheduler));
+	api.route("/inbox", inboxRoutes(getDb));
 	api.route("/messages", messageRoutes(getDb));
 	api.route("/labels", labelRoutes(getDb));
 	api.route("/attachments", attachmentRoutes(getDb));
