@@ -209,7 +209,7 @@ Content-Type: application/json
 
 **Required fields**: `name`, `email`, `imap_host`, `imap_user`, `imap_pass`
 
-**Optional fields**: `imap_port` (default: 993), `imap_tls` (default: 1), `smtp_host`, `smtp_port` (default: 587), `smtp_tls` (default: 1), `smtp_user`, `smtp_pass`, `sync_delete_from_server` (default: 0, enables archive mode — auto-deletes messages from the IMAP server after syncing them locally)
+**Optional fields**: `imap_port` (default: 993), `imap_tls` (default: 1), `smtp_host`, `smtp_port` (default: 587), `smtp_tls` (default: 1), `smtp_user`, `smtp_pass`, `sync_delete_from_server` (default: 0, enables vault mode — auto-deletes messages from the IMAP server after syncing them locally)
 
 **Request body**:
 ```json
@@ -582,7 +582,7 @@ Moves a message to a different folder.
 DELETE /api/messages/:messageId
 ```
 
-Permanently deletes a message from local storage. Note: with **Archive mode** enabled, messages are automatically removed from the IMAP server during sync — this endpoint only manages local storage.
+Permanently deletes a message from local storage. Note: with **Vault mode** enabled, messages are automatically removed from the IMAP server during sync — this endpoint only manages local storage.
 
 **Response**: `200 OK` | `404 Not Found`
 

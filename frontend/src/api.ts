@@ -57,6 +57,7 @@ export interface Account {
 	imap_host: string;
 	smtp_host: string | null;
 	default_view?: string;
+	sync_delete_from_server: number;
 	created_at: string;
 }
 

@@ -4,15 +4,27 @@
 
 **Not by default.** The sync engine is read-only unless you opt in. Out of the box, Stork fetches messages and flags but never modifies anything on your IMAP server — safe to use against a production mailbox.
 
-If you want to use Stork as your permanent email archive, enable **Archive mode** in Settings > Accounts for that account. With this enabled, Stork automatically removes messages from the IMAP server after it has successfully synced them locally. Your IMAP provider becomes a transient delivery edge — mail arrives there, Stork picks it up and stores it encrypted locally, then clears it from the server. This setting is per-account and off by default.
+If you want to use Stork as your permanent email archive, enable **Vault mode** in Settings > Accounts for that account. With this enabled, Stork automatically removes messages from the IMAP server after it has successfully synced them locally. Your IMAP provider becomes a transient delivery edge — mail arrives there, Stork picks it up and stores it encrypted locally, then clears it from the server. This setting is per-account and off by default.
 
-## What happens to archive mode if Stork crashes mid-sync?
+## What happens if Stork crashes mid-sync in vault mode?
 
-Archive mode is crash-safe. When Stork fetches a new message, it immediately marks it `pending_archive` in the database before moving on. Phase 3 (the IMAP deletion step) queries this column rather than relying on an in-memory list.
+Vault mode is crash-safe. When Stork fetches a new message, it immediately marks it `pending_archive` in the database before moving on. Phase 3 (the IMAP deletion step) queries this column rather than relying on an in-memory list.
 
 If the process is killed after fetching messages (Phase 1) but before deleting them from the server (Phase 3), the pending flag persists in the database. On the next sync cycle, Stork finds the flagged messages and completes the deletion — no messages are left stranded on the server indefinitely.
 
 The flag is cleared to zero once `deleted_from_server` is confirmed.
+
+## What is mirror mode vs vault mode?
+
+Stork has two sync philosophies, selectable per-account in Settings:
+
+**Mirror mode (default):** Stork reads alongside your existing email provider. Both your provider and Stork hold copies of your messages. Your provider stays authoritative — use this while you're evaluating Stork, so you can still fall back to your provider's interface. Heads up: actions you take in Stork (deleting, labeling, archiving) are local only and do not sync back to your provider. Changes on your provider don't flow into Stork either.
+
+**Vault mode:** When you're ready to commit, enable vault mode. After each sync, Stork removes messages from the IMAP server — your provider becomes a transient delivery edge. Mail arrives, Stork picks it up, encrypts it on your hardware, and clears it from the server. Stork becomes your permanent, encrypted email home. Make sure your Stork database is backed up before enabling this.
+
+## What is an IMAP UID?
+
+A UID (Unique Identifier) is a stable number that an IMAP server assigns to each message in a mailbox. Unlike sequence numbers (which shift when messages are deleted), UIDs never change or get reused within a mailbox — IMAP servers guarantee this monotonically increasing property. Stork uses UIDs to track sync position: it remembers the highest UID it has seen and, on the next sync, only fetches messages with higher UIDs. This makes incremental sync efficient and correct even after messages are deleted from the server.
 
 ## Will full-text search scale to a large mailbox?
 
