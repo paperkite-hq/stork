@@ -9,7 +9,13 @@ import { SearchPanel } from "./components/SearchPanel";
 import { Settings } from "./components/Settings";
 import { SetupScreen } from "./components/SetupScreen";
 import { ShortcutsHelp } from "./components/ShortcutsHelp";
-import { ALL_MAIL_LABEL_ID, INBOX_LABEL_ID, Sidebar, UNREAD_LABEL_ID } from "./components/Sidebar";
+import {
+	ALL_MAIL_LABEL_ID,
+	INBOX_LABEL_ID,
+	Sidebar,
+	UNIFIED_INBOX_LABEL_ID,
+	UNREAD_LABEL_ID,
+} from "./components/Sidebar";
 import { ToastContainer, toast } from "./components/Toast";
 import { UnlockScreen } from "./components/UnlockScreen";
 import { Welcome } from "./components/Welcome";
@@ -110,6 +116,7 @@ export function App() {
 	const isAllMail = effectiveLabelId === ALL_MAIL_LABEL_ID;
 	const isUnread = effectiveLabelId === UNREAD_LABEL_ID;
 	const isInbox = effectiveLabelId === INBOX_LABEL_ID;
+	const isUnifiedInbox = effectiveLabelId === UNIFIED_INBOX_LABEL_ID;
 
 	// Find the real inbox label for the promoted Inbox view
 	const inboxLabel = labels?.find((l) => l.name.toLowerCase() === "inbox") ?? null;
@@ -128,6 +135,13 @@ export function App() {
 		[effectiveAccountId],
 	);
 
+	// Fetch unified inbox count for the "All Inboxes" sidebar badge (only with multiple accounts)
+	const hasMultipleAccounts = (accounts?.length ?? 0) > 1;
+	const { data: unifiedInboxCount, refetch: refetchUnifiedInboxCount } = useAsync(
+		() => (hasMultipleAccounts ? api.inbox.unified.count() : Promise.resolve(null)),
+		[hasMultipleAccounts],
+	);
+
 	// Message list fetching + pagination (extracted to hook)
 	const {
 		allMessages,
@@ -143,6 +157,7 @@ export function App() {
 		effectiveAccountId,
 		isAllMail,
 		isUnread,
+		isUnifiedInbox,
 	});
 
 	// Fetch selected message detail
@@ -180,16 +195,25 @@ export function App() {
 			refetchMessages();
 			refetchAllMailCount();
 			refetchUnreadCount();
-		}, [refetchLabels, refetchMessages, refetchAllMailCount, refetchUnreadCount]),
+			refetchUnifiedInboxCount();
+		}, [
+			refetchLabels,
+			refetchMessages,
+			refetchAllMailCount,
+			refetchUnreadCount,
+			refetchUnifiedInboxCount,
+		]),
 	);
 
-	const currentLabelName = isAllMail
-		? "All Mail"
-		: isUnread
-			? "Unread"
-			: isInbox
-				? "Inbox"
-				: (labels?.find((l) => l.id === effectiveLabelId)?.name ?? "Inbox");
+	const currentLabelName = isUnifiedInbox
+		? "All Inboxes"
+		: isAllMail
+			? "All Mail"
+			: isUnread
+				? "Unread"
+				: isInbox
+					? "Inbox"
+					: (labels?.find((l) => l.id === effectiveLabelId)?.name ?? "Inbox");
 
 	// Update document title with total unread count
 	const totalUnread = labels?.reduce((sum, l) => sum + (l.unread_count || 0), 0) ?? 0;
@@ -216,10 +240,17 @@ export function App() {
 			refetchLabels();
 			refetchAllMailCount();
 			refetchUnreadCount();
+			refetchUnifiedInboxCount();
 		};
 		window.addEventListener("focus", handler);
 		return () => window.removeEventListener("focus", handler);
-	}, [refetchMessages, refetchLabels, refetchAllMailCount, refetchUnreadCount]);
+	}, [
+		refetchMessages,
+		refetchLabels,
+		refetchAllMailCount,
+		refetchUnreadCount,
+		refetchUnifiedInboxCount,
+	]);
 
 	// Message selection
 	const handleSelectMessage = useCallback(
@@ -672,6 +703,7 @@ export function App() {
 						allMailCount={allMailCount}
 						unreadCount={unreadCount}
 						inboxLabel={inboxLabel}
+						unifiedInboxCount={unifiedInboxCount}
 					/>
 				</div>
 
@@ -740,14 +772,17 @@ export function App() {
 								onLoadMore={handleLoadMore}
 								loadingMore={loadingMore}
 								onToggleStar={handleToggleStar}
+								accounts={isUnifiedInbox ? (accounts ?? undefined) : undefined}
 								totalCount={
-									isAllMail
-										? allMailCount?.total
-										: isUnread
-											? unreadCount?.total
-											: isInbox
-												? inboxLabel?.message_count
-												: labels?.find((l) => l.id === effectiveLabelId)?.message_count
+									isUnifiedInbox
+										? unifiedInboxCount?.total
+										: isAllMail
+											? allMailCount?.total
+											: isUnread
+												? unreadCount?.total
+												: isInbox
+													? inboxLabel?.message_count
+													: labels?.find((l) => l.id === effectiveLabelId)?.message_count
 								}
 								selectedIds={bulk.selectedIds}
 								onToggleSelect={bulk.toggle}

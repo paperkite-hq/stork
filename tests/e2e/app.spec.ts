@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 test.describe("App layout and navigation", () => {
 	test("loads the app with sidebar and message list", async ({ page }) => {
 		await page.goto("/");
-		// Sidebar should show Stork branding
-		await expect(page.getByText("Stork")).toBeVisible();
+		// Sidebar should show Stork branding (target the brand span specifically)
+		await expect(page.locator(".text-stork-600").first()).toBeVisible();
 		// Folder list should show Inbox in the promoted sidebar section
 		await expect(page.getByRole("button", { name: /Inbox/ })).toBeVisible();
 		// Should show compose button (use role to avoid matching SVG <title>Compose</title>)

@@ -106,6 +106,8 @@ export interface MessageSummary {
 	size: number;
 	has_attachments: number;
 	preview: string | null;
+	/** Present only in unified inbox responses — identifies which account the message belongs to */
+	account_id?: number;
 }
 
 export interface Message extends MessageSummary {
@@ -353,6 +355,17 @@ export const api = {
 			if (opts?.limit) params.set("limit", String(opts.limit));
 			if (opts?.offset) params.set("offset", String(opts.offset));
 			return fetchJSON<MessageSummary[]>(`/labels/${labelId}/messages?${params}`);
+		},
+	},
+	inbox: {
+		unified: {
+			list: (opts?: { limit?: number; offset?: number }) => {
+				const params = new URLSearchParams();
+				if (opts?.limit) params.set("limit", String(opts.limit));
+				if (opts?.offset) params.set("offset", String(opts.offset));
+				return fetchJSON<MessageSummary[]>(`/inbox/unified?${params}`);
+			},
+			count: () => fetchJSON<{ total: number; unread: number }>("/inbox/unified/count"),
 		},
 	},
 	allMessages: {
