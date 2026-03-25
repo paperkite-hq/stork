@@ -47,4 +47,13 @@ describe("ShortcutsHelp", () => {
 		fireEvent.keyDown(dialog, { key: "Escape" });
 		expect(onClose).toHaveBeenCalledOnce();
 	});
+
+	it("does not call onClose when a non-Escape key is pressed", () => {
+		const onClose = vi.fn();
+		render(<ShortcutsHelp onClose={onClose} />);
+		const dialog = screen.getByRole("dialog");
+		fireEvent.keyDown(dialog, { key: "Enter" });
+		fireEvent.keyDown(dialog, { key: "j" });
+		expect(onClose).not.toHaveBeenCalled();
+	});
 });

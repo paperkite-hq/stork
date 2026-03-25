@@ -122,4 +122,16 @@ describe("SandboxedEmail", () => {
 		// The non-matching "Hello world" should remain unwrapped
 		expect(iframe.srcdoc).toContain("Hello world");
 	});
+
+	it("highlights a term at the start of a text node (empty leading part branch)", () => {
+		// When the matched term is at the very beginning of a text node,
+		// text.split(regex) produces ["", "Term", " rest"] — the first element is
+		// an empty string, exercising the `else if (part)` false branch in highlightHtmlTerms.
+		render(<SandboxedEmail html="<p>Invoice from Alice</p>" searchQuery="invoice" />);
+		const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
+		// "Invoice" should be wrapped in a mark tag
+		expect(iframe.srcdoc).toContain("<mark>");
+		// The text after the match should still be present
+		expect(iframe.srcdoc).toContain("from Alice");
+	});
 });
