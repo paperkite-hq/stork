@@ -206,6 +206,31 @@ export function AccountForm({
 				</div>
 			)}
 
+			{accountId === null && (
+				<div className="rounded-lg border-2 border-stork-300 dark:border-stork-700 bg-stork-50 dark:bg-stork-950 px-4 py-3 space-y-2">
+					<p className="text-sm font-bold text-stork-800 dark:text-stork-200">
+						⚡ Two minutes to understand how Stork thinks about email
+					</p>
+					<p className="text-xs text-stork-700 dark:text-stork-300">
+						Most email clients treat your mail provider (Gmail, Fastmail, etc.) as the permanent
+						home for your email. Stork{"'"}s philosophy is different:{" "}
+						<strong>your provider is just the delivery edge</strong>. Mail arrives there, Stork
+						picks it up and stores it encrypted on your own hardware, and — when you{"'"}re ready —
+						clears it from the provider.
+					</p>
+					<p className="text-xs text-stork-700 dark:text-stork-300">
+						<strong>Mirror mode (default):</strong> Stork reads alongside your provider. Both have
+						copies. Perfect for trying Stork — your provider stays your safety net. Heads up:
+						actions you take in Stork (delete, label, archive) stay local and don{"'"}t sync back.
+					</p>
+					<p className="text-xs text-stork-700 dark:text-stork-300">
+						<strong>Vault mode:</strong> Once you{"'"}re confident, flip the switch. Stork becomes
+						your permanent encrypted email home. Your provider is just a pipe — mail arrives, Stork
+						grabs it and erases it from the server. Back up your Stork database.
+					</p>
+				</div>
+			)}
+
 			{/* Basic info */}
 			<div className="grid grid-cols-2 gap-3">
 				<FormField
@@ -335,32 +360,33 @@ export function AccountForm({
 						className="rounded border-gray-300 dark:border-gray-600 mt-0.5 shrink-0"
 					/>
 					<span>
-						<span className="font-medium">Archive mode</span> — after syncing, remove messages from
-						your IMAP server so Stork becomes your permanent record
+						<span className="font-medium">Vault mode</span> — after syncing, remove messages from
+						your IMAP server so Stork becomes your permanent encrypted email home
 					</span>
 				</label>
 				{form.sync_delete_from_server === 1 ? (
 					<div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded px-3 py-2 space-y-1">
-						<p className="font-medium">Archive mode is on — Stork is your email record of truth.</p>
+						<p className="font-medium">
+							Vault mode is on — Stork is your permanent encrypted email home.
+						</p>
 						<p>
 							New messages are removed from your IMAP server after each sync. Your email provider is
-							the delivery edge; Stork holds the permanent archive. Make sure your Stork database is
-							backed up.
+							just the delivery pipe; Stork holds your mail encrypted on your own hardware. Make
+							sure your Stork database is backed up.
 						</p>
 					</div>
 				) : (
 					<div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-2 space-y-1">
-						<p className="font-medium">
-							Archive mode is off — read-only sync, good for trying Stork.
+						<p className="font-medium">Mirror mode is on — Stork reads alongside your provider.</p>
+						<p>
+							Your provider stays authoritative. Both your provider and Stork hold copies of your
+							messages. Actions you take in Stork (delete, label, archive) are local only and do not
+							replicate back to your mail provider. Changes made via your provider{"'"}s interface
+							do not flow into Stork either.
 						</p>
 						<p>
-							Messages stay on your IMAP server. Actions you take in Stork (delete, label, archive)
-							are local only and do not replicate back to your mail provider. Deletions and changes
-							made via your provider{"'"}s interface do not flow into Stork either.
-						</p>
-						<p>
-							When you{"'"}re confident Stork is right for you, enable archive mode to make it your
-							permanent record and free your provider from storing old mail.
+							When you{"'"}re confident Stork is right for you, enable vault mode to make it your
+							permanent encrypted home and free your provider from storing your mail.
 						</p>
 					</div>
 				)}
