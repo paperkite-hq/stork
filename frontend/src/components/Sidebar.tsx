@@ -56,6 +56,8 @@ export const ALL_MAIL_LABEL_ID = -1;
 export const UNREAD_LABEL_ID = -2;
 /** Sentinel label ID for the promoted "Inbox" virtual view */
 export const INBOX_LABEL_ID = -3;
+/** Sentinel label ID for the unified cross-account inbox view */
+export const UNIFIED_INBOX_LABEL_ID = -4;
 
 interface SidebarProps {
 	accounts: Account[];
@@ -77,6 +79,7 @@ interface SidebarProps {
 	allMailCount?: { total: number; unread: number } | null;
 	unreadCount?: { total: number } | null;
 	inboxLabel?: Label | null;
+	unifiedInboxCount?: { total: number; unread: number } | null;
 }
 
 /** Formats a duration in ms as "Xm Ys" or "Xs" */
@@ -199,6 +202,7 @@ export function Sidebar({
 	allMailCount,
 	unreadCount,
 	inboxLabel,
+	unifiedInboxCount,
 }: SidebarProps) {
 	const [contextMenu, setContextMenu] = useState<{
 		label: Label;
@@ -348,6 +352,33 @@ export function Sidebar({
 
 			{/* Navigation — promoted views + label list */}
 			<nav className="flex-1 overflow-y-auto px-2 py-3">
+				{/* All Inboxes — unified cross-account inbox, only shown with multiple accounts */}
+				{accounts.length > 1 && (
+					<>
+						<p className="px-3 pt-1 pb-1 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+							All Accounts
+						</p>
+						<button
+							type="button"
+							onClick={() => onSelectLabel(UNIFIED_INBOX_LABEL_ID)}
+							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+								selectedLabelId === UNIFIED_INBOX_LABEL_ID
+									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
+									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+							}`}
+						>
+							<InboxIcon className="w-4 h-4 flex-shrink-0" />
+							<span className="truncate">All Inboxes</span>
+							{unifiedInboxCount && unifiedInboxCount.unread > 0 && (
+								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
+									{unifiedInboxCount.unread}
+								</span>
+							)}
+						</button>
+						<div className="my-2 mx-3 border-t border-gray-200 dark:border-gray-700" />
+					</>
+				)}
+
 				{/* Promoted views: Inbox, Unread, All Mail — always at top */}
 				{labels.length > 0 && (
 					<>

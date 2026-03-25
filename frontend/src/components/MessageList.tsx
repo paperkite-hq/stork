@@ -1,5 +1,5 @@
 import { type RefObject, memo, useEffect, useRef } from "react";
-import type { Folder, MessageSummary } from "../api";
+import type { Account, Folder, MessageSummary } from "../api";
 import { isFlagged, isUnread } from "../utils";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { AlertCircleIcon, InboxEmptyIcon, PaperclipIcon, RefreshIcon, StarIcon } from "./Icons";
@@ -68,6 +68,8 @@ interface MessageListItemProps {
 	onToggleStar?: (id: number) => void;
 	onToggleSelect?: (id: number) => void;
 	selectedRef?: RefObject<HTMLButtonElement | null>;
+	/** Account email shown as a badge — passed when viewing unified inbox */
+	accountLabel?: string;
 }
 
 /** Memoized message row — skips re-render when props haven't changed,
@@ -83,6 +85,7 @@ const MessageListItem = memo(function MessageListItem({
 	onToggleStar,
 	onToggleSelect,
 	selectedRef,
+	accountLabel,
 }: MessageListItemProps) {
 	const unread = isUnread(msg.flags);
 	const starred = isFlagged(msg.flags);
@@ -220,8 +223,18 @@ const MessageListItem = memo(function MessageListItem({
 								<PaperclipIcon className="w-3 h-3 text-gray-400 flex-shrink-0" />
 							)}
 						</div>
-						{msg.preview && (
+						{accountLabel && (
+							<div className="text-xs text-stork-500 dark:text-stork-400 truncate mt-0.5">
+								{accountLabel}
+							</div>
+						)}
+						{!accountLabel && msg.preview && (
 							<div className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">
+								{msg.preview.replace(/\s+/g, " ").trim()}
+							</div>
+						)}
+						{accountLabel && msg.preview && (
+							<div className="text-xs text-gray-400 dark:text-gray-500 truncate">
 								{msg.preview.replace(/\s+/g, " ").trim()}
 							</div>
 						)}
@@ -246,6 +259,8 @@ interface MessageListProps {
 	loadingMore?: boolean;
 	totalCount?: number;
 	onToggleStar?: (id: number) => void;
+	/** Pass accounts to show per-account labels in unified inbox view */
+	accounts?: Account[];
 	// Bulk selection
 	selectedIds?: Set<number>;
 	onToggleSelect?: (id: number) => void;
@@ -272,6 +287,7 @@ export function MessageList({
 	onLoadMore,
 	loadingMore,
 	onToggleStar,
+	accounts,
 	selectedIds,
 	onToggleSelect,
 	onSelectAll,
@@ -395,21 +411,26 @@ export function MessageList({
 						<p>No messages in this folder</p>
 					</div>
 				)}
-				{messages.map((msg, idx) => (
-					<MessageListItem
-						key={msg.id}
-						msg={msg}
-						idx={idx}
-						active={msg.id === selectedId}
-						focused={msg.id === focusedId}
-						bulkSelected={selectedIds?.has(msg.id) ?? false}
-						hasBulk={hasBulk}
-						onSelect={onSelect}
-						onToggleStar={onToggleStar}
-						onToggleSelect={onToggleSelect}
-						selectedRef={msg.id === selectedId ? selectedRef : undefined}
-					/>
-				))}
+				{messages.map((msg, idx) => {
+					const account =
+						accounts && msg.account_id ? accounts.find((a) => a.id === msg.account_id) : undefined;
+					return (
+						<MessageListItem
+							key={msg.id}
+							msg={msg}
+							idx={idx}
+							active={msg.id === selectedId}
+							focused={msg.id === focusedId}
+							bulkSelected={selectedIds?.has(msg.id) ?? false}
+							hasBulk={hasBulk}
+							onSelect={onSelect}
+							onToggleStar={onToggleStar}
+							onToggleSelect={onToggleSelect}
+							selectedRef={msg.id === selectedId ? selectedRef : undefined}
+							accountLabel={account?.email}
+						/>
+					);
+				})}
 				{hasMore && (
 					<div className="p-4 text-center">
 						<button
