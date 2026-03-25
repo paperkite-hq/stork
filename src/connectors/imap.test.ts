@@ -239,4 +239,44 @@ describe("ImapIngestConnector", () => {
 
 		await connector.disconnect();
 	});
+
+	test("deleteMessages with empty array is a no-op", async () => {
+		const connector = createConnector();
+		await connector.connect();
+		// Should return immediately without error
+		await connector.deleteMessages("INBOX", []);
+		await connector.disconnect();
+	});
+
+	test("deleteMessages removes messages from folder", async () => {
+		const connector = createConnector();
+		await connector.connect();
+
+		// Verify 3 messages initially
+		const before: number[] = [];
+		for await (const msg of connector.fetchMessages("INBOX", 0)) {
+			before.push(msg.uid);
+		}
+		expect(before).toHaveLength(3);
+
+		// Delete UID 1
+		await connector.deleteMessages("INBOX", [1]);
+
+		// Verify UID 1 is gone
+		const after: number[] = [];
+		for await (const msg of connector.fetchMessages("INBOX", 0)) {
+			after.push(msg.uid);
+		}
+		expect(after).not.toContain(1);
+		expect(after).toHaveLength(2);
+
+		await connector.disconnect();
+	});
+
+	test("forceClose with connected socket suppresses errors", async () => {
+		const connector = createConnector();
+		await connector.connect();
+		// forceClose on a live connection should not throw
+		connector.forceClose();
+	});
 });
