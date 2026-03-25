@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Unified inbox** — when two or more accounts are configured, an "All Accounts" section appears at the top of the sidebar with an "All Inboxes" view showing messages from all accounts' inboxes combined, sorted by date. Each message in the unified view shows the account email it belongs to. Unread count badge aggregates across all accounts.
+
 ## v0.4.0 (2026-03-25)
 
 Vault mode — the core sync philosophy made real.
