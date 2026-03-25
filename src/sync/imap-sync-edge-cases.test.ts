@@ -508,6 +508,82 @@ describe("IMAP sync edge cases", () => {
 		await sync2.disconnect();
 	});
 
+	test("flag sync uses UID FETCH not sequence-number FETCH (large UIDs)", async () => {
+		// Regression test for: syncFlags was calling client.fetch(rangeStr, query) without
+		// the third argument { uid: true }, so imapflow issued a sequence-number FETCH
+		// instead of a UID FETCH. On folders where UIDs >> sequence numbers (e.g., UID 1000
+		// in a 2-message folder), the server would return nothing or BAD Invalid messageset.
+		const largeUidMailboxes: MockMailbox[] = [
+			{
+				path: "INBOX",
+				name: "Inbox",
+				delimiter: "/",
+				flags: ["\\HasNoChildren"],
+				specialUse: "\\Inbox",
+				uidValidity: 1,
+				uidNext: 2001,
+				messages: [
+					{
+						uid: 1000,
+						flags: ["\\Seen"],
+						internalDate: "2026-01-15T10:00:00Z",
+						source: buildRawEmail({
+							from: "alice@example.com",
+							to: "test@example.com",
+							subject: "Large UID message 1",
+							body: "First.",
+							messageId: "<large1@example.com>",
+							date: "Wed, 15 Jan 2026 10:00:00 +0000",
+						}),
+					},
+					{
+						uid: 2000,
+						flags: [],
+						internalDate: "2026-01-16T14:30:00Z",
+						source: buildRawEmail({
+							from: "bob@example.com",
+							to: "test@example.com",
+							subject: "Large UID message 2",
+							body: "Second.",
+							messageId: "<large2@example.com>",
+							date: "Thu, 16 Jan 2026 14:30:00 +0000",
+						}),
+					},
+				],
+			},
+		];
+		await setupServer(largeUidMailboxes);
+
+		// First sync — downloads both messages with large UIDs
+		const sync1 = makeSync();
+		await sync1.connect();
+		await sync1.syncAll();
+		await sync1.disconnect();
+
+		// Change flags on the server for UID 1000
+		server.updateMailbox("INBOX", (mb) => {
+			const msg = mb.messages.find((m) => m.uid === 1000);
+			if (msg) msg.flags = ["\\Seen", "\\Flagged"];
+		});
+
+		// Second sync — syncFlags must use UID FETCH (not sequence-number FETCH).
+		// With sequence-number FETCH, seqnum=1000 doesn't exist in a 2-message folder,
+		// so the flag change would be silently missed. With UID FETCH, it's found.
+		const sync2 = makeSync();
+		await sync2.connect();
+		const result = await sync2.syncAll();
+		await sync2.disconnect();
+
+		const flagsAfter = db
+			.prepare("SELECT flags FROM messages WHERE account_id = ? AND uid = 1000")
+			.get(accountId) as { flags: string } | undefined;
+
+		expect(flagsAfter).toBeTruthy();
+		expect(flagsAfter?.flags).toContain("\\Flagged");
+		// Flag sync errors (STORK-E003) would be produced if sequence-number FETCH failed
+		expect(result.totalErrors).toBe(0);
+	});
+
 	test("disconnect() does not throw when the server closes the connection abruptly", async () => {
 		await setupServer(makeMailboxes());
 		const sync = makeSync();
