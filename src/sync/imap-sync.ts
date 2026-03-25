@@ -794,10 +794,14 @@ export class ImapSync {
 			const rangeStr = batch.join(",");
 
 			try {
-				for await (const msg of this.client.fetch(rangeStr, {
-					uid: true,
-					flags: true,
-				})) {
+				for await (const msg of this.client.fetch(
+					rangeStr,
+					{
+						uid: true,
+						flags: true,
+					},
+					{ uid: true },
+				)) {
 					const newFlags = Array.from(msg.flags ?? new Set()).join(",");
 					const oldFlags = localFlagMap.get(msg.uid);
 					if (oldFlags !== newFlags) {
