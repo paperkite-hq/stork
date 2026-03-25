@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.4.0 (2026-03-25)
+
+Vault mode — the core sync philosophy made real.
+
+- **Mirror mode & Vault mode** — two sync modes reflecting where you are in your journey. Mirror mode (default) keeps your provider as a backup while you evaluate; Vault mode makes Stork your permanent encrypted home and treats your provider as just the delivery pipe. An onboarding callout explains the choice before you connect your first account; the sidebar shows an ambient reminder while any account is still in mirror mode.
+- **Interleaved fetch + delete** — in vault mode, Stork deletes from the server every 100 messages during the initial sync instead of one big sweep at the end. A large mailbox starts clearing gradually from the first batch.
+- **Crash-safe vault mode** — pending deletions are tracked in the database so an interrupted sync picks up where it left off on restart, with no messages left stranded.
+- **Desktop notifications** — browser notifications on new mail arrival (respects browser permission).
+- **Per-account default view** — configure each account to open on Inbox, Unread, or All Mail.
+- **Inline search results** — search results appear directly in the message list panel; prev/next navigation cycles through matches; search terms are highlighted in the message detail pane.
+- **Trusted senders panel** — manage per-sender remote image permissions from the Settings UI.
+- **Performance** — cached unread and all-message counts eliminate full-table scans on large mailboxes; additional SQLite pragmas for databases over 1 GB.
+- **Pluggable connectors** — IMAP, SMTP, Cloudflare Email Workers, and AWS SES connectors all wired in via a common `IngestConnector`/`SendConnector` interface; vault mode generalizes cleanly to any connector that implements `deleteMessages()`.
+- Bug fixes: UID FETCH for folders with very large UIDs, batch server deletions for large vault-mode mailboxes, restored security hardening flags in all documentation docker-compose snippets.
+
 ## v0.3.0 (2026-03-23)
 
 First stable release. Promotes v0.3.0-alpha with additional bug fixes:
