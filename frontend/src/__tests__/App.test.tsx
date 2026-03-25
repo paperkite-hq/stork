@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { Account, Label, Message, MessageSummary } from "../api";
+import { useSyncPoller } from "../hooks";
 
 // ------------------------------------------------------------------
 // Mocks
@@ -2343,5 +2344,274 @@ describe("App — History navigation with searchActive", () => {
 		// Wait a tick and verify search panel remains closed
 		await new Promise((r) => setTimeout(r, 50));
 		expect(screen.queryByPlaceholderText("Search messages…")).not.toBeInTheDocument();
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: Search result prev/next navigation (App.tsx lines 244-254)
+// ------------------------------------------------------------------
+
+describe("App — Search prev/next navigation", () => {
+	// Helper: set up 3 search results and open the middle one (index 1)
+	async function setupSearchNavigation() {
+		const msg1 = makeMessage({ id: 101, subject: "Result One", text_body: "body one" });
+		const msg2 = makeMessage({ id: 102, subject: "Result Two", text_body: "body two" });
+		const msg3 = makeMessage({ id: 103, subject: "Result Three", text_body: "body three" });
+
+		// messages.get will be called with whichever id is selected
+		(
+			api as unknown as { messages: { get: ReturnType<typeof vi.fn> } }
+		).messages.get.mockImplementation((id: number) => {
+			if (id === 101) return Promise.resolve(msg1);
+			if (id === 102) return Promise.resolve(msg2);
+			if (id === 103) return Promise.resolve(msg3);
+			return Promise.resolve(null);
+		});
+		(
+			api as unknown as { messages: { getThread: ReturnType<typeof vi.fn> } }
+		).messages.getThread.mockImplementation((id: number) => {
+			if (id === 101) return Promise.resolve([msg1]);
+			if (id === 102) return Promise.resolve([msg2]);
+			if (id === 103) return Promise.resolve([msg3]);
+			return Promise.resolve([]);
+		});
+
+		const makeResult = (id: number, subject: string) => ({
+			id,
+			subject,
+			from_address: "sender@test.com",
+			from_name: "Sender",
+			date: new Date().toISOString(),
+			snippet: `body for ${subject}`,
+		});
+		mockApi.search.mockResolvedValue([
+			makeResult(101, "Result One"),
+			makeResult(102, "Result Two"),
+			makeResult(103, "Result Three"),
+		]);
+
+		setupWithAccounts([makeAccount()], [makeLabel()]);
+		render(<App />);
+		await waitForAppLayout();
+
+		// Open search
+		fireEvent.keyDown(window, { key: "/" });
+		await waitFor(() =>
+			expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument(),
+		);
+
+		// Type to trigger search
+		await userEvent.type(screen.getByPlaceholderText("Search messages…"), "result");
+
+		// Wait for results
+		await waitFor(
+			() =>
+				expect(screen.getByRole("button", { name: /Result Two from Sender/ })).toBeInTheDocument(),
+			{ timeout: 2000 },
+		);
+
+		// Open the 2nd result (middle — has both prev and next)
+		await userEvent.click(screen.getByRole("button", { name: /Result Two from Sender/ }));
+
+		// Wait for message detail with search navigation
+		await waitFor(() => expect(screen.getByText("← Search results")).toBeInTheDocument(), {
+			timeout: 3000,
+		});
+	}
+
+	it("shows prev/next navigation buttons when viewing a search result", async () => {
+		await setupSearchNavigation();
+
+		// Both prev and next buttons should be present
+		expect(screen.getByTitle("Previous search result")).toBeInTheDocument();
+		expect(screen.getByTitle("Next search result")).toBeInTheDocument();
+
+		// Shows position indicator (2 of 3)
+		expect(screen.getByText("2/3")).toBeInTheDocument();
+	});
+
+	it("clicking prev navigates to the previous search result", async () => {
+		await setupSearchNavigation();
+
+		// Click prev — should navigate to Result One (id=101)
+		await userEvent.click(screen.getByTitle("Previous search result"));
+
+		// Message detail should now show Result One
+		await waitFor(
+			() =>
+				expect(
+					(api as unknown as { messages: { get: ReturnType<typeof vi.fn> } }).messages.get,
+				).toHaveBeenCalledWith(101),
+			{ timeout: 2000 },
+		);
+
+		// Now at first result — prev button should be disabled (undefined prop)
+		await waitFor(() => {
+			const prevBtn = screen.getByTitle("Previous search result");
+			expect(prevBtn).toBeDisabled();
+		});
+	});
+
+	it("clicking next navigates to the next search result", async () => {
+		await setupSearchNavigation();
+
+		// Click next — should navigate to Result Three (id=103)
+		await userEvent.click(screen.getByTitle("Next search result"));
+
+		// Message detail should now show Result Three
+		await waitFor(
+			() =>
+				expect(
+					(api as unknown as { messages: { get: ReturnType<typeof vi.fn> } }).messages.get,
+				).toHaveBeenCalledWith(103),
+			{ timeout: 2000 },
+		);
+
+		// Now at last result — next button should be disabled (undefined prop)
+		await waitFor(() => {
+			const nextBtn = screen.getByTitle("Next search result");
+			expect(nextBtn).toBeDisabled();
+		});
+	});
+
+	it("prev button is disabled for the first search result", async () => {
+		const msg = makeMessage({ id: 201, subject: "Only Result", text_body: "body" });
+		(
+			api as unknown as { messages: { get: ReturnType<typeof vi.fn> } }
+		).messages.get.mockResolvedValue(msg);
+		(
+			api as unknown as { messages: { getThread: ReturnType<typeof vi.fn> } }
+		).messages.getThread.mockResolvedValue([msg]);
+		mockApi.search.mockResolvedValue([
+			{
+				id: 201,
+				subject: "Only Result",
+				from_address: "a@b.com",
+				from_name: "A",
+				date: new Date().toISOString(),
+				snippet: "body",
+			},
+		]);
+		setupWithAccounts([makeAccount()], [makeLabel()]);
+		render(<App />);
+		await waitForAppLayout();
+
+		fireEvent.keyDown(window, { key: "/" });
+		await waitFor(() =>
+			expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument(),
+		);
+		await userEvent.type(screen.getByPlaceholderText("Search messages…"), "only");
+		await waitFor(
+			() => expect(screen.getByRole("button", { name: /Only Result from A/ })).toBeInTheDocument(),
+			{ timeout: 2000 },
+		);
+		await userEvent.click(screen.getByRole("button", { name: /Only Result from A/ }));
+		await waitFor(() => expect(screen.getByText("← Search results")).toBeInTheDocument(), {
+			timeout: 3000,
+		});
+
+		// Only one result — prev and next should both be disabled
+		const prevBtn = screen.getByTitle("Previous search result");
+		const nextBtn = screen.getByTitle("Next search result");
+		expect(prevBtn).toBeDisabled();
+		expect(nextBtn).toBeDisabled();
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: api.status() error fallback (App.tsx line 41)
+// ------------------------------------------------------------------
+
+describe("App — api.status error fallback", () => {
+	it("falls back to unlocked state when api.status() rejects (server error path)", async () => {
+		const { api: mockApiModule } = await import("../api");
+		(mockApiModule.status as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Connection refused"),
+		);
+		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.labels.list.mockResolvedValue([makeLabel()]);
+		mockApi.labels.messages.mockResolvedValue([]);
+		mockApi.folders.list.mockResolvedValue([]);
+		render(<App />);
+		// Should proceed to the main app layout despite api.status() throwing
+		await waitForAppLayout();
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: per-account default_view "label:<id>" parsing (App.tsx lines 101-102)
+// ------------------------------------------------------------------
+
+describe("App — per-account default_view label: parsing", () => {
+	it("selects the specified label when default_view is 'label:<id>'", async () => {
+		const targetLabel = makeLabel({ id: 7, name: "work", unread_count: 3, message_count: 5 });
+		const accountWithLabelView = makeAccount({ default_view: "label:7" });
+		mockApi.accounts.list.mockResolvedValue([accountWithLabelView]);
+		mockApi.labels.list.mockResolvedValue([makeLabel(), targetLabel]);
+		mockApi.labels.messages.mockResolvedValue([]);
+		mockApi.folders.list.mockResolvedValue([]);
+		render(<App />);
+		await waitForAppLayout();
+		// The "work" label should be auto-selected — messages.list would be called for label 7
+		await waitFor(() => expect(mockApi.labels.messages).toHaveBeenCalledWith(7, expect.anything()));
+	});
+
+	it("falls back to inbox when default_view is 'label:<nan>'", async () => {
+		const accountWithBadView = makeAccount({ default_view: "label:notanumber" });
+		const inboxLabel = makeLabel({ id: 1, name: "inbox" });
+		mockApi.accounts.list.mockResolvedValue([accountWithBadView]);
+		mockApi.labels.list.mockResolvedValue([inboxLabel]);
+		mockApi.labels.messages.mockResolvedValue([]);
+		mockApi.folders.list.mockResolvedValue([]);
+		render(<App />);
+		await waitForAppLayout();
+		// Should fall back to inbox (label id 1 = INBOX_LABEL_ID)
+		await waitFor(() => expect(mockApi.labels.messages).toHaveBeenCalledWith(1, expect.anything()));
+	});
+});
+
+// ------------------------------------------------------------------
+// Tests: useSyncPoller onSyncComplete callback fires refetches (App.tsx lines 179-182)
+// ------------------------------------------------------------------
+
+describe("App — useSyncPoller onSyncComplete callback", () => {
+	it("fires refetchLabels, refetchMessages, refetchAllMailCount, refetchUnreadCount on sync complete", async () => {
+		// Capture the LATEST callback so we get the version with effectiveAccountId already set.
+		// useSyncPoller is called on every render; we track the most recent invocation.
+		let latestCallback: (() => void) | undefined;
+		vi.mocked(useSyncPoller).mockImplementation((onSyncComplete) => {
+			latestCallback = onSyncComplete;
+			return { syncing: false, lastError: null, syncStatus: null, progress: null };
+		});
+
+		try {
+			setupWithAccounts([makeAccount()], [makeLabel()]);
+			render(<App />);
+			await waitForAppLayout();
+
+			// Ensure initial labels load completes (effectiveAccountId is now set)
+			await waitFor(() => expect(mockApi.labels.list.mock.calls.length).toBeGreaterThanOrEqual(1));
+			const labelsCountBefore = mockApi.labels.list.mock.calls.length;
+
+			// Fire the latest callback (which has fresh refetchLabels with effectiveAccountId=1)
+			expect(latestCallback).toBeDefined();
+			await act(async () => {
+				latestCallback?.();
+			});
+
+			// refetchLabels should trigger an additional labels.list call
+			await waitFor(
+				() => expect(mockApi.labels.list.mock.calls.length).toBeGreaterThan(labelsCountBefore),
+				{ timeout: 3000 },
+			);
+		} finally {
+			// Restore original mock so subsequent tests see default behavior
+			vi.mocked(useSyncPoller).mockReturnValue({
+				syncing: false,
+				lastError: null,
+				syncStatus: null,
+				progress: null,
+			});
+		}
 	});
 });
