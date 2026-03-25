@@ -1,7 +1,8 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import type { Hono } from "hono";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../api/server.js";
+import { MockImapServer, buildRawEmail } from "../../test-helpers/mock-imap-server.js";
 import {
 	addMessageLabel,
 	createTestAccount,
@@ -332,6 +333,46 @@ describe("Accounts API", () => {
 	});
 
 	describe("POST /accounts/test-connection", () => {
+		let mockServer: MockImapServer;
+		let mockPort: number;
+
+		beforeAll(async () => {
+			mockServer = new MockImapServer({
+				user: "conntest",
+				pass: "connpass",
+				mailboxes: [
+					{
+						path: "INBOX",
+						name: "INBOX",
+						delimiter: "/",
+						flags: [],
+						uidValidity: 1,
+						uidNext: 1,
+						messages: [
+							{
+								uid: 1,
+								flags: [],
+								internalDate: "2026-01-01T00:00:00Z",
+								source: buildRawEmail({
+									from: "a@b.com",
+									to: "c@d.com",
+									subject: "test",
+									body: "body",
+									messageId: "<t@t>",
+									date: "Wed, 01 Jan 2026 00:00:00 +0000",
+								}),
+							},
+						],
+					},
+				],
+			});
+			mockPort = await mockServer.start();
+		});
+
+		afterAll(async () => {
+			await mockServer.stop();
+		});
+
 		test("returns 400 when required fields are missing", async () => {
 			const res = await app.request("/api/accounts/test-connection", {
 				method: "POST",
@@ -359,6 +400,24 @@ describe("Accounts API", () => {
 			const body = (await res.json()) as { ok: boolean; error?: string };
 			expect(body.ok).toBe(false);
 			expect(body.error).toBeTruthy();
+		});
+
+		test("returns ok:true with mailbox count for valid credentials", async () => {
+			const res = await app.request("/api/accounts/test-connection", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					imap_host: "127.0.0.1",
+					imap_port: mockPort,
+					imap_tls: 0,
+					imap_user: "conntest",
+					imap_pass: "connpass",
+				}),
+			});
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as { ok: boolean; mailboxes?: number; error?: string };
+			expect(body.ok).toBe(true);
+			expect(body.mailboxes).toBeGreaterThanOrEqual(1);
 		});
 	});
 
