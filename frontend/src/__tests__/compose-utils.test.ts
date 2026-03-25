@@ -70,6 +70,13 @@ describe("validateEmails", () => {
 	it("rejects invalid email in list", () => {
 		expect(validateEmails("valid@test.com, bad")).toContain("Invalid email address");
 	});
+
+	it("rejects angle-bracket address with only whitespace inside (|| part branch)", () => {
+		// "Alice <   >" → match[1] = "   " → email = "" after trim → uses || part
+		const err = validateEmails("Alice <   >");
+		expect(err).toContain("Invalid email address");
+		expect(err).toContain("Alice <   >");
+	});
 });
 
 describe("buildReplySubject", () => {
@@ -161,6 +168,15 @@ describe("buildReplyHtmlBody", () => {
 		// quotedContent falls back to escapeHtml(null || "") = ""
 		expect(html).toContain("<blockquote");
 	});
+
+	it("falls back to from_address when from_name is null (|| from_address branch)", () => {
+		const msg = makeMessage({
+			from_name: null as unknown as string,
+			from_address: "alice@test.com",
+		});
+		const html = buildReplyHtmlBody(msg);
+		expect(html).toContain("alice@test.com");
+	});
 });
 
 describe("buildForwardHtmlBody", () => {
@@ -216,6 +232,15 @@ describe("buildForwardHtmlBody", () => {
 		const html = buildForwardHtmlBody(msg);
 		// Should not crash; forwarded content will be empty string
 		expect(html).toContain("---------- Forwarded message ----------");
+	});
+
+	it("uses 'unknown' when both from_name and from_address are null (line 118 || branch)", () => {
+		const msg = makeMessage({
+			from_name: null as unknown as string,
+			from_address: null as unknown as string,
+		});
+		const html = buildForwardHtmlBody(msg);
+		expect(html).toContain("unknown");
 	});
 });
 
