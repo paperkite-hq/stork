@@ -19,9 +19,9 @@ test("inbox screenshot", async ({ page }) => {
 
 test("thread screenshot", async ({ page }) => {
 	await page.goto("/");
-	// Open the design-review thread
+	// Open the infrastructure migration thread (3-message thread in demo data)
 	await page
-		.getByRole("button", { name: /Q1 design review/ })
+		.getByRole("button", { name: /Q2 Infrastructure Migration Plan/ })
 		.first()
 		.click();
 	// Wait for thread view to render
