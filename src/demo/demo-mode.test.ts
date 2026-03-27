@@ -23,17 +23,18 @@ describe("seedDemoData", () => {
 		seedDemoData(db);
 
 		const accounts = db.prepare("SELECT * FROM accounts").all() as { name: string }[];
-		expect(accounts).toHaveLength(1);
+		expect(accounts).toHaveLength(2);
 		expect(accounts[0].name).toBe("Alex Demo");
+		expect(accounts[1].name).toBe("Alex (Work)");
 
 		const folders = db.prepare("SELECT * FROM folders").all();
-		expect(folders).toHaveLength(1);
+		expect(folders).toHaveLength(2); // one INBOX per account
 
 		const labels = db.prepare("SELECT * FROM labels").all();
-		expect(labels).toHaveLength(7);
+		expect(labels).toHaveLength(12); // 7 for account 1, 5 for account 2
 
 		const messages = db.prepare("SELECT * FROM messages").all();
-		expect(messages).toHaveLength(15);
+		expect(messages).toHaveLength(19); // 15 for account 1, 4 for account 2
 
 		// Check message-label assignments exist
 		const mlCount = (db.prepare("SELECT COUNT(*) as n FROM message_labels").get() as { n: number })
@@ -85,7 +86,7 @@ describe("bootDemoDatabase", () => {
 		const db = bootDemoDatabase(tmpDir);
 
 		const messages = db.prepare("SELECT COUNT(*) as n FROM messages").get() as { n: number };
-		expect(messages.n).toBe(15);
+		expect(messages.n).toBe(19); // 15 (account 1) + 4 (account 2)
 
 		db.close();
 	});
@@ -100,7 +101,7 @@ describe("bootDemoDatabase", () => {
 
 		const db2 = bootDemoDatabase(tmpDir);
 		const messages = db2.prepare("SELECT COUNT(*) as n FROM messages").get() as { n: number };
-		expect(messages.n).toBe(15); // Not doubled
+		expect(messages.n).toBe(19); // Not doubled
 		db2.close();
 	});
 });

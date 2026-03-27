@@ -28,7 +28,7 @@ export function bootDemoDatabase(dataDir: string): Database.Database {
 
 	if (needsSeed) {
 		seedDemoData(db);
-		console.log("  Demo data seeded: 15 messages, 7 labels, 1 account");
+		console.log("  Demo data seeded: 19 messages, 12 labels, 2 accounts (Vault mode)");
 	}
 
 	return db;
