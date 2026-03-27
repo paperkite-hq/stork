@@ -19,9 +19,9 @@ test("inbox screenshot", async ({ page }) => {
 
 test("thread screenshot", async ({ page }) => {
 	await page.goto("/");
-	// Open the infrastructure migration thread (3-message thread in demo data)
+	// Open the code review thread (2-message thread in Alex (Work) inbox — first account alphabetically)
 	await page
-		.getByRole("button", { name: /Q2 Infrastructure Migration Plan/ })
+		.getByRole("button", { name: /Code review: feat\/cache-invalidation/ })
 		.first()
 		.click();
 	// Wait for thread view to render
