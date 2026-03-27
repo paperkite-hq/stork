@@ -447,12 +447,141 @@ If you don't recognize this device, you can remove it from your admin console.
 	},
 ];
 
+// ─── Second demo account (work email) ────────────────────────────────────────
+
+const DEMO_ACCOUNT_2 = {
+	name: "Alex (Work)",
+	email: "a.demo@acme-corp.com",
+	imap_host: "mail.acme-corp.com",
+	imap_port: 993,
+	imap_tls: 1,
+	imap_user: "a.demo@acme-corp.com",
+	imap_pass: "demo-not-real",
+};
+
+const DEMO_LABELS_2 = [
+	{ name: "Inbox", color: "#3b82f6", source: "system" },
+	{ name: "Sent", color: "#10b981", source: "system" },
+	{ name: "Archive", color: "#6b7280", source: "system" },
+	{ name: "Code Reviews", color: "#f59e0b", source: "user" },
+	{ name: "Announcements", color: "#8b5cf6", source: "user" },
+];
+
+const MESSAGE_LABELS_2: Record<number, string[]> = {
+	0: ["Inbox", "Code Reviews"],
+	1: ["Inbox", "Announcements"],
+	2: ["Inbox"],
+	3: ["Sent"],
+};
+
+const DEMO_MESSAGES_2: SeedMessage[] = [
+	{
+		subject: "Code review: feat/cache-invalidation",
+		from_address: "sam@acme-corp.com",
+		from_name: "Sam Okonkwo",
+		to_addresses: "a.demo@acme-corp.com",
+		date: "2026-03-22T13:00:00Z",
+		text_body: `Hey Alex,
+
+Can you take a look at my PR when you get a chance? It's the cache invalidation rework — touches the CDN edge config and the Redis eviction logic.
+
+PR: https://github.com/acme-corp/platform/pull/714
+
+Main things I'd like eyes on:
+- The TTL fallback logic in cache-manager.ts
+- Whether the test coverage for edge cases looks sufficient
+
+Shouldn't take long — maybe 20-30 min. Thanks!
+
+— Sam`,
+		html_body:
+			"<p>Hey Alex,</p><p>Can you take a look at my PR when you get a chance? It's the cache invalidation rework — touches the CDN edge config and the Redis eviction logic.</p><p>PR: <a href='https://github.com/acme-corp/platform/pull/714'>acme-corp/platform#714</a></p><p>Main things I'd like eyes on:</p><ul><li>The TTL fallback logic in <code>cache-manager.ts</code></li><li>Whether the test coverage for edge cases looks sufficient</li></ul><p>Shouldn't take long — maybe 20-30 min. Thanks!</p><p>— Sam</p>",
+		flags: "",
+		message_id: "<pr-review-714@acme-corp.com>",
+	},
+	{
+		subject: "All-hands recording now available — March 2026",
+		from_address: "people@acme-corp.com",
+		from_name: "Acme People Team",
+		to_addresses: "all@acme-corp.com",
+		date: "2026-03-21T19:30:00Z",
+		text_body: `Hi everyone,
+
+The recording from Tuesday's all-hands is now available in the company portal.
+
+Key announcements:
+- Q1 closed at 112% of plan — great work across the board
+- Engineering headcount: 3 new hires starting in April
+- New PTO policy effective May 1: unlimited PTO with a 10-day minimum
+- Office closure: April 18 for company offsite
+
+Recording link: https://intranet.acme-corp.com/all-hands/2026-03
+Slides: attached
+
+See you next quarter!
+— People Team`,
+		html_body:
+			"<p>Hi everyone,</p><p>The recording from Tuesday's all-hands is now available in the company portal.</p><h3>Key announcements:</h3><ul><li>Q1 closed at 112% of plan — great work across the board</li><li>Engineering headcount: 3 new hires starting in April</li><li>New PTO policy effective May 1: unlimited PTO with a 10-day minimum</li><li>Office closure: April 18 for company offsite</li></ul>",
+		flags: "\\Seen",
+		message_id: "<allhands-mar2026@acme-corp.com>",
+		has_attachments: 1,
+	},
+	{
+		subject: "Action required: update Node.js to 22.x by April 1",
+		from_address: "security@acme-corp.com",
+		from_name: "Acme Security",
+		to_addresses: "engineering@acme-corp.com",
+		date: "2026-03-20T10:00:00Z",
+		text_body: `Engineering team,
+
+Node.js 18.x reaches end-of-life on April 30, 2026. We are requiring all services to migrate to Node.js 22.x by April 1 to stay ahead of the EOL and align with our updated security baseline.
+
+Action items:
+1. Update your Dockerfile base images to node:22-alpine
+2. Update .nvmrc / .node-version files
+3. Run your test suite — Node 22 breaks some older CJS/ESM interop patterns
+4. Update package.json engines field
+
+If you need help, reach out in #platform-migration.
+
+— Acme Security`,
+		html_body:
+			"<p>Engineering team,</p><p>Node.js 18.x reaches end-of-life on April 30, 2026. We are requiring all services to migrate to Node.js 22.x by April 1 to stay ahead of the EOL and align with our updated security baseline.</p><h3>Action items:</h3><ol><li>Update your Dockerfile base images to <code>node:22-alpine</code></li><li>Update <code>.nvmrc</code> / <code>.node-version</code> files</li><li>Run your test suite — Node 22 breaks some older CJS/ESM interop patterns</li><li>Update <code>package.json</code> engines field</li></ol><p>If you need help, reach out in <code>#platform-migration</code>.</p>",
+		flags: "",
+		message_id: "<security-node22@acme-corp.com>",
+	},
+	{
+		subject: "Re: Code review: feat/cache-invalidation",
+		from_address: "a.demo@acme-corp.com",
+		from_name: "Alex (Work)",
+		to_addresses: "sam@acme-corp.com",
+		date: "2026-03-22T14:45:00Z",
+		text_body: `Sam,
+
+Left comments on GitHub. Overall looks solid — the TTL logic is clean. Two minor nits:
+- The fallback should probably log a warning rather than silently succeeding
+- One edge case in the test around concurrent eviction isn't covered
+
+Approved with those addressed.
+
+— Alex`,
+		html_body:
+			"<p>Sam,</p><p>Left comments on GitHub. Overall looks solid — the TTL logic is clean. Two minor nits:</p><ul><li>The fallback should probably log a warning rather than silently succeeding</li><li>One edge case in the test around concurrent eviction isn't covered</li></ul><p>Approved with those addressed.</p><p>— Alex</p>",
+		flags: "\\Seen",
+		message_id: "<pr-review-714-reply@acme-corp.com>",
+		in_reply_to: "<pr-review-714@acme-corp.com>",
+		references: "<pr-review-714@acme-corp.com>",
+	},
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function seedDemoData(db: Database.Database): void {
-	// Insert demo account
+	// Insert demo account (Vault mode: sync_delete_from_server=1 mirrors expected long-term use)
 	const accountResult = db
 		.prepare(
-			`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
 		)
 		.run(
 			DEMO_ACCOUNT.name,
@@ -561,4 +690,97 @@ export function seedDemoData(db: Database.Database): void {
 			)
 		WHERE id = ?
 	`).run(accountId, accountId, accountId);
+
+	// ── Second account ──────────────────────────────────────────────────────
+
+	const account2Result = db
+		.prepare(
+			`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+		)
+		.run(
+			DEMO_ACCOUNT_2.name,
+			DEMO_ACCOUNT_2.email,
+			DEMO_ACCOUNT_2.imap_host,
+			DEMO_ACCOUNT_2.imap_port,
+			DEMO_ACCOUNT_2.imap_tls,
+			DEMO_ACCOUNT_2.imap_user,
+			DEMO_ACCOUNT_2.imap_pass,
+		);
+	const accountId2 = account2Result.lastInsertRowid as number;
+
+	const folder2Result = db
+		.prepare(
+			`INSERT INTO folders (account_id, path, name, special_use, uid_validity, uid_next, message_count, unread_count)
+		 VALUES (?, 'INBOX', 'Inbox', '\\\\Inbox', 1, ?, ?, ?)`,
+		)
+		.run(accountId2, DEMO_MESSAGES_2.length + 1, DEMO_MESSAGES_2.length, 2);
+	const folderId2 = folder2Result.lastInsertRowid as number;
+
+	const labelMap2 = new Map<string, number>();
+	for (const label of DEMO_LABELS_2) {
+		const result = insertLabel.run(accountId2, label.name, label.color, label.source);
+		labelMap2.set(label.name, result.lastInsertRowid as number);
+	}
+
+	const insertAll2 = db.transaction(() => {
+		for (let i = 0; i < DEMO_MESSAGES_2.length; i++) {
+			const msg = DEMO_MESSAGES_2[i];
+			const size = msg.text_body.length + (msg.html_body?.length ?? 0);
+			const result = insertMessage.run(
+				accountId2,
+				folderId2,
+				i + 1,
+				msg.message_id,
+				msg.in_reply_to ?? null,
+				msg.references ?? null,
+				msg.subject,
+				msg.from_address,
+				msg.from_name,
+				msg.to_addresses,
+				msg.cc_addresses ?? null,
+				msg.date,
+				msg.text_body,
+				msg.html_body,
+				msg.flags,
+				msg.has_attachments ?? 0,
+				size,
+			);
+			const messageId2 = result.lastInsertRowid as number;
+			const labels2 = MESSAGE_LABELS_2[i] ?? [];
+			for (const labelName of labels2) {
+				const labelId = labelMap2.get(labelName);
+				if (labelId) {
+					insertMessageLabel.run(messageId2, labelId);
+				}
+			}
+		}
+	});
+
+	insertAll2();
+
+	db.prepare(`
+		UPDATE labels
+		SET
+			message_count = (SELECT COUNT(*) FROM message_labels WHERE label_id = labels.id),
+			unread_count = (
+				SELECT COUNT(*) FROM message_labels ml
+				JOIN messages m ON m.id = ml.message_id
+				WHERE ml.label_id = labels.id
+				AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%')
+			)
+		WHERE account_id = ?
+	`).run(accountId2);
+
+	db.prepare(`
+		UPDATE accounts
+		SET
+			cached_message_count = (SELECT COUNT(*) FROM messages WHERE account_id = ?),
+			cached_unread_count = (
+				SELECT COUNT(*) FROM messages
+				WHERE account_id = ?
+				AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')
+			)
+		WHERE id = ?
+	`).run(accountId2, accountId2, accountId2);
 }
