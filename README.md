@@ -98,6 +98,32 @@ docker compose up --build
 
 ![Compose form](docs/screenshots/compose.png)
 
+## Vault Mode — Your Email, Permanently Yours
+
+Most email clients treat your mail provider as the source of truth. Stork inverts this: **your provider is the delivery edge; Stork is your permanent encrypted archive.**
+
+The idea is simple. Your inbox is full of sensitive history — receipts, contracts, conversations — and right now it lives on someone else's server indefinitely. Stork lets you take it back.
+
+**Mirror mode** (default): Stork syncs a local encrypted copy while leaving your provider's mailbox intact. Use this while you're evaluating — your provider stays your safety net, and you can fall back to its interface at any time.
+
+**Vault mode**: Once you're confident Stork is right for you, flip the switch. New messages are fetched and deleted from your provider in interleaved batches as they arrive — 100 at a time, so your server starts clearing immediately rather than in one big sweep at the end. Your provider becomes just the delivery pipe; Stork holds the only copy, AES-256 encrypted, on your own hardware.
+
+```
+         Mirror mode                       Vault mode
+  ┌──────────────────────┐          ┌──────────────────────┐
+  │  Mail provider       │          │  Mail provider       │
+  │  (holds all mail)    │          │  (transient — 1 hop) │
+  └──────────┬───────────┘          └──────────┬───────────┘
+             │ IMAP sync                        │ IMAP sync + delete
+             ▼                                  ▼
+  ┌──────────────────────┐          ┌──────────────────────┐
+  │  Stork               │          │  Stork               │
+  │  (encrypted copy)    │          │  (only copy, AES-256)│
+  └──────────────────────┘          └──────────────────────┘
+```
+
+The UI walks you through this choice when you connect your first account, and surfaces an ambient reminder while any account is still in mirror mode. The [User Guide](docs/user-guide.md) covers both modes in detail. The connector architecture supports any mail source — not just IMAP — so vault mode generalizes as new connectors are added.
+
 ## How Stork Compares
 
 | | Stork | Roundcube | Bichon | Mailu |
