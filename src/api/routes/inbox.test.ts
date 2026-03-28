@@ -38,6 +38,11 @@ describe("Inbox API", () => {
 	}
 
 	describe("GET /api/inbox/unified", () => {
+		test("returns 400 for invalid pagination params", async () => {
+			const { status } = await jsonRequest("/api/inbox/unified?limit=abc");
+			expect(status).toBe(400);
+		});
+
 		test("returns empty array when no accounts exist", async () => {
 			const { status, body } = await jsonRequest("/api/inbox/unified");
 			expect(status).toBe(200);
