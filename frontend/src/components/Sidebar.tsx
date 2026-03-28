@@ -58,6 +58,10 @@ export const UNREAD_LABEL_ID = -2;
 export const INBOX_LABEL_ID = -3;
 /** Sentinel label ID for the unified cross-account inbox view */
 export const UNIFIED_INBOX_LABEL_ID = -4;
+/** Sentinel label ID for the unified cross-account All Mail view */
+export const UNIFIED_ALL_MAIL_LABEL_ID = -5;
+/** Sentinel label ID for the unified cross-account Unread view */
+export const UNIFIED_UNREAD_LABEL_ID = -6;
 
 interface SidebarProps {
 	accounts: Account[];
@@ -80,6 +84,8 @@ interface SidebarProps {
 	unreadCount?: { total: number } | null;
 	inboxLabel?: Label | null;
 	unifiedInboxCount?: { total: number; unread: number } | null;
+	unifiedAllMailCount?: { total: number; unread: number } | null;
+	unifiedUnreadCount?: { total: number } | null;
 }
 
 /** Formats a duration in ms as "Xm Ys" or "Xs" */
@@ -203,6 +209,8 @@ export function Sidebar({
 	unreadCount,
 	inboxLabel,
 	unifiedInboxCount,
+	unifiedAllMailCount,
+	unifiedUnreadCount,
 }: SidebarProps) {
 	const [contextMenu, setContextMenu] = useState<{
 		label: Label;
@@ -372,6 +380,40 @@ export function Sidebar({
 							{unifiedInboxCount && unifiedInboxCount.unread > 0 && (
 								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
 									{unifiedInboxCount.unread}
+								</span>
+							)}
+						</button>
+						<button
+							type="button"
+							onClick={() => onSelectLabel(UNIFIED_UNREAD_LABEL_ID)}
+							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+								selectedLabelId === UNIFIED_UNREAD_LABEL_ID
+									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
+									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+							}`}
+						>
+							<UnreadIcon className="w-4 h-4 flex-shrink-0" />
+							<span className="truncate">All Unread</span>
+							{unifiedUnreadCount && unifiedUnreadCount.total > 0 && (
+								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
+									{unifiedUnreadCount.total}
+								</span>
+							)}
+						</button>
+						<button
+							type="button"
+							onClick={() => onSelectLabel(UNIFIED_ALL_MAIL_LABEL_ID)}
+							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+								selectedLabelId === UNIFIED_ALL_MAIL_LABEL_ID
+									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
+									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+							}`}
+						>
+							<MailAllIcon className="w-4 h-4 flex-shrink-0" />
+							<span className="truncate">All Mail</span>
+							{unifiedAllMailCount && unifiedAllMailCount.unread > 0 && (
+								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
+									{unifiedAllMailCount.unread}
 								</span>
 							)}
 						</button>
