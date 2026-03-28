@@ -427,7 +427,7 @@ export function MessageList({
 							onToggleStar={onToggleStar}
 							onToggleSelect={onToggleSelect}
 							selectedRef={msg.id === selectedId ? selectedRef : undefined}
-							accountLabel={account?.email}
+							accountLabel={account ? account.name || account.email : undefined}
 						/>
 					);
 				})}

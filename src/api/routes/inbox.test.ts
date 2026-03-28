@@ -121,6 +121,147 @@ describe("Inbox API", () => {
 		});
 	});
 
+	describe("GET /api/inbox/all-messages", () => {
+		test("returns 400 for invalid pagination params", async () => {
+			const { status } = await jsonRequest("/api/inbox/all-messages?limit=abc");
+			expect(status).toBe(400);
+		});
+
+		test("returns empty array when no messages exist", async () => {
+			const { status, body } = await jsonRequest("/api/inbox/all-messages");
+			expect(status).toBe(200);
+			expect(body).toEqual([]);
+		});
+
+		test("returns all messages across multiple accounts sorted by date desc", async () => {
+			const acct1 = createTestAccount(db, { name: "Work", email: "work@example.com" });
+			const folder1 = createTestFolder(db, acct1, "INBOX");
+			createTestMessage(db, acct1, folder1, 1, {
+				subject: "Work message",
+				date: "2026-03-25T10:00:00Z",
+			});
+
+			const acct2 = createTestAccount(db, { name: "Personal", email: "personal@example.com" });
+			const folder2 = createTestFolder(db, acct2, "INBOX");
+			createTestMessage(db, acct2, folder2, 1, {
+				subject: "Personal message",
+				date: "2026-03-25T12:00:00Z",
+			});
+
+			const { status, body } = await jsonRequest("/api/inbox/all-messages");
+			expect(status).toBe(200);
+			expect(body).toHaveLength(2);
+			expect(body[0].subject).toBe("Personal message");
+			expect(body[1].subject).toBe("Work message");
+			expect(body[0].account_id).toBe(acct2);
+			expect(body[1].account_id).toBe(acct1);
+		});
+
+		test("supports pagination", async () => {
+			const acct = createTestAccount(db);
+			const folder = createTestFolder(db, acct, "INBOX");
+			for (let i = 1; i <= 5; i++) {
+				createTestMessage(db, acct, folder, i, {
+					subject: `Message ${i}`,
+					date: `2026-03-${String(i).padStart(2, "0")}T10:00:00Z`,
+				});
+			}
+			const { body: page1 } = await jsonRequest("/api/inbox/all-messages?limit=2");
+			expect(page1).toHaveLength(2);
+			const { body: page2 } = await jsonRequest("/api/inbox/all-messages?limit=2&offset=2");
+			expect(page2).toHaveLength(2);
+			expect(page1[0].subject).not.toBe(page2[0].subject);
+		});
+	});
+
+	describe("GET /api/inbox/all-messages/count", () => {
+		test("returns zeros when no messages exist", async () => {
+			const { status, body } = await jsonRequest("/api/inbox/all-messages/count");
+			expect(status).toBe(200);
+			expect(body).toEqual({ total: 0, unread: 0 });
+		});
+
+		test("counts total and unread across all accounts", async () => {
+			const acct1 = createTestAccount(db);
+			const folder1 = createTestFolder(db, acct1, "INBOX");
+			createTestMessage(db, acct1, folder1, 1, { subject: "Unread", flags: null });
+			createTestMessage(db, acct1, folder1, 2, { subject: "Read", flags: "\\Seen" });
+
+			const acct2 = createTestAccount(db, { email: "b@example.com" });
+			const folder2 = createTestFolder(db, acct2, "INBOX");
+			createTestMessage(db, acct2, folder2, 1, { subject: "Also unread", flags: null });
+
+			const { status, body } = await jsonRequest("/api/inbox/all-messages/count");
+			expect(status).toBe(200);
+			expect(body.total).toBe(3);
+			expect(body.unread).toBe(2);
+		});
+	});
+
+	describe("GET /api/inbox/unread-messages", () => {
+		test("returns 400 for invalid pagination params", async () => {
+			const { status } = await jsonRequest("/api/inbox/unread-messages?limit=abc");
+			expect(status).toBe(400);
+		});
+
+		test("returns empty array when no unread messages exist", async () => {
+			const { status, body } = await jsonRequest("/api/inbox/unread-messages");
+			expect(status).toBe(200);
+			expect(body).toEqual([]);
+		});
+
+		test("returns only unread messages across all accounts", async () => {
+			const acct1 = createTestAccount(db, { email: "a@example.com" });
+			const folder1 = createTestFolder(db, acct1, "INBOX");
+			createTestMessage(db, acct1, folder1, 1, {
+				subject: "Unread",
+				flags: null,
+				date: "2026-03-25T10:00:00Z",
+			});
+			createTestMessage(db, acct1, folder1, 2, { subject: "Read", flags: "\\Seen" });
+
+			const acct2 = createTestAccount(db, { email: "b@example.com" });
+			const folder2 = createTestFolder(db, acct2, "INBOX");
+			createTestMessage(db, acct2, folder2, 1, {
+				subject: "Also unread",
+				flags: null,
+				date: "2026-03-25T12:00:00Z",
+			});
+
+			const { status, body } = await jsonRequest("/api/inbox/unread-messages");
+			expect(status).toBe(200);
+			expect(body).toHaveLength(2);
+			expect(body[0].subject).toBe("Also unread");
+			expect(body[1].subject).toBe("Unread");
+			expect(body.find((m: { subject: string }) => m.subject === "Read")).toBeUndefined();
+			expect(body[0].account_id).toBe(acct2);
+			expect(body[1].account_id).toBe(acct1);
+		});
+	});
+
+	describe("GET /api/inbox/unread-messages/count", () => {
+		test("returns zero when no unread messages", async () => {
+			const { status, body } = await jsonRequest("/api/inbox/unread-messages/count");
+			expect(status).toBe(200);
+			expect(body).toEqual({ total: 0 });
+		});
+
+		test("counts unread messages across all accounts", async () => {
+			const acct1 = createTestAccount(db);
+			const folder1 = createTestFolder(db, acct1, "INBOX");
+			createTestMessage(db, acct1, folder1, 1, { flags: null });
+			createTestMessage(db, acct1, folder1, 2, { flags: "\\Seen" });
+
+			const acct2 = createTestAccount(db, { email: "b@example.com" });
+			const folder2 = createTestFolder(db, acct2, "INBOX");
+			createTestMessage(db, acct2, folder2, 1, { flags: null });
+
+			const { status, body } = await jsonRequest("/api/inbox/unread-messages/count");
+			expect(status).toBe(200);
+			expect(body.total).toBe(2);
+		});
+	});
+
 	describe("GET /api/inbox/unified/count", () => {
 		test("returns zeros when no accounts exist", async () => {
 			const { status, body } = await jsonRequest("/api/inbox/unified/count");

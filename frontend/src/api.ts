@@ -367,6 +367,24 @@ export const api = {
 			},
 			count: () => fetchJSON<{ total: number; unread: number }>("/inbox/unified/count"),
 		},
+		allMessages: {
+			list: (opts?: { limit?: number; offset?: number }) => {
+				const params = new URLSearchParams();
+				if (opts?.limit) params.set("limit", String(opts.limit));
+				if (opts?.offset) params.set("offset", String(opts.offset));
+				return fetchJSON<MessageSummary[]>(`/inbox/all-messages?${params}`);
+			},
+			count: () => fetchJSON<{ total: number; unread: number }>("/inbox/all-messages/count"),
+		},
+		unreadMessages: {
+			list: (opts?: { limit?: number; offset?: number }) => {
+				const params = new URLSearchParams();
+				if (opts?.limit) params.set("limit", String(opts.limit));
+				if (opts?.offset) params.set("offset", String(opts.offset));
+				return fetchJSON<MessageSummary[]>(`/inbox/unread-messages?${params}`);
+			},
+			count: () => fetchJSON<{ total: number }>("/inbox/unread-messages/count"),
+		},
 	},
 	allMessages: {
 		list: (accountId: number, opts?: { limit?: number; offset?: number }) => {
