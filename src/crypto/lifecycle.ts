@@ -81,6 +81,17 @@ function ts(): string {
 	return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
 }
 
+/** Number of consecutive identical errors to show individually before batching. */
+const BATCH_SHOW_LIMIT = 3;
+
+interface ErrorBatch {
+	folder: string | null;
+	errorType: string;
+	retriable: boolean;
+	shownCount: number;
+	suppressedCount: number;
+}
+
 export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer): void {
 	if (context.state === "unlocked") return;
 
@@ -89,12 +100,53 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 	// Zero vault key immediately after passing to SQLCipher
 	vaultKey.fill(0);
 
+	// Per-account batching state for consecutive identical sync errors
+	const errorBatches = new Map<number, ErrorBatch>();
+
+	function flushErrorBatch(accountId: number): void {
+		const batch = errorBatches.get(accountId);
+		if (!batch || batch.suppressedCount === 0) {
+			errorBatches.delete(accountId);
+			return;
+		}
+		const retry = batch.retriable ? "(will retry)" : "(permanent)";
+		const total = batch.shownCount + batch.suppressedCount;
+		const folder = batch.folder ? `"${batch.folder}"` : "sync";
+		console.error(
+			`  ${ts()} [${batch.errorType}] ${folder} — ${total} batches failed, retrying automatically ${retry}`,
+		);
+		errorBatches.delete(accountId);
+	}
+
 	const scheduler = new SyncScheduler(db, {
-		onSyncRecordError: (_accountId, err) => {
-			const retry = err.retriable ? "(will retry)" : "(permanent)";
-			console.error(`  ${ts()} [${err.errorType}] ${err.message} ${retry}`);
+		onSyncRecordError: (accountId, err) => {
+			const batch = errorBatches.get(accountId);
+			const matchesBatch =
+				batch && batch.folder === err.folderPath && batch.errorType === err.errorType;
+
+			if (!matchesBatch) {
+				flushErrorBatch(accountId);
+				errorBatches.set(accountId, {
+					folder: err.folderPath,
+					errorType: err.errorType,
+					retriable: err.retriable,
+					shownCount: 0,
+					suppressedCount: 0,
+				});
+			}
+
+			const current = errorBatches.get(accountId);
+			if (current === undefined) return;
+			if (current.shownCount < BATCH_SHOW_LIMIT) {
+				const retry = err.retriable ? "(will retry)" : "(permanent)";
+				console.error(`  ${ts()} [${err.errorType}] ${err.message} ${retry}`);
+				current.shownCount++;
+			} else {
+				current.suppressedCount++;
+			}
 		},
 		onSyncComplete: (accountId, result) => {
+			flushErrorBatch(accountId);
 			if (result.aborted) {
 				console.log(
 					`${ts()} Sync interrupted for account ${accountId}: ${result.totalNew} new (aborted)`,
@@ -108,6 +160,7 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 			console.log(parts.join(", "));
 		},
 		onSyncError: (accountId, error) => {
+			flushErrorBatch(accountId);
 			const imapErr = error as Error & { responseText?: string; responseStatus?: string };
 			const detail = imapErr.responseText
 				? `${imapErr.responseStatus ?? "ERROR"}: ${imapErr.responseText}`
