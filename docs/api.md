@@ -477,6 +477,58 @@ DELETE /api/messages/:messageId/labels/:labelId
 
 **Response**: `200 OK`
 
+## Unified Inbox
+
+Cross-account inbox views. These endpoints aggregate messages across all configured accounts' Inbox labels, letting multi-account setups see all incoming mail in one place.
+
+### Get unified inbox messages
+
+```
+GET /api/inbox/unified?limit=50&offset=0
+```
+
+Returns inbox messages across all accounts, sorted by date (newest first). Each message includes the `account_id` field so the UI can show which account each message belongs to.
+
+**Query parameters**:
+- `limit` (default: 50) — number of messages to return
+- `offset` (default: 0) — pagination offset
+
+**Response**: `200 OK`
+```json
+[
+  {
+    "id": 42,
+    "uid": 1501,
+    "message_id": "<abc123@example.com>",
+    "subject": "Weekly report",
+    "from_address": "boss@example.com",
+    "from_name": "Jane Smith",
+    "to_addresses": "[\"user@example.com\"]",
+    "date": "2026-01-15T09:00:00.000Z",
+    "flags": "[\"\\\\Seen\"]",
+    "size": 4096,
+    "has_attachments": 0,
+    "preview": "Hi team, here are this week's numbers...",
+    "account_id": 1
+  }
+]
+```
+
+Messages from all accounts' Inbox labels are merged and sorted by date. Accounts without an "Inbox" label are excluded. Available once the container is unlocked — returns `423 Locked` otherwise.
+
+### Get unified inbox count
+
+```
+GET /api/inbox/unified/count
+```
+
+Returns aggregate total and unread message counts across all accounts' Inbox labels. Used to display the unified inbox badge count in the sidebar.
+
+**Response**: `200 OK`
+```json
+{ "total": 147, "unread": 12 }
+```
+
 ## Messages
 
 ### List messages in a folder
