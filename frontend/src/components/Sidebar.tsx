@@ -264,12 +264,12 @@ export function Sidebar({
 				</div>
 			)}
 
-			{/* Mirror mode nag — shown when any account is in mirror mode (not vault mode) */}
+			{/* Mirror mode nag — shown when any account is in mirror mode (not connector mode) */}
 			{accounts.some((a) => a.sync_delete_from_server === 0) && (
 				<div className="mx-4 mt-3 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
 					<button type="button" onClick={onSettings} className="text-left w-full">
 						<span className="font-medium">Mirror mode active.</span> Actions in Stork don't sync
-						back to your provider. <span className="underline">Switch to Vault mode</span> when
+						back to your provider. <span className="underline">Switch to Connector mode</span> when
 						you're ready to commit.
 					</button>
 				</div>

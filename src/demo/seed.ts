@@ -577,7 +577,7 @@ Approved with those addressed.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function seedDemoData(db: Database.Database): void {
-	// Insert demo account (Vault mode: sync_delete_from_server=1 mirrors expected long-term use)
+	// Insert demo account (Connector mode: sync_delete_from_server=1 mirrors expected long-term use)
 	const accountResult = db
 		.prepare(
 			`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
