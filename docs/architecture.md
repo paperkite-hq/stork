@@ -322,6 +322,12 @@ For a script in an HTML email to access the parent DOM and leak private informat
 
 The sandbox attribute alone is sufficient — it is enforced by the browser's security model, not by HTML parsing. Even a novel DOMPurify bypass cannot execute scripts inside a `sandbox` iframe without `allow-scripts`.
 
+## Multi-Account Model
+
+Stork uses a unified-first multi-account model: all accounts share one SQLite database, and unified views (All Inboxes, All Unread, All Mail) span all accounts by default. Per-account views remain available for focused workflows.
+
+See [Multi-Account Support](./multi-account.md) for the full philosophy and UX model.
+
 ## Design Principles
 
 1. **Self-host the client, not the edge.** Don't compete with mail servers — complement them. Let Postfix/Dovecot/Fastmail handle MX records, DKIM, and deliverability. Stork handles storage, search, and the UI.

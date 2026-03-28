@@ -52,6 +52,14 @@ vi.mock("../api", () => ({
 				list: vi.fn().mockResolvedValue([]),
 				count: vi.fn().mockResolvedValue({ total: 0, unread: 0 }),
 			},
+			allMessages: {
+				list: vi.fn().mockResolvedValue([]),
+				count: vi.fn().mockResolvedValue({ total: 0, unread: 0 }),
+			},
+			unreadMessages: {
+				list: vi.fn().mockResolvedValue([]),
+				count: vi.fn().mockResolvedValue({ total: 0 }),
+			},
 		},
 		allMessages: {
 			list: vi.fn().mockResolvedValue([]),

@@ -562,17 +562,35 @@ export function useMessagePagination(opts: {
 	isAllMail: boolean;
 	isUnread?: boolean;
 	isUnifiedInbox?: boolean;
+	isUnifiedAllMail?: boolean;
+	isUnifiedUnread?: boolean;
 }) {
-	const { effectiveLabelId, effectiveAccountId, isAllMail, isUnread, isUnifiedInbox } = opts;
+	const {
+		effectiveLabelId,
+		effectiveAccountId,
+		isAllMail,
+		isUnread,
+		isUnifiedInbox,
+		isUnifiedAllMail,
+		isUnifiedUnread,
+	} = opts;
 
 	const [allMessages, setAllMessages] = useState<MessageSummary[]>([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [loadingMore, setLoadingMore] = useState(false);
 
+	const isAnyUnified = isUnifiedInbox || isUnifiedAllMail || isUnifiedUnread;
+
 	const getFetchFn = useCallback(
 		(paginationOpts: { limit: number; offset?: number }) => {
 			if (isUnifiedInbox) {
 				return api.inbox.unified.list(paginationOpts);
+			}
+			if (isUnifiedAllMail) {
+				return api.inbox.allMessages.list(paginationOpts);
+			}
+			if (isUnifiedUnread) {
+				return api.inbox.unreadMessages.list(paginationOpts);
 			}
 			if (isUnread && effectiveAccountId) {
 				return api.unreadMessages.list(effectiveAccountId, paginationOpts);
@@ -585,7 +603,15 @@ export function useMessagePagination(opts: {
 			}
 			return Promise.resolve([]);
 		},
-		[isUnifiedInbox, isUnread, isAllMail, effectiveAccountId, effectiveLabelId],
+		[
+			isUnifiedInbox,
+			isUnifiedAllMail,
+			isUnifiedUnread,
+			isUnread,
+			isAllMail,
+			effectiveAccountId,
+			effectiveLabelId,
+		],
 	);
 
 	const {
@@ -594,7 +620,7 @@ export function useMessagePagination(opts: {
 		refetch: refetchMessages,
 	} = useAsync(() => {
 		const needsAccount = isAllMail || isUnread;
-		if (isUnifiedInbox) {
+		if (isAnyUnified) {
 			return getFetchFn({ limit: getPageSize() }).then((msgs) => {
 				setAllMessages(msgs);
 				setHasMore(msgs.length >= getPageSize());
@@ -611,13 +637,13 @@ export function useMessagePagination(opts: {
 			setHasMore(msgs.length >= getPageSize());
 			return msgs;
 		});
-	}, [effectiveLabelId, isAllMail, isUnread, isUnifiedInbox, effectiveAccountId, getFetchFn]);
+	}, [effectiveLabelId, isAllMail, isUnread, isAnyUnified, effectiveAccountId, getFetchFn]);
 
 	const handleLoadMore = useCallback(() => {
 		if (loadingMore) return;
 		const needsAccount = isAllMail || isUnread;
-		if (!isUnifiedInbox && !effectiveLabelId && !needsAccount) return;
-		if (!isUnifiedInbox && needsAccount && !effectiveAccountId) return;
+		if (!isAnyUnified && !effectiveLabelId && !needsAccount) return;
+		if (!isAnyUnified && needsAccount && !effectiveAccountId) return;
 		setLoadingMore(true);
 		getFetchFn({ limit: getPageSize(), offset: allMessages.length })
 			.then((more) => {
@@ -632,7 +658,7 @@ export function useMessagePagination(opts: {
 		effectiveLabelId,
 		isAllMail,
 		isUnread,
-		isUnifiedInbox,
+		isAnyUnified,
 		effectiveAccountId,
 		allMessages.length,
 		loadingMore,
