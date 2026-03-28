@@ -37,7 +37,10 @@ let mockCapturedOnSyncComplete:
 	| ((accountId: number, result: { totalNew: number; totalErrors: number }) => void)
 	| undefined;
 let mockCapturedOnSyncRecordError:
-	| ((accountId: number, error: { errorType: string; message: string; retriable: boolean }) => void)
+	| ((
+			accountId: number,
+			error: { errorType: string; message: string; retriable: boolean; folderPath?: string | null },
+	  ) => void)
 	| undefined;
 let mockCapturedOnSyncError: ((accountId: number, error: Error) => void) | undefined;
 
@@ -53,7 +56,12 @@ vi.mock("../sync/sync-scheduler.js", () => ({
 			) => void;
 			onSyncRecordError?: (
 				accountId: number,
-				error: { errorType: string; message: string; retriable: boolean },
+				error: {
+					errorType: string;
+					message: string;
+					retriable: boolean;
+					folderPath?: string | null;
+				},
 			) => void;
 			onSyncError?: (accountId: number, error: Error) => void;
 		},
@@ -254,6 +262,76 @@ describe("transitionToUnlocked — scheduler callbacks", () => {
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("account 13"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("connection refused"));
 		consoleSpy.mockRestore();
+	});
+
+	test("onSyncRecordError batches >3 consecutive identical errors and emits summary at sync complete", () => {
+		const context = makeLockedContext();
+		transitionToUnlocked(context, Buffer.alloc(32));
+
+		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		// Fire 5 identical flag-sync errors for the same folder
+		for (let i = 0; i < 5; i++) {
+			mockCapturedOnSyncRecordError?.(1, {
+				errorType: "flags",
+				folderPath: "Archive",
+				message: `Flag sync failed for "Archive" (UIDs ${i * 50 + 1}–${(i + 1) * 50}): BAD: something`,
+				retriable: true,
+			});
+		}
+
+		// Only first 3 should be logged individually
+		expect(consoleErrorSpy).toHaveBeenCalledTimes(3);
+
+		// Flush by completing sync
+		mockCapturedOnSyncComplete?.(1, { totalNew: 0, totalErrors: 5, aborted: false, folders: [] });
+
+		// Summary line should be emitted: 5 total batches
+		const allCalls = consoleErrorSpy.mock.calls.map((c) => c[0] as string);
+		const summaryCall = allCalls.find((msg) => msg.includes("5 batches failed"));
+		expect(summaryCall).toBeDefined();
+		expect(summaryCall).toContain('"Archive"');
+		expect(summaryCall).toContain("(will retry)");
+
+		consoleErrorSpy.mockRestore();
+		consoleLogSpy.mockRestore();
+	});
+
+	test("onSyncRecordError flushes batch when error type changes", () => {
+		const context = makeLockedContext();
+		transitionToUnlocked(context, Buffer.alloc(32));
+
+		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		// 4 identical flag errors → first 3 logged, 1 suppressed
+		for (let i = 0; i < 4; i++) {
+			mockCapturedOnSyncRecordError?.(1, {
+				errorType: "flags",
+				folderPath: "Archive",
+				message: `Flag sync failed for "Archive": error`,
+				retriable: true,
+			});
+		}
+		expect(consoleErrorSpy).toHaveBeenCalledTimes(3);
+
+		// Different error type — should flush the batch with summary
+		mockCapturedOnSyncRecordError?.(1, {
+			errorType: "message",
+			folderPath: "Archive",
+			message: "UID 999: fetch error",
+			retriable: false,
+		});
+
+		const calls = consoleErrorSpy.mock.calls.map((c) => c[0] as string);
+		const summary = calls.find((msg) => msg.includes("batches failed"));
+		expect(summary).toBeDefined();
+		expect(summary).toContain("4 batches failed");
+
+		// The new different error should also be logged individually
+		expect(calls.some((msg) => msg.includes("UID 999"))).toBe(true);
+
+		consoleErrorSpy.mockRestore();
 	});
 
 	test("second transitionToUnlocked call is a no-op when already unlocked", () => {
