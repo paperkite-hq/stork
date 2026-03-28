@@ -190,7 +190,7 @@ Sync runs automatically every 5 minutes per account. You can also trigger a manu
 
 ### What Stork Does NOT Do (by default)
 
-- **Stork does not delete mail from your server by default.** The sync is strictly read-only. To use Stork as a permanent local archive, turn on **Vault mode** in Settings > Accounts for each account. With it enabled, Stork automatically removes messages from the IMAP server after syncing them locally — your mail provider becomes a transient delivery edge, and Stork becomes the single source of truth.
+- **Stork does not delete mail from your server by default.** The sync is strictly read-only. To use Stork as a permanent local archive, turn on **Connector mode** in Settings > Accounts for each account. With it enabled, Stork automatically removes messages from the IMAP server after syncing them locally — your mail provider becomes a transient delivery edge, and Stork becomes the single source of truth.
 - **Stork does not modify flags on the server.** Marking a message as read in Stork only affects local storage. Your IMAP server's flags remain unchanged.
 
 ### Sync Errors

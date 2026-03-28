@@ -30,7 +30,7 @@ export interface SyncResult {
 	updatedFlags: number;
 	deletedFolders: number;
 	attachmentsSaved: number;
-	/** Number of messages deleted from the IMAP server after syncing (vault mode) */
+	/** Number of messages deleted from the IMAP server after syncing (connector mode) */
 	deletedFromServer: number;
 	errors: SyncError[];
 }
@@ -74,7 +74,7 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 const FETCH_BATCH_SIZE = 50;
 /** Max UIDs per IMAP messageDelete call. Prevents overly-long UID-set strings on large initial syncs.
- *  Also used as the fetch batch size for interleaved fetch+delete in vault mode. */
+ *  Also used as the fetch batch size for interleaved fetch+delete in connector mode. */
 const DELETE_BATCH_SIZE = 100;
 /** Apply folder labels to messages after every this-many new messages within a folder.
  *  Keeps the UI responsive during large-folder syncs (e.g. Archive with 50k messages). */
@@ -279,7 +279,7 @@ export class ImapSync {
 			// Ensure labels exist for all synced folders
 			this.ensureLabelsForFolders();
 
-			// Read vault mode setting once per sync run (can change between syncs)
+			// Read connector mode setting once per sync run (can change between syncs)
 			const accountRow = this.db
 				.prepare("SELECT sync_delete_from_server FROM accounts WHERE id = ?")
 				.get(this.accountId) as { sync_delete_from_server: number } | undefined;
@@ -425,7 +425,7 @@ export class ImapSync {
 	 *          → search for new UIDs → release lock.
 	 * Phase 1 (per-batch): For each batch of DELETE_BATCH_SIZE UIDs:
 	 *   a. acquire lock → fetchUidBatch() → release lock
-	 *   b. if vault mode: deleteFromServer() for this batch (acquires its own lock)
+	 *   b. if connector mode: deleteFromServer() for this batch (acquires its own lock)
 	 * Phase 2: Acquire lock → sync flags → release lock.
 	 * Phase 3 (crash recovery): Delete any pending_archive=1, deleted_from_server=0
 	 *          messages not handled in Phase 1 (from previous incomplete cycles).
@@ -613,7 +613,7 @@ export class ImapSync {
 				runningLabelCount = 0;
 			}
 
-			// Phase 1b: if vault mode, delete this batch from the server.
+			// Phase 1b: if connector mode, delete this batch from the server.
 			// deleteFromServer() acquires its own lock per batch internally.
 			if (deleteFromServerAfterSync && !signal?.aborted) {
 				try {
@@ -664,7 +664,7 @@ export class ImapSync {
 		// Phase 3 (crash recovery): delete any pending_archive=1, deleted_from_server=0
 		// messages not already handled in Phase 1. These are from previous incomplete
 		// cycles where the process was killed after fetch but before delete.
-		// Only runs in vault mode and when not aborted.
+		// Only runs in connector mode and when not aborted.
 		if (deleteFromServerAfterSync && !signal?.aborted) {
 			try {
 				const pendingRows = this.db
@@ -704,7 +704,7 @@ export class ImapSync {
 	 * Takes an explicit list of UIDs to fetch (used by the interleaved fetch+delete loop
 	 * in syncFolder). Updates last_uid in sync_state after processing the batch.
 	 *
-	 * In vault mode, marks each newly-stored message as pending_archive=1 so that
+	 * In connector mode, marks each newly-stored message as pending_archive=1 so that
 	 * a crash between fetch and delete is recoverable — the next sync cycle picks
 	 * up pending_archive=1 records and retries the deletion (Phase 3 crash recovery).
 	 *
@@ -838,7 +838,7 @@ export class ImapSync {
 
 					if (message.uid > maxUid) maxUid = message.uid;
 
-					// Mark message as pending server deletion for crash-safe vault mode.
+					// Mark message as pending server deletion for crash-safe connector mode.
 					// This must be set BEFORE Phase 1b (deleteFromServer) runs so that a
 					// crash between fetch and delete is recoverable — the next sync cycle's
 					// Phase 3 will find pending_archive=1 and retry the deletion.
