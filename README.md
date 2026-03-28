@@ -154,6 +154,12 @@ The UI walks you through this choice when you connect your first account, and su
 - [x] Delete-from-server workflow
 - [x] Multi-account support (unified inbox)
 
+### v0.6.0 (planned)
+
+- [ ] Filter rules and auto-labeling (server-side, applied on sync)
+- [ ] JMAP connector (pluggable alternative to IMAP)
+- [ ] CalDAV calendar integration (read-only events from email invites)
+
 ## Documentation
 
 - **[Getting Started](docs/getting-started.md)** — first launch, encryption setup, adding an account
