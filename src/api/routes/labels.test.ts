@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../api/server.js";
 import {
 	addMessageLabel,
-	createTestAccount,
 	createTestContext,
 	createTestDb,
 	createTestFolder,
+	createTestIdentity,
 	createTestLabel,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
@@ -39,14 +39,14 @@ describe("Labels API", () => {
 
 	// ─── Label CRUD ─────────────────────────────────────────
 	describe("Label CRUD", () => {
-		let accountId: number;
+		let identityId: number;
 
 		beforeEach(() => {
-			accountId = createTestAccount(db);
+			identityId = createTestIdentity(db);
 		});
 
-		test("GET /api/accounts/:id/labels returns empty array initially", async () => {
-			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/labels`);
+		test("GET /api/identities/:id/labels returns empty array initially", async () => {
+			const { status, body } = await jsonRequest(`/api/identities/${identityId}/labels`);
 			expect(status).toBe(200);
 			expect(body).toEqual([]);
 		});
@@ -57,8 +57,8 @@ describe("Labels API", () => {
 			expect(body).toEqual([]);
 		});
 
-		test("POST /api/accounts/:id/labels creates a global label", async () => {
-			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/labels`, {
+		test("POST /api/identities/:id/labels creates a global label", async () => {
+			const { status, body } = await jsonRequest(`/api/identities/${identityId}/labels`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ name: "Important", color: "#ff0000" }),
@@ -66,7 +66,7 @@ describe("Labels API", () => {
 			expect(status).toBe(201);
 			expect(body.id).toBeGreaterThan(0);
 
-			const { body: labels } = await jsonRequest(`/api/accounts/${accountId}/labels`);
+			const { body: labels } = await jsonRequest(`/api/identities/${identityId}/labels`);
 			expect(labels).toHaveLength(1);
 			expect(labels[0].name).toBe("Important");
 			expect(labels[0].color).toBe("#ff0000");
@@ -87,20 +87,20 @@ describe("Labels API", () => {
 			expect(body.id).toBeGreaterThan(0);
 		});
 
-		test("GET /api/accounts/:id/labels returns same labels regardless of account", async () => {
-			const accountId2 = createTestAccount(db, { email: "second@example.com" });
-			createTestLabel(db, accountId, "Shared");
+		test("GET /api/identities/:id/labels returns same labels regardless of account", async () => {
+			const identityId2 = createTestIdentity(db, { email: "second@example.com" });
+			createTestLabel(db, "Shared");
 
-			const { body: labels1 } = await jsonRequest(`/api/accounts/${accountId}/labels`);
-			const { body: labels2 } = await jsonRequest(`/api/accounts/${accountId2}/labels`);
+			const { body: labels1 } = await jsonRequest(`/api/identities/${identityId}/labels`);
+			const { body: labels2 } = await jsonRequest(`/api/identities/${identityId2}/labels`);
 			expect(labels1).toHaveLength(1);
 			expect(labels2).toHaveLength(1);
 			expect(labels1[0].name).toBe("Shared");
 			expect(labels2[0].name).toBe("Shared");
 		});
 
-		test("POST /api/accounts/:id/labels rejects missing name", async () => {
-			const { status } = await jsonRequest(`/api/accounts/${accountId}/labels`, {
+		test("POST /api/identities/:id/labels rejects missing name", async () => {
+			const { status } = await jsonRequest(`/api/identities/${identityId}/labels`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({}),
@@ -108,9 +108,9 @@ describe("Labels API", () => {
 			expect(status).toBe(400);
 		});
 
-		test("POST /api/accounts/:id/labels rejects duplicate name", async () => {
-			createTestLabel(db, accountId, "Work");
-			const { status } = await jsonRequest(`/api/accounts/${accountId}/labels`, {
+		test("POST /api/identities/:id/labels rejects duplicate name", async () => {
+			createTestLabel(db, "Work");
+			const { status } = await jsonRequest(`/api/identities/${identityId}/labels`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ name: "Work" }),
@@ -118,9 +118,9 @@ describe("Labels API", () => {
 			expect(status).toBe(409);
 		});
 
-		test("POST /api/accounts/:id/labels returns 409 for duplicate name", async () => {
-			createTestLabel(db, accountId, "Work");
-			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/labels`, {
+		test("POST /api/identities/:id/labels returns 409 for duplicate name", async () => {
+			createTestLabel(db, "Work");
+			const { status, body } = await jsonRequest(`/api/identities/${identityId}/labels`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ name: "Work" }),
@@ -130,7 +130,7 @@ describe("Labels API", () => {
 		});
 
 		test("PUT /api/labels/:id updates label", async () => {
-			const labelId = createTestLabel(db, accountId, "Old Name");
+			const labelId = createTestLabel(db, "Old Name");
 			const { status } = await jsonRequest(`/api/labels/${labelId}`, {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
@@ -153,7 +153,7 @@ describe("Labels API", () => {
 		});
 
 		test("PUT /api/labels/:id rejects empty update", async () => {
-			const labelId = createTestLabel(db, accountId, "Test");
+			const labelId = createTestLabel(db, "Test");
 			const { status } = await jsonRequest(`/api/labels/${labelId}`, {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
@@ -163,7 +163,7 @@ describe("Labels API", () => {
 		});
 
 		test("DELETE /api/labels/:id deletes label", async () => {
-			const labelId = createTestLabel(db, accountId, "Temp");
+			const labelId = createTestLabel(db, "Temp");
 			const { status } = await jsonRequest(`/api/labels/${labelId}`, { method: "DELETE" });
 			expect(status).toBe(200);
 
@@ -177,10 +177,10 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/labels/:id/messages returns labeled messages", async () => {
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const labelId = createTestLabel(db, accountId, "Inbox", { source: "imap" });
-			const msg1 = createTestMessage(db, accountId, folderId, 1, { subject: "Labeled" });
-			createTestMessage(db, accountId, folderId, 2, { subject: "Unlabeled" });
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const labelId = createTestLabel(db, "Inbox", { source: "imap" });
+			const msg1 = createTestMessage(db, identityId, folderId, 1, { subject: "Labeled" });
+			createTestMessage(db, identityId, folderId, 2, { subject: "Unlabeled" });
 			addMessageLabel(db, msg1, labelId);
 
 			const { status, body } = await jsonRequest(`/api/labels/${labelId}/messages`);
@@ -190,10 +190,10 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/labels/:id/messages supports pagination", async () => {
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const labelId = createTestLabel(db, accountId, "Inbox");
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const labelId = createTestLabel(db, "Inbox");
 			for (let i = 1; i <= 5; i++) {
-				const msgId = createTestMessage(db, accountId, folderId, i);
+				const msgId = createTestMessage(db, identityId, folderId, i);
 				addMessageLabel(db, msgId, labelId);
 			}
 
@@ -206,12 +206,12 @@ describe("Labels API", () => {
 		});
 
 		test("labels include message_count and unread_count", async () => {
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const labelId = createTestLabel(db, accountId, "Inbox");
-			const msg1 = createTestMessage(db, accountId, folderId, 1, {
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const labelId = createTestLabel(db, "Inbox");
+			const msg1 = createTestMessage(db, identityId, folderId, 1, {
 				flags: "\\Seen",
 			});
-			const msg2 = createTestMessage(db, accountId, folderId, 2, { flags: "" });
+			const msg2 = createTestMessage(db, identityId, folderId, 2, { flags: "" });
 			addMessageLabel(db, msg1, labelId);
 			addMessageLabel(db, msg2, labelId);
 			// Counts are cached columns — populate them as refreshLabelCounts() would
@@ -259,19 +259,19 @@ describe("Labels API", () => {
 
 	// ─── Multi-label filter ──────────────────────────────────
 	describe("Multi-label filter", () => {
-		let accountId: number;
+		let identityId: number;
 		let folderId: number;
 
 		beforeEach(() => {
-			accountId = createTestAccount(db);
-			folderId = createTestFolder(db, accountId, "INBOX");
+			identityId = createTestIdentity(db);
+			folderId = createTestFolder(db, identityId, "INBOX");
 		});
 
 		test("GET /api/labels/filter returns messages matching all label IDs", async () => {
-			const l1 = createTestLabel(db, accountId, "Work");
-			const l2 = createTestLabel(db, accountId, "Important");
-			const msg1 = createTestMessage(db, accountId, folderId, 1, { subject: "Both" });
-			const msg2 = createTestMessage(db, accountId, folderId, 2, { subject: "OnlyWork" });
+			const l1 = createTestLabel(db, "Work");
+			const l2 = createTestLabel(db, "Important");
+			const msg1 = createTestMessage(db, identityId, folderId, 1, { subject: "Both" });
+			const msg2 = createTestMessage(db, identityId, folderId, 2, { subject: "OnlyWork" });
 			addMessageLabel(db, msg1, l1);
 			addMessageLabel(db, msg1, l2);
 			addMessageLabel(db, msg2, l1);
@@ -295,9 +295,9 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/labels/filter supports pagination", async () => {
-			const l1 = createTestLabel(db, accountId, "Tag");
+			const l1 = createTestLabel(db, "Tag");
 			for (let i = 1; i <= 4; i++) {
-				const msgId = createTestMessage(db, accountId, folderId, i);
+				const msgId = createTestMessage(db, identityId, folderId, i);
 				addMessageLabel(db, msgId, l1);
 			}
 			const { body: page1 } = await jsonRequest(`/api/labels/filter?ids=${l1}&limit=2&offset=0`);
@@ -308,16 +308,16 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/labels/filter returns 400 for invalid pagination", async () => {
-			const l1 = createTestLabel(db, accountId, "Tag");
+			const l1 = createTestLabel(db, "Tag");
 			const { status } = await jsonRequest(`/api/labels/filter?ids=${l1}&limit=-1`);
 			expect(status).toBe(400);
 		});
 
 		test("GET /api/labels/filter/count returns total and unread", async () => {
-			const l1 = createTestLabel(db, accountId, "Work");
-			const l2 = createTestLabel(db, accountId, "Urgent");
-			const msg1 = createTestMessage(db, accountId, folderId, 1, { flags: "" });
-			const msg2 = createTestMessage(db, accountId, folderId, 2, { flags: "\\Seen" });
+			const l1 = createTestLabel(db, "Work");
+			const l2 = createTestLabel(db, "Urgent");
+			const msg1 = createTestMessage(db, identityId, folderId, 1, { flags: "" });
+			const msg2 = createTestMessage(db, identityId, folderId, 2, { flags: "\\Seen" });
 			addMessageLabel(db, msg1, l1);
 			addMessageLabel(db, msg1, l2);
 			addMessageLabel(db, msg2, l1);
@@ -340,7 +340,7 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/labels/filter/count returns zeros when no messages match", async () => {
-			const l1 = createTestLabel(db, accountId, "Empty");
+			const l1 = createTestLabel(db, "Empty");
 			const { status, body } = await jsonRequest(`/api/labels/filter/count?ids=${l1}`);
 			expect(status).toBe(200);
 			expect(body.total).toBe(0);
@@ -350,20 +350,20 @@ describe("Labels API", () => {
 
 	// ─── Related labels ───────────────────────────────────────
 	describe("Related labels", () => {
-		let accountId: number;
+		let identityId: number;
 		let folderId: number;
 
 		beforeEach(() => {
-			accountId = createTestAccount(db);
-			folderId = createTestFolder(db, accountId, "INBOX");
+			identityId = createTestIdentity(db);
+			folderId = createTestFolder(db, identityId, "INBOX");
 		});
 
 		test("GET /api/labels/:id/related returns co-occurring labels", async () => {
-			const l1 = createTestLabel(db, accountId, "Inbox");
-			const l2 = createTestLabel(db, accountId, "Work");
-			const l3 = createTestLabel(db, accountId, "Personal");
-			const msg1 = createTestMessage(db, accountId, folderId, 1);
-			const msg2 = createTestMessage(db, accountId, folderId, 2);
+			const l1 = createTestLabel(db, "Inbox");
+			const l2 = createTestLabel(db, "Work");
+			const l3 = createTestLabel(db, "Personal");
+			const msg1 = createTestMessage(db, identityId, folderId, 1);
+			const msg2 = createTestMessage(db, identityId, folderId, 2);
 			addMessageLabel(db, msg1, l1);
 			addMessageLabel(db, msg1, l2);
 			addMessageLabel(db, msg2, l1);
@@ -377,17 +377,17 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/labels/:id/related returns empty array when no co-occurrences", async () => {
-			const l1 = createTestLabel(db, accountId, "Solo");
+			const l1 = createTestLabel(db, "Solo");
 			const { status, body } = await jsonRequest(`/api/labels/${l1}/related`);
 			expect(status).toBe(200);
 			expect(body).toEqual([]);
 		});
 
 		test("GET /api/labels/:id/related respects limit parameter", async () => {
-			const l1 = createTestLabel(db, accountId, "Base");
+			const l1 = createTestLabel(db, "Base");
 			for (let i = 0; i < 5; i++) {
-				const li = createTestLabel(db, accountId, `Tag${i}`);
-				const msgId = createTestMessage(db, accountId, folderId, i + 1);
+				const li = createTestLabel(db, `Tag${i}`);
+				const msgId = createTestMessage(db, identityId, folderId, i + 1);
 				addMessageLabel(db, msgId, l1);
 				addMessageLabel(db, msgId, li);
 			}
@@ -402,10 +402,10 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/labels/:id/related defaults to limit 5", async () => {
-			const l1 = createTestLabel(db, accountId, "Base2");
+			const l1 = createTestLabel(db, "Base2");
 			for (let i = 0; i < 8; i++) {
-				const li = createTestLabel(db, accountId, `CoTag${i}`);
-				const msgId = createTestMessage(db, accountId, folderId, i + 1);
+				const li = createTestLabel(db, `CoTag${i}`);
+				const msgId = createTestMessage(db, identityId, folderId, i + 1);
 				addMessageLabel(db, msgId, l1);
 				addMessageLabel(db, msgId, li);
 			}
@@ -416,18 +416,18 @@ describe("Labels API", () => {
 
 	// ─── Message Labels ──────────────────────────────────────
 	describe("Message labels", () => {
-		let accountId: number;
+		let identityId: number;
 		let folderId: number;
 
 		beforeEach(() => {
-			accountId = createTestAccount(db);
-			folderId = createTestFolder(db, accountId, "INBOX");
+			identityId = createTestIdentity(db);
+			folderId = createTestFolder(db, identityId, "INBOX");
 		});
 
 		test("POST /api/messages/:id/labels adds labels", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1);
-			const label1 = createTestLabel(db, accountId, "Work");
-			const label2 = createTestLabel(db, accountId, "Important");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
+			const label1 = createTestLabel(db, "Work");
+			const label2 = createTestLabel(db, "Important");
 
 			const { status } = await jsonRequest(`/api/messages/${msgId}/labels`, {
 				method: "POST",
@@ -442,7 +442,7 @@ describe("Labels API", () => {
 		});
 
 		test("POST /api/messages/:id/labels rejects missing label_ids", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 			const { status } = await jsonRequest(`/api/messages/${msgId}/labels`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -461,8 +461,8 @@ describe("Labels API", () => {
 		});
 
 		test("POST /api/messages/:id/labels is idempotent", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1);
-			const labelId = createTestLabel(db, accountId, "Work");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
+			const labelId = createTestLabel(db, "Work");
 
 			await jsonRequest(`/api/messages/${msgId}/labels`, {
 				method: "POST",
@@ -480,8 +480,8 @@ describe("Labels API", () => {
 		});
 
 		test("DELETE /api/messages/:id/labels/:labelId removes label", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1);
-			const labelId = createTestLabel(db, accountId, "Work");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
+			const labelId = createTestLabel(db, "Work");
 			addMessageLabel(db, msgId, labelId);
 
 			const { status } = await jsonRequest(`/api/messages/${msgId}/labels/${labelId}`, {
@@ -494,9 +494,9 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/messages/:id/labels returns labels for a message", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1);
-			const label1 = createTestLabel(db, accountId, "Inbox", { source: "imap" });
-			const label2 = createTestLabel(db, accountId, "Personal");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
+			const label1 = createTestLabel(db, "Inbox", { source: "imap" });
+			const label2 = createTestLabel(db, "Personal");
 			addMessageLabel(db, msgId, label1);
 			addMessageLabel(db, msgId, label2);
 
@@ -511,26 +511,26 @@ describe("Labels API", () => {
 
 	// ─── Related Labels ──────────────────────────────────────
 	describe("Related labels", () => {
-		let accountId: number;
+		let identityId: number;
 		let folderId: number;
 
 		beforeEach(() => {
-			accountId = createTestAccount(db);
-			folderId = createTestFolder(db, accountId, "INBOX");
+			identityId = createTestIdentity(db);
+			folderId = createTestFolder(db, identityId, "INBOX");
 		});
 
 		test("GET /api/labels/:id/related returns co-occurring labels sorted by frequency", async () => {
-			const inbox = createTestLabel(db, accountId, "Inbox");
-			const work = createTestLabel(db, accountId, "Work");
-			const personal = createTestLabel(db, accountId, "Personal");
+			const inbox = createTestLabel(db, "Inbox");
+			const work = createTestLabel(db, "Work");
+			const personal = createTestLabel(db, "Personal");
 
 			// 3 messages with Inbox+Work, 1 message with Inbox+Personal
 			for (let i = 0; i < 3; i++) {
-				const msgId = createTestMessage(db, accountId, folderId, i + 1);
+				const msgId = createTestMessage(db, identityId, folderId, i + 1);
 				addMessageLabel(db, msgId, inbox);
 				addMessageLabel(db, msgId, work);
 			}
-			const msg4 = createTestMessage(db, accountId, folderId, 4);
+			const msg4 = createTestMessage(db, identityId, folderId, 4);
 			addMessageLabel(db, msg4, inbox);
 			addMessageLabel(db, msg4, personal);
 
@@ -543,9 +543,9 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/labels/:id/related does not include the label itself", async () => {
-			const inbox = createTestLabel(db, accountId, "Inbox");
-			const work = createTestLabel(db, accountId, "Work");
-			const msg = createTestMessage(db, accountId, folderId, 1);
+			const inbox = createTestLabel(db, "Inbox");
+			const work = createTestLabel(db, "Work");
+			const msg = createTestMessage(db, identityId, folderId, 1);
 			addMessageLabel(db, msg, inbox);
 			addMessageLabel(db, msg, work);
 
@@ -556,8 +556,8 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/labels/:id/related returns empty array when no co-occurring labels", async () => {
-			const inbox = createTestLabel(db, accountId, "Inbox");
-			const msg = createTestMessage(db, accountId, folderId, 1);
+			const inbox = createTestLabel(db, "Inbox");
+			const msg = createTestMessage(db, identityId, folderId, 1);
 			addMessageLabel(db, msg, inbox);
 
 			const { status, body } = await jsonRequest(`/api/labels/${inbox}/related`);
@@ -566,12 +566,12 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/labels/:id/related respects limit parameter", async () => {
-			const inbox = createTestLabel(db, accountId, "Inbox");
+			const inbox = createTestLabel(db, "Inbox");
 			const labels = [];
 			for (let i = 0; i < 6; i++) {
-				labels.push(createTestLabel(db, accountId, `Label${i}`));
+				labels.push(createTestLabel(db, `Label${i}`));
 			}
-			const msg = createTestMessage(db, accountId, folderId, 1);
+			const msg = createTestMessage(db, identityId, folderId, 1);
 			addMessageLabel(db, msg, inbox);
 			for (const lId of labels) addMessageLabel(db, msg, lId);
 

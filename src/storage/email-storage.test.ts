@@ -57,11 +57,11 @@ function buildRaw(
 	return Buffer.from(lines.join("\r\n")).toString("base64");
 }
 
-/** Create an inbound connector and account, return { connectorId, accountId } */
-function createR2AccountAndConnector(
+/** Create an inbound connector and identity, return { connectorId, identityId } */
+function createR2IdentityAndConnector(
 	db: Database.Database,
 	name = "Test",
-): { connectorId: number; accountId: number } {
+): { connectorId: number; identityId: number } {
 	db.prepare(
 		`INSERT INTO inbound_connectors (name, type, cf_r2_account_id, cf_r2_bucket_name,
 		 cf_r2_access_key_id, cf_r2_secret_access_key, cf_r2_prefix)
@@ -80,21 +80,20 @@ function createR2AccountAndConnector(
 	);
 
 	db.prepare(
-		`INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id,
-		 ingest_connector_type, send_connector_type)
-		 VALUES (?, ?, ?, ?, 'cloudflare-r2', 'smtp')`,
+		`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+		 VALUES (?, ?, ?, ?)`,
 	).run(name, `${name.toLowerCase()}@example.com`, connectorId, outboundId);
-	const accountId = Number(
+	const identityId = Number(
 		(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 	);
 
-	return { connectorId, accountId };
+	return { connectorId, identityId };
 }
 
 describe("storeInboundEmail", () => {
-	test("returns stored:0 when no accounts are linked to the connector", async () => {
+	test("returns stored:0 when no identities are linked to the connector", async () => {
 		const db = createTestDb();
-		// Create connector with NO linked account
+		// Create connector with NO linked identity
 		db.prepare(
 			`INSERT INTO inbound_connectors (name, type, cf_r2_account_id, cf_r2_bucket_name,
 			 cf_r2_access_key_id, cf_r2_secret_access_key, cf_r2_prefix)
@@ -116,7 +115,7 @@ describe("storeInboundEmail", () => {
 
 	test("stores a basic email and returns stored:1", async () => {
 		const db = createTestDb();
-		const { connectorId } = createR2AccountAndConnector(db);
+		const { connectorId } = createR2IdentityAndConnector(db);
 
 		const raw = buildRaw({
 			from: "alice@example.com",
@@ -144,7 +143,7 @@ describe("storeInboundEmail", () => {
 
 	test("deduplicates emails with the same message-id", async () => {
 		const db = createTestDb();
-		const { connectorId } = createR2AccountAndConnector(db);
+		const { connectorId } = createR2IdentityAndConnector(db);
 
 		const raw = buildRaw({
 			from: "alice@example.com",
@@ -166,7 +165,7 @@ describe("storeInboundEmail", () => {
 
 	test("stores email with no message-id (checkDuplicate = null)", async () => {
 		const db = createTestDb();
-		const { connectorId } = createR2AccountAndConnector(db);
+		const { connectorId } = createR2IdentityAndConnector(db);
 
 		// No Message-ID header → checkDuplicate is null → no dedup
 		const raw = buildRaw({ from: "alice@example.com", subject: "No ID", body: "hi" });
@@ -194,7 +193,7 @@ describe("storeInboundEmail", () => {
 
 	test("stores email with no Date header (falls back to current time)", async () => {
 		const db = createTestDb();
-		const { connectorId } = createR2AccountAndConnector(db);
+		const { connectorId } = createR2IdentityAndConnector(db);
 
 		const raw = buildRaw({
 			from: "alice@example.com",
@@ -222,7 +221,7 @@ describe("storeInboundEmail", () => {
 
 	test("stores email with no To/Cc headers (null JSON fields)", async () => {
 		const db = createTestDb();
-		const { connectorId } = createR2AccountAndConnector(db);
+		const { connectorId } = createR2IdentityAndConnector(db);
 
 		// No To or Cc headers → toAddrs/ccAddrs empty → JSON stored as null
 		const raw = buildRaw({
@@ -249,7 +248,7 @@ describe("storeInboundEmail", () => {
 
 	test("stores email with no From header (falls back to payload.from)", async () => {
 		const db = createTestDb();
-		const { connectorId } = createR2AccountAndConnector(db);
+		const { connectorId } = createR2IdentityAndConnector(db);
 
 		// No From header → fromAddr undefined → uses payload.from
 		const raw = buildRaw({
@@ -274,7 +273,7 @@ describe("storeInboundEmail", () => {
 
 	test("stores email with HTML body", async () => {
 		const db = createTestDb();
-		const { connectorId } = createR2AccountAndConnector(db);
+		const { connectorId } = createR2IdentityAndConnector(db);
 
 		const raw = buildRaw({
 			from: "alice@example.com",
@@ -300,7 +299,7 @@ describe("storeInboundEmail", () => {
 
 	test("stores email with attachment (has_attachments = 1)", async () => {
 		const db = createTestDb();
-		const { connectorId } = createR2AccountAndConnector(db);
+		const { connectorId } = createR2IdentityAndConnector(db);
 
 		const raw = buildRaw({
 			from: "alice@example.com",
@@ -326,7 +325,7 @@ describe("storeInboundEmail", () => {
 
 	test("stores email with no References header (refs = null)", async () => {
 		const db = createTestDb();
-		const { connectorId } = createR2AccountAndConnector(db);
+		const { connectorId } = createR2IdentityAndConnector(db);
 
 		// No References or In-Reply-To → refs = null
 		const raw = buildRaw({
@@ -350,11 +349,11 @@ describe("storeInboundEmail", () => {
 		expect(msg.references).toBeNull();
 	});
 
-	test("stores email for multiple accounts linked to the same connector", async () => {
+	test("stores email for multiple identities linked to the same connector", async () => {
 		const db = createTestDb();
-		const { connectorId } = createR2AccountAndConnector(db, "Account1");
+		const { connectorId } = createR2IdentityAndConnector(db, "Account1");
 
-		// Link a second account to the same connector
+		// Link a second identity to the same connector
 		db.prepare(
 			`INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
 			 VALUES ('Outbound2', 'smtp', 'smtp.example.com', 587, 1, 'u2', 'p2')`,
@@ -363,15 +362,14 @@ describe("storeInboundEmail", () => {
 			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 		);
 		db.prepare(
-			`INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id,
-			 ingest_connector_type, send_connector_type)
-			 VALUES ('Account2', 'account2@example.com', ?, ?, 'cloudflare-r2', 'smtp')`,
+			`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+			 VALUES ('Account2', 'identity2@example.com', ?, ?)`,
 		).run(connectorId, outbound2Id);
 
 		const raw = buildRaw({
 			from: "alice@example.com",
 			to: "inbox@example.com",
-			subject: "Multi-account",
+			subject: "Multi-identity",
 			messageId: "<multi@example.com>",
 		});
 
@@ -381,7 +379,7 @@ describe("storeInboundEmail", () => {
 			raw,
 			rawSize: 100,
 		});
-		// Should be stored for both accounts
+		// Should be stored for both identities
 		expect(result.stored).toBe(2);
 	});
 });

@@ -23,39 +23,39 @@ describe("api client", () => {
 		vi.restoreAllMocks();
 	});
 
-	describe("accounts", () => {
-		it("list fetches /api/accounts", async () => {
-			const accounts = [{ id: 1, name: "Test" }];
-			mockFetch.mockResolvedValue(mockJsonResponse(accounts));
+	describe("identities", () => {
+		it("list fetches /api/identities", async () => {
+			const identities = [{ id: 1, name: "Test" }];
+			mockFetch.mockResolvedValue(mockJsonResponse(identities));
 
-			const result = await api.accounts.list();
-			expect(result).toEqual(accounts);
+			const result = await api.identities.list();
+			expect(result).toEqual(identities);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts",
+				"/api/identities",
 				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
 			);
 		});
 
-		it("get fetches /api/accounts/:id", async () => {
-			const account = { id: 1, name: "Test", email: "test@test.com" };
-			mockFetch.mockResolvedValue(mockJsonResponse(account));
+		it("get fetches /api/identities/:id", async () => {
+			const identity = { id: 1, name: "Test", email: "test@test.com" };
+			mockFetch.mockResolvedValue(mockJsonResponse(identity));
 
-			const result = await api.accounts.get(1);
-			expect(result).toEqual(account);
+			const result = await api.identities.get(1);
+			expect(result).toEqual(identity);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/1",
+				"/api/identities/1",
 				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
 			);
 		});
 
-		it("create POSTs to /api/accounts", async () => {
+		it("create POSTs to /api/identities", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ id: 2 }, 200));
 
 			const data = { name: "New", email: "new@test.com", imap_host: "imap.test.com" };
-			const result = await api.accounts.create(data);
+			const result = await api.identities.create(data);
 			expect(result).toEqual({ id: 2 });
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts",
+				"/api/identities",
 				expect.objectContaining({
 					method: "POST",
 					body: JSON.stringify(data),
@@ -64,12 +64,12 @@ describe("api client", () => {
 			);
 		});
 
-		it("update PUTs to /api/accounts/:id", async () => {
+		it("update PUTs to /api/identities/:id", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
 
-			await api.accounts.update(1, { name: "Updated" });
+			await api.identities.update(1, { name: "Updated" });
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/1",
+				"/api/identities/1",
 				expect.objectContaining({
 					method: "PUT",
 					body: JSON.stringify({ name: "Updated" }),
@@ -78,12 +78,12 @@ describe("api client", () => {
 			);
 		});
 
-		it("delete DELETEs /api/accounts/:id", async () => {
+		it("delete DELETEs /api/identities/:id", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
 
-			await api.accounts.delete(5);
+			await api.identities.delete(5);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/5",
+				"/api/identities/5",
 				expect.objectContaining({
 					method: "DELETE",
 					headers: { "Content-Type": "application/json" },
@@ -91,24 +91,24 @@ describe("api client", () => {
 			);
 		});
 
-		it("syncStatus fetches /api/accounts/:id/sync-status", async () => {
+		it("syncStatus fetches /api/identities/:id/sync-status", async () => {
 			const status = [{ id: 1, name: "INBOX", message_count: 10 }];
 			mockFetch.mockResolvedValue(mockJsonResponse(status));
 
-			const result = await api.accounts.syncStatus(1);
+			const result = await api.identities.syncStatus(1);
 			expect(result).toEqual(status);
 		});
 	});
 
 	describe("folders", () => {
-		it("list fetches /api/accounts/:id/folders", async () => {
+		it("list fetches /api/identities/:id/folders", async () => {
 			const folders = [{ id: 1, path: "INBOX", name: "INBOX" }];
 			mockFetch.mockResolvedValue(mockJsonResponse(folders));
 
 			const result = await api.folders.list(1);
 			expect(result).toEqual(folders);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/1/folders",
+				"/api/identities/1/folders",
 				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
 			);
 		});
@@ -122,7 +122,7 @@ describe("api client", () => {
 			const result = await api.messages.list(1, 2);
 			expect(result).toEqual(messages);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/1/folders/2/messages?",
+				"/api/identities/1/folders/2/messages?",
 				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
 			);
 		});
@@ -202,13 +202,13 @@ describe("api client", () => {
 			expect(url).toContain("q=hello");
 		});
 
-		it("passes accountId and limit options", async () => {
+		it("passes identityId and limit options", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse([]));
 
-			await api.search("test", { accountId: 3, limit: 5 });
+			await api.search("test", { identityId: 3, limit: 5 });
 			const url = mockFetch.mock.calls[0]?.[0] as string;
 			expect(url).toContain("q=test");
-			expect(url).toContain("account_id=3");
+			expect(url).toContain("identity_id=3");
 			expect(url).toContain("limit=5");
 		});
 	});
@@ -443,26 +443,26 @@ describe("api client", () => {
 	});
 
 	describe("sync — extended", () => {
-		it("trigger POSTs to /api/accounts/:id/sync", async () => {
+		it("trigger POSTs to /api/identities/:id/sync", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({}));
 
 			await api.sync.trigger(1);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/1/sync",
+				"/api/identities/1/sync",
 				expect.objectContaining({ method: "POST" }),
 			);
 		});
 	});
 
 	describe("allMessages", () => {
-		it("list fetches /api/accounts/:id/all-messages", async () => {
+		it("list fetches /api/identities/:id/all-messages", async () => {
 			const messages = [{ id: 1, subject: "Hello" }];
 			mockFetch.mockResolvedValue(mockJsonResponse(messages));
 
 			const result = await api.allMessages.list(1);
 			expect(result).toEqual(messages);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/1/all-messages?",
+				"/api/identities/1/all-messages?",
 				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
 			);
 		});
@@ -476,7 +476,7 @@ describe("api client", () => {
 			expect(url).toContain("offset=50");
 		});
 
-		it("count fetches /api/accounts/:id/all-messages/count", async () => {
+		it("count fetches /api/identities/:id/all-messages/count", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ total: 100, unread: 5 }));
 
 			const result = await api.allMessages.count(1);
@@ -485,13 +485,13 @@ describe("api client", () => {
 	});
 
 	describe("unreadMessages", () => {
-		it("list fetches /api/accounts/:id/unread-messages", async () => {
+		it("list fetches /api/identities/:id/unread-messages", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse([{ id: 1 }]));
 
 			const result = await api.unreadMessages.list(2);
 			expect(result).toEqual([{ id: 1 }]);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/2/unread-messages?",
+				"/api/identities/2/unread-messages?",
 				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
 			);
 		});
@@ -505,7 +505,7 @@ describe("api client", () => {
 			expect(url).toContain("offset=20");
 		});
 
-		it("count fetches /api/accounts/:id/unread-messages/count", async () => {
+		it("count fetches /api/identities/:id/unread-messages/count", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ total: 42 }));
 
 			const result = await api.unreadMessages.count(1);
@@ -524,7 +524,7 @@ describe("api client", () => {
 			};
 			mockFetch.mockResolvedValue(mockJsonResponse(response));
 
-			const data = { account_id: 1, to: ["to@test.com"], subject: "Test", text_body: "Hello" };
+			const data = { identity_id: 1, to: ["to@test.com"], subject: "Test", text_body: "Hello" };
 			const result = await api.send(data);
 			expect(result).toEqual(response);
 			expect(mockFetch).toHaveBeenCalledWith(
@@ -555,14 +555,14 @@ describe("api client", () => {
 	});
 
 	describe("drafts", () => {
-		it("list fetches /api/drafts?account_id=:id", async () => {
+		it("list fetches /api/drafts?identity_id=:id", async () => {
 			const drafts = [{ id: 1, subject: "Draft" }];
 			mockFetch.mockResolvedValue(mockJsonResponse(drafts));
 
 			const result = await api.drafts.list(1);
 			expect(result).toEqual(drafts);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/drafts?account_id=1",
+				"/api/drafts?identity_id=1",
 				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
 			);
 		});
@@ -578,7 +578,7 @@ describe("api client", () => {
 		it("create POSTs to /api/drafts", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ id: 10 }));
 
-			const data = { account_id: 1, subject: "New Draft", text_body: "Content" };
+			const data = { identity_id: 1, subject: "New Draft", text_body: "Content" };
 			const result = await api.drafts.create(data);
 			expect(result).toEqual({ id: 10 });
 			expect(mockFetch).toHaveBeenCalledWith(
@@ -615,30 +615,30 @@ describe("api client", () => {
 	});
 
 	describe("trustedSenders", () => {
-		it("list fetches /api/accounts/:id/trusted-senders", async () => {
+		it("list fetches /api/trusted-senders", async () => {
 			const senders = [{ id: 1, sender_address: "alice@test.com" }];
 			mockFetch.mockResolvedValue(mockJsonResponse(senders));
 
-			const result = await api.trustedSenders.list(1);
+			const result = await api.trustedSenders.list();
 			expect(result).toEqual(senders);
 		});
 
 		it("check fetches with encoded sender param", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ trusted: true }));
 
-			const result = await api.trustedSenders.check(1, "alice@test.com");
+			const result = await api.trustedSenders.check("alice@test.com");
 			expect(result).toEqual({ trusted: true });
 			const url = mockFetch.mock.calls[0]?.[0] as string;
 			expect(url).toContain("sender=alice%40test.com");
 		});
 
-		it("add POSTs to /api/accounts/:id/trusted-senders", async () => {
+		it("add POSTs to /api/trusted-senders", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ id: 5 }));
 
-			const result = await api.trustedSenders.add(1, "alice@test.com");
+			const result = await api.trustedSenders.add("alice@test.com");
 			expect(result).toEqual({ id: 5 });
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/1/trusted-senders",
+				"/api/trusted-senders",
 				expect.objectContaining({
 					method: "POST",
 					body: JSON.stringify({ sender_address: "alice@test.com" }),
@@ -646,12 +646,12 @@ describe("api client", () => {
 			);
 		});
 
-		it("remove DELETEs from /api/accounts/:id/trusted-senders", async () => {
+		it("remove DELETEs from /api/trusted-senders", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true }));
 
-			await api.trustedSenders.remove(1, "alice@test.com");
+			await api.trustedSenders.remove("alice@test.com");
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/1/trusted-senders",
+				"/api/trusted-senders",
 				expect.objectContaining({
 					method: "DELETE",
 					body: JSON.stringify({ sender_address: "alice@test.com" }),
@@ -709,15 +709,15 @@ describe("api client", () => {
 		});
 	});
 
-	describe("accounts — extended", () => {
-		it("testConnection POSTs to /api/accounts/test-connection", async () => {
+	describe("identities — extended", () => {
+		it("testConnection POSTs to /api/identities/test-connection", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ ok: true, mailboxes: 5 }));
 
 			const data = { imap_host: "imap.test.com", imap_port: 993 };
-			const result = await api.accounts.testConnection(data);
+			const result = await api.identities.testConnection(data);
 			expect(result).toEqual({ ok: true, mailboxes: 5 });
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/test-connection",
+				"/api/identities/test-connection",
 				expect.objectContaining({
 					method: "POST",
 					body: JSON.stringify(data),
@@ -749,7 +749,7 @@ describe("api client", () => {
 		it("throws on non-ok response with error message", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ error: "Not found" }, 404));
 
-			await expect(api.accounts.get(999)).rejects.toThrow("Not found");
+			await expect(api.identities.get(999)).rejects.toThrow("Not found");
 		});
 
 		it("dispatches stork-container-locked event on 423 response", async () => {
@@ -760,7 +760,7 @@ describe("api client", () => {
 			const handler = vi.fn();
 			window.addEventListener("stork-container-locked", handler);
 			try {
-				await expect(api.accounts.list()).rejects.toThrow("Container is locked");
+				await expect(api.identities.list()).rejects.toThrow("Container is locked");
 				expect(handler).toHaveBeenCalledTimes(1);
 			} finally {
 				window.removeEventListener("stork-container-locked", handler);
@@ -775,13 +775,13 @@ describe("api client", () => {
 				json: () => Promise.reject(new Error("bad json")),
 			});
 
-			await expect(api.accounts.list()).rejects.toThrow("Internal Server Error");
+			await expect(api.identities.list()).rejects.toThrow("Internal Server Error");
 		});
 
 		it("passes AbortSignal to fetch for timeout", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse([]));
 
-			await api.accounts.list();
+			await api.identities.list();
 			const init = mockFetch.mock.calls[0]?.[1];
 			expect(init.signal).toBeInstanceOf(AbortSignal);
 		});
@@ -790,7 +790,7 @@ describe("api client", () => {
 			const abortError = new DOMException("signal is aborted", "AbortError");
 			mockFetch.mockRejectedValue(abortError);
 
-			await expect(api.accounts.list()).rejects.toThrow(/timed out/);
+			await expect(api.identities.list()).rejects.toThrow(/timed out/);
 		});
 
 		it("respects timeout even when caller provides a signal", async () => {
@@ -811,9 +811,9 @@ describe("api client", () => {
 			);
 
 			// Use the internal fetchJSON by calling an api method and passing our signal indirectly
-			// We can't pass signal directly to api.accounts.list(), but we can test the abort
+			// We can't pass signal directly to api.identities.list(), but we can test the abort
 			// by checking that fetch receives the internal controller's signal, not the caller's
-			const promise = api.accounts.list();
+			const promise = api.identities.list();
 			const fetchCall = mockFetch.mock.calls[0]?.[1];
 			// The signal should be the internal controller's (not undefined)
 			expect(fetchCall?.signal).toBeInstanceOf(AbortSignal);
@@ -834,7 +834,7 @@ describe("api client", () => {
 
 			// The internal fetchJSON can't distinguish perfectly in unit tests without
 			// calling it directly, but we verify the fetch receives an AbortSignal
-			await expect(api.accounts.list()).rejects.toThrow(/timed out/);
+			await expect(api.identities.list()).rejects.toThrow(/timed out/);
 		});
 	});
 });

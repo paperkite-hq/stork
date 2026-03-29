@@ -30,7 +30,7 @@ export function webhookRoutes(context: ContainerContext): Hono {
 	 * POST /api/webhook/cloudflare-email/:connectorId
 	 *
 	 * Receives an email from a Cloudflare Email Worker and stores it for all
-	 * accounts linked to the given inbound connector.
+	 * identities linked to the given inbound connector.
 	 *
 	 * Authentication: Bearer token in Authorization header, matched against
 	 * cf_email_webhook_secret stored in inbound_connectors.

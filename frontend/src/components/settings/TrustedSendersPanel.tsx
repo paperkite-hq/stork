@@ -4,10 +4,8 @@ import { ConfirmDialog } from "../ConfirmDialog";
 import { toast } from "../Toast";
 
 export function TrustedSendersPanel({
-	accountId,
 	onClose,
 }: {
-	accountId: number;
 	onClose: () => void;
 }) {
 	const [senders, setSenders] = useState<TrustedSender[]>([]);
@@ -17,15 +15,15 @@ export function TrustedSendersPanel({
 	useEffect(() => {
 		setLoading(true);
 		api.trustedSenders
-			.list(accountId)
+			.list()
 			.then(setSenders)
 			.catch(() => {})
 			.finally(() => setLoading(false));
-	}, [accountId]);
+	}, []);
 
 	const handleRemove = (sender: TrustedSender) => {
 		api.trustedSenders
-			.remove(accountId, sender.sender_address)
+			.remove(sender.sender_address)
 			.then(() => {
 				setSenders((prev) => prev.filter((s) => s.id !== sender.id));
 				toast(`Removed ${sender.sender_address} from trusted senders`, "success");

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Account } from "../api";
+import type { Identity } from "../api";
 import {
 	type ComposeFormat,
 	type ComposeMode,
@@ -25,11 +25,11 @@ export type { ComposeMode } from "../compose-utils";
 
 interface ComposeModalProps {
 	mode: ComposeMode;
-	accounts?: Account[];
-	selectedAccountId?: number | null;
+	identities?: Identity[];
+	selectedIdentityId?: number | null;
 	onClose: () => void;
 	onSend: (data: {
-		accountId?: number;
+		identityId?: number;
 		to: string;
 		cc: string;
 		bcc: string;
@@ -83,16 +83,18 @@ function ExpandIcon({ expanded }: { expanded: boolean }) {
 
 export function ComposeModal({
 	mode,
-	accounts,
-	selectedAccountId,
+	identities,
+	selectedIdentityId,
 	onClose,
 	onSend,
 }: ComposeModalProps) {
 	const currentDraftKey = draftKey(mode);
-	const userEmail = accounts?.find((a) => a.id === (selectedAccountId ?? accounts[0]?.id))?.email;
+	const userEmail = identities?.find(
+		(a) => a.id === (selectedIdentityId ?? identities[0]?.id),
+	)?.email;
 
-	const [fromAccountId, setFromAccountId] = useState<number | undefined>(
-		selectedAccountId ?? undefined,
+	const [fromIdentityId, setFromIdentityId] = useState<number | undefined>(
+		selectedIdentityId ?? undefined,
 	);
 	const [to, setTo] = useState(() => {
 		const saved = loadDraft(currentDraftKey);
@@ -222,7 +224,7 @@ export function ComposeModal({
 			const currentHtml = format === "html" ? getEditorHtml() : undefined;
 			const textBody = format === "html" ? htmlToPlainText(currentHtml || "") : body;
 			await onSend({
-				accountId: fromAccountId,
+				identityId: fromIdentityId,
 				to: to.trim(),
 				cc: cc.trim(),
 				bcc: bcc.trim(),
@@ -236,7 +238,7 @@ export function ComposeModal({
 			setSending(false);
 			setValidationError(err instanceof Error ? err.message : "Failed to send message");
 		}
-	}, [to, cc, bcc, subject, body, format, fromAccountId, onSend, currentDraftKey, getEditorHtml]);
+	}, [to, cc, bcc, subject, body, format, fromIdentityId, onSend, currentDraftKey, getEditorHtml]);
 
 	const handleDiscard = useCallback(() => {
 		clearDraft(currentDraftKey);
@@ -383,18 +385,18 @@ export function ComposeModal({
 
 				{/* Fields */}
 				<div className="px-4 py-2 space-y-2 border-b border-gray-100 dark:border-gray-800">
-					{accounts && accounts.length > 1 && (
+					{identities && identities.length > 1 && (
 						<div className="flex items-center gap-2">
 							<label htmlFor="compose-from" className="text-sm text-gray-500 w-14 flex-shrink-0">
 								From
 							</label>
 							<select
 								id="compose-from"
-								value={fromAccountId ?? ""}
-								onChange={(e) => setFromAccountId(Number(e.target.value) || undefined)}
+								value={fromIdentityId ?? ""}
+								onChange={(e) => setFromIdentityId(Number(e.target.value) || undefined)}
 								className="flex-1 bg-transparent text-sm outline-none border-none dark:text-gray-100"
 							>
-								{accounts.map((a) => (
+								{identities.map((a) => (
 									<option key={a.id} value={a.id} className="bg-white dark:bg-gray-900">
 										{a.name} &lt;{a.email}&gt;
 									</option>

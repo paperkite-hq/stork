@@ -16,7 +16,7 @@ import { toast } from "./Toast";
 interface SearchPanelProps {
 	onClose: () => void;
 	onSelectMessage: (id: number) => void;
-	accountId: number | null;
+	identityId: number | null;
 	onResultsChange?: (results: SearchResult[]) => void;
 	onQueryChange?: (query: string) => void;
 	initialQuery?: string;
@@ -82,7 +82,7 @@ function buildQueryWithFilters(text: string, filters: ActiveFilter[]): string {
 export function SearchPanel({
 	onClose,
 	onSelectMessage,
-	accountId,
+	identityId,
 	onResultsChange,
 	onQueryChange,
 	initialQuery = "",
@@ -125,7 +125,7 @@ export function SearchPanel({
 			setActiveQuery(fullQuery);
 			setLoading(true);
 			api
-				.search(fullQuery, { accountId: accountId ?? undefined, limit: SEARCH_PAGE_SIZE })
+				.search(fullQuery, { identityId: identityId ?? undefined, limit: SEARCH_PAGE_SIZE })
 				.then((r) => {
 					setResults(r);
 					setSearched(true);
@@ -140,7 +140,7 @@ export function SearchPanel({
 				})
 				.finally(() => setLoading(false));
 		},
-		[accountId],
+		[identityId],
 	);
 
 	const triggerSearch = useCallback(
@@ -164,7 +164,7 @@ export function SearchPanel({
 		setLoadingMore(true);
 		api
 			.search(lastQueryRef.current, {
-				accountId: accountId ?? undefined,
+				identityId: identityId ?? undefined,
 				limit: SEARCH_PAGE_SIZE,
 				offset: results.length,
 			})
@@ -176,7 +176,7 @@ export function SearchPanel({
 				toast("Failed to load more results", "error");
 			})
 			.finally(() => setLoadingMore(false));
-	}, [accountId, results.length, loadingMore]);
+	}, [identityId, results.length, loadingMore]);
 
 	// Cleanup debounce timeout on unmount
 	useEffect(() => {

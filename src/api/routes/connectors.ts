@@ -215,7 +215,7 @@ export function connectorRoutes(
 			...(values as [string | number | null, ...Array<string | number | null>]),
 		);
 
-		// Reload affected accounts in scheduler if IMAP credentials changed
+		// Reload affected identities in scheduler if IMAP credentials changed
 		if (
 			"imap_host" in body ||
 			"imap_port" in body ||
@@ -223,7 +223,7 @@ export function connectorRoutes(
 			"imap_user" in body ||
 			"imap_pass" in body
 		) {
-			_reloadConnectorAccounts(db, getScheduler(), connectorId);
+			_reloadConnectorIdentities(db, getScheduler(), connectorId);
 		}
 
 		// Reload R2 poller if R2 credentials changed
@@ -249,14 +249,14 @@ export function connectorRoutes(
 		const connectorId = parseIntParam(c, "connectorId", c.req.param("connectorId"));
 		if (connectorId instanceof Response) return connectorId;
 
-		// Block deletion if any account references this connector
+		// Block deletion if any identity references this connector
 		const inUse = db
-			.prepare("SELECT COUNT(*) as n FROM accounts WHERE inbound_connector_id = ?")
+			.prepare("SELECT COUNT(*) as n FROM identities WHERE inbound_connector_id = ?")
 			.get(connectorId) as { n: number };
 		if (inUse.n > 0) {
 			return c.json(
 				{
-					error: `Cannot delete: ${inUse.n} account(s) still reference this inbound connector`,
+					error: `Cannot delete: ${inUse.n} identity/identities still reference this inbound connector`,
 				},
 				409,
 			);
@@ -487,14 +487,14 @@ export function connectorRoutes(
 		const connectorId = parseIntParam(c, "connectorId", c.req.param("connectorId"));
 		if (connectorId instanceof Response) return connectorId;
 
-		// Block deletion if any account references this connector
+		// Block deletion if any identity references this connector
 		const inUse = db
-			.prepare("SELECT COUNT(*) as n FROM accounts WHERE outbound_connector_id = ?")
+			.prepare("SELECT COUNT(*) as n FROM identities WHERE outbound_connector_id = ?")
 			.get(connectorId) as { n: number };
 		if (inUse.n > 0) {
 			return c.json(
 				{
-					error: `Cannot delete: ${inUse.n} account(s) still reference this outbound connector`,
+					error: `Cannot delete: ${inUse.n} identity/identities still reference this outbound connector`,
 				},
 				409,
 			);
@@ -608,18 +608,18 @@ function _reloadR2Connector(db: Database.Database, poller: R2Poller, connectorId
 	}
 }
 
-/** Reload IMAP accounts in the scheduler after an inbound connector's credentials change */
-function _reloadConnectorAccounts(
+/** Reload IMAP identities in the scheduler after an inbound connector's credentials change */
+function _reloadConnectorIdentities(
 	db: Database.Database,
 	scheduler: SyncScheduler,
 	inboundConnectorId: number,
 ): void {
 	const affected = db
 		.prepare(
-			`SELECT a.id, ic.imap_host, ic.imap_port, ic.imap_tls, ic.imap_user, ic.imap_pass
-			FROM accounts a
-			JOIN inbound_connectors ic ON ic.id = a.inbound_connector_id
-			WHERE a.inbound_connector_id = ? AND ic.type = 'imap'`,
+			`SELECT i.id, ic.imap_host, ic.imap_port, ic.imap_tls, ic.imap_user, ic.imap_pass
+			FROM identities i
+			JOIN inbound_connectors ic ON ic.id = i.inbound_connector_id
+			WHERE i.inbound_connector_id = ? AND ic.type = 'imap'`,
 		)
 		.all(inboundConnectorId) as {
 		id: number;
@@ -630,16 +630,16 @@ function _reloadConnectorAccounts(
 		imap_pass: string;
 	}[];
 
-	for (const account of affected) {
-		scheduler.removeAccount(account.id);
-		if (account.imap_host && account.imap_user && account.imap_pass) {
-			scheduler.addAccount({
-				accountId: account.id,
+	for (const identity of affected) {
+		scheduler.removeIdentity(identity.id);
+		if (identity.imap_host && identity.imap_user && identity.imap_pass) {
+			scheduler.addIdentity({
+				identityId: identity.id,
 				imapConfig: {
-					host: account.imap_host,
-					port: account.imap_port,
-					secure: account.imap_tls === 1,
-					auth: { user: account.imap_user, pass: account.imap_pass },
+					host: identity.imap_host,
+					port: identity.imap_port,
+					secure: identity.imap_tls === 1,
+					auth: { user: identity.imap_user, pass: identity.imap_pass },
 				},
 			});
 		}

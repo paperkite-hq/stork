@@ -107,13 +107,13 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 	// Zero vault key immediately after passing to SQLCipher
 	vaultKey.fill(0);
 
-	// Per-account batching state for consecutive identical sync errors
+	// Per-identity batching state for consecutive identical sync errors
 	const errorBatches = new Map<number, ErrorBatch>();
 
-	function flushErrorBatch(accountId: number): void {
-		const batch = errorBatches.get(accountId);
+	function flushErrorBatch(identityId: number): void {
+		const batch = errorBatches.get(identityId);
 		if (!batch || batch.suppressedCount === 0) {
-			errorBatches.delete(accountId);
+			errorBatches.delete(identityId);
 			return;
 		}
 		const retry = batch.retriable ? "(will retry)" : "(permanent)";
@@ -122,18 +122,18 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 		console.error(
 			`  ${ts()} [${batch.errorType}] ${folder} — ${total} batches failed, retrying automatically ${retry}`,
 		);
-		errorBatches.delete(accountId);
+		errorBatches.delete(identityId);
 	}
 
 	const scheduler = new SyncScheduler(db, {
-		onSyncRecordError: (accountId, err) => {
-			const batch = errorBatches.get(accountId);
+		onSyncRecordError: (identityId, err) => {
+			const batch = errorBatches.get(identityId);
 			const matchesBatch =
 				batch && batch.folder === err.folderPath && batch.errorType === err.errorType;
 
 			if (!matchesBatch) {
-				flushErrorBatch(accountId);
-				errorBatches.set(accountId, {
+				flushErrorBatch(identityId);
+				errorBatches.set(identityId, {
 					folder: err.folderPath,
 					errorType: err.errorType,
 					retriable: err.retriable,
@@ -142,7 +142,7 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 				});
 			}
 
-			const current = errorBatches.get(accountId);
+			const current = errorBatches.get(identityId);
 			if (current === undefined) return;
 			if (current.shownCount < BATCH_SHOW_LIMIT) {
 				const retry = err.retriable ? "(will retry)" : "(permanent)";
@@ -152,30 +152,30 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 				current.suppressedCount++;
 			}
 		},
-		onSyncComplete: (accountId, result) => {
-			flushErrorBatch(accountId);
+		onSyncComplete: (identityId, result) => {
+			flushErrorBatch(identityId);
 			if (result.aborted) {
 				console.log(
-					`${ts()} Sync interrupted for account ${accountId}: ${result.totalNew} new (aborted)`,
+					`${ts()} Sync interrupted for identity ${identityId}: ${result.totalNew} new (aborted)`,
 				);
 				return;
 			}
-			const parts = [`${ts()} Sync complete for account ${accountId}: ${result.totalNew} new`];
+			const parts = [`${ts()} Sync complete for identity ${identityId}: ${result.totalNew} new`];
 			if (result.totalErrors > 0) {
 				parts.push(`${result.totalErrors} errors`);
 			}
 			console.log(parts.join(", "));
 		},
-		onSyncError: (accountId, error) => {
-			flushErrorBatch(accountId);
+		onSyncError: (identityId, error) => {
+			flushErrorBatch(identityId);
 			const imapErr = error as Error & { responseText?: string; responseStatus?: string };
 			const detail = imapErr.responseText
 				? `${imapErr.responseStatus ?? "ERROR"}: ${imapErr.responseText}`
 				: error.message;
-			console.error(`${ts()} Sync failed for account ${accountId}: ${detail}`);
+			console.error(`${ts()} Sync failed for identity ${identityId}: ${detail}`);
 		},
 	});
-	scheduler.loadAccountsFromDb();
+	scheduler.loadIdentitiesFromDb();
 	scheduler.start();
 
 	const r2Poller = new R2Poller(db, {

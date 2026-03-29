@@ -9,7 +9,7 @@ import { toast } from "./Toast";
 interface MessageHeaderActionsProps {
 	message: Message;
 	folders?: Folder[];
-	accountId?: number | null;
+	identityId?: number | null;
 	onMessageChanged?: () => void;
 	onMessageDeleted?: () => void;
 	onLabelsChanged?: () => void;

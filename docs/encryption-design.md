@@ -132,7 +132,7 @@ This file is essential — if lost, data is unrecoverable. The Docker volume mus
 
 While locked, the container is intentionally inert:
 
-- No IMAP connections (can't open encrypted database to read account credentials)
+- No IMAP connections (can't open encrypted database to read identity credentials)
 - No API responses except health check and unlock
 - Web UI shows only the unlock screen
 - No background jobs or sync activity

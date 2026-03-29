@@ -21,7 +21,7 @@ interface MessageDetailProps {
 	onMessageChanged?: () => void;
 	onMessageDeleted?: () => void;
 	folders?: Folder[];
-	accountId?: number | null;
+	identityId?: number | null;
 	onLabelsChanged?: () => void;
 	openedFromSearch?: boolean;
 	searchPosition?: { current: number; total: number };
@@ -41,7 +41,7 @@ export function MessageDetail({
 	onMessageChanged,
 	onMessageDeleted,
 	folders,
-	accountId,
+	identityId,
 	onLabelsChanged,
 	error,
 	dark,
@@ -67,21 +67,20 @@ export function MessageDetail({
 	const [confirmDelete, setConfirmDelete] = useState<Message | null>(null);
 	// Per-message remote image allow-list — tracks message IDs where user clicked "Show images"
 	const [imagesAllowed, setImagesAllowed] = useState<Set<number>>(new Set());
-	// Per-account sender whitelist for persistent image trust
+	// Sender whitelist for persistent image trust
 	const [trustedSenders, setTrustedSenders] = useState<TrustedSender[]>([]);
 	const trustedAddresses = useMemo(
 		() => new Set(trustedSenders.map((s) => s.sender_address)),
 		[trustedSenders],
 	);
 
-	// Fetch trusted senders when account changes
+	// Fetch trusted senders (global, no identity scoping)
 	useEffect(() => {
-		if (!accountId) return;
 		api.trustedSenders
-			.list(accountId)
+			.list()
 			.then(setTrustedSenders)
 			.catch(() => {});
-	}, [accountId]);
+	}, []);
 
 	// Auto-mark message as read when opened — debounced to avoid marking every message
 	// as read during rapid j/k keyboard navigation (1s delay, like Gmail)
@@ -132,23 +131,19 @@ export function MessageDetail({
 		setImagesAllowed((prev) => new Set([...prev, id]));
 	}, []);
 
-	const handleTrustSender = useCallback(
-		(senderAddress: string) => {
-			if (!accountId) return;
-			const normalized = senderAddress.toLowerCase().trim();
-			// Optimistic update
-			setTrustedSenders((prev) => [
-				...prev,
-				{ id: 0, sender_address: normalized, created_at: new Date().toISOString() },
-			]);
-			api.trustedSenders.add(accountId, normalized).catch(() => {
-				// Rollback on failure
-				setTrustedSenders((prev) => prev.filter((s) => s.sender_address !== normalized));
-				toast("Failed to trust sender", "error");
-			});
-		},
-		[accountId],
-	);
+	const handleTrustSender = useCallback((senderAddress: string) => {
+		const normalized = senderAddress.toLowerCase().trim();
+		// Optimistic update
+		setTrustedSenders((prev) => [
+			...prev,
+			{ id: 0, sender_address: normalized, created_at: new Date().toISOString() },
+		]);
+		api.trustedSenders.add(normalized).catch(() => {
+			// Rollback on failure
+			setTrustedSenders((prev) => prev.filter((s) => s.sender_address !== normalized));
+			toast("Failed to trust sender", "error");
+		});
+	}, []);
 
 	if (loading) {
 		return (
@@ -296,7 +291,7 @@ export function MessageDetail({
 				<MessageHeaderActions
 					message={message}
 					folders={folders}
-					accountId={accountId}
+					identityId={identityId}
 					onMessageChanged={onMessageChanged}
 					onMessageDeleted={onMessageDeleted}
 					onLabelsChanged={onLabelsChanged}

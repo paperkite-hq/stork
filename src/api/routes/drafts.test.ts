@@ -3,10 +3,10 @@ import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../api/server.js";
 import {
-	createTestAccount,
 	createTestContext,
 	createTestDb,
 	createTestFolder,
+	createTestIdentity,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
 
@@ -37,10 +37,10 @@ describe("Drafts API", () => {
 
 	// ─── Draft CRUD ─────────────────────────────────────────────
 	describe("Draft CRUD", () => {
-		let accountId: number;
+		let identityId: number;
 
 		beforeEach(() => {
-			accountId = createTestAccount(db);
+			identityId = createTestIdentity(db);
 		});
 
 		test("creates a draft", async () => {
@@ -48,7 +48,7 @@ describe("Drafts API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to_addresses: "alice@example.com",
 					subject: "Draft subject",
 					text_body: "Draft body text",
@@ -65,7 +65,7 @@ describe("Drafts API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					subject: "Draft 1",
 					compose_mode: "new",
 				}),
@@ -74,13 +74,13 @@ describe("Drafts API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					subject: "Draft 2",
 					compose_mode: "reply",
 				}),
 			});
 
-			const { status, body } = await jsonRequest(`/api/drafts?account_id=${accountId}`);
+			const { status, body } = await jsonRequest(`/api/drafts?identity_id=${identityId}`);
 			expect(status).toBe(200);
 			expect(body).toHaveLength(2);
 		});
@@ -90,7 +90,7 @@ describe("Drafts API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to_addresses: "bob@example.com",
 					subject: "Full draft",
 					text_body: "Full body",
@@ -110,7 +110,7 @@ describe("Drafts API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					subject: "Original",
 					compose_mode: "new",
 				}),
@@ -138,7 +138,7 @@ describe("Drafts API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					subject: "To delete",
 					compose_mode: "new",
 				}),
@@ -157,17 +157,17 @@ describe("Drafts API", () => {
 			expect(status).toBe(404);
 		});
 
-		test("requires account_id on create", async () => {
+		test("requires identity_id on create", async () => {
 			const { status, body } = await jsonRequest("/api/drafts", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ subject: "No account" }),
 			});
 			expect(status).toBe(400);
-			expect(body.error).toContain("account_id");
+			expect(body.error).toContain("identity_id");
 		});
 
-		test("requires account_id on list", async () => {
+		test("requires identity_id on list", async () => {
 			const { status, body } = await jsonRequest("/api/drafts");
 			expect(status).toBe(400);
 		});
@@ -177,7 +177,7 @@ describe("Drafts API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					subject: "Original",
 					compose_mode: "new",
 				}),
@@ -211,7 +211,7 @@ describe("Drafts API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					subject: "Thread draft",
 					compose_mode: "reply",
 				}),
@@ -231,8 +231,8 @@ describe("Drafts API", () => {
 		});
 
 		test("creates reply draft with original message reference", async () => {
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1, {
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1, {
 				subject: "Original message",
 				messageId: "<orig@example.com>",
 			});
@@ -241,7 +241,7 @@ describe("Drafts API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to_addresses: "sender@example.com",
 					subject: "Re: Original message",
 					text_body: "Reply body",

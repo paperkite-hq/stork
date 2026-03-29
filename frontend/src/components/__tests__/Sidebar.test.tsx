@@ -1,21 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { Account, GlobalSyncStatus, Label } from "../../api";
+import type { GlobalSyncStatus, Identity, Label } from "../../api";
 import { ALL_MAIL_LABEL_ID, INBOX_LABEL_ID, Sidebar, UNREAD_LABEL_ID } from "../Sidebar";
 
-function makeAccount(overrides: Partial<Account> = {}): Account {
+function makeIdentity(overrides: Partial<Identity> = {}): Identity {
 	return {
 		id: 1,
-		name: "Test Account",
+		name: "Test Identity",
 		email: "test@example.com",
-		ingest_connector_type: "imap",
-		send_connector_type: "smtp",
 		inbound_connector_id: 1,
 		outbound_connector_id: 1,
-		imap_host: "imap.example.com",
-		smtp_host: null,
-		sync_delete_from_server: 1,
 		created_at: new Date().toISOString(),
 		...overrides,
 	};
@@ -35,7 +30,7 @@ function makeLabel(overrides: Partial<Label> = {}): Label {
 }
 
 const defaultProps = {
-	accounts: [makeAccount()],
+	identities: [makeIdentity()],
 	labels: [] as Label[],
 	selectedLabelId: null,
 	filterLabelIds: [] as number[],
@@ -119,28 +114,28 @@ describe("Sidebar", () => {
 		expect(screen.getByText("No labels yet")).toBeInTheDocument();
 	});
 
-	it("shows per-account section when multiple accounts", () => {
-		const accounts = [
-			makeAccount({ id: 1, name: "Account 1", email: "a1@test.com" }),
-			makeAccount({ id: 2, name: "Account 2", email: "a2@test.com" }),
+	it("shows per-identity section when multiple identities", () => {
+		const identities = [
+			makeIdentity({ id: 1, name: "Identity 1", email: "a1@test.com" }),
+			makeIdentity({ id: 2, name: "Identity 2", email: "a2@test.com" }),
 		];
 		const labels = [
-			makeLabel({ id: 10, name: "Account 1", source: "account" }),
-			makeLabel({ id: 11, name: "Account 2", source: "account" }),
+			makeLabel({ id: 10, name: "Identity 1", source: "identity" }),
+			makeLabel({ id: 11, name: "Identity 2", source: "identity" }),
 		];
-		render(<Sidebar {...defaultProps} accounts={accounts} labels={labels} />);
-		// Both account names should appear as account labels in the Accounts section
-		expect(screen.getByText("Account 1")).toBeInTheDocument();
-		expect(screen.getByText("Account 2")).toBeInTheDocument();
-		// No dropdown (combobox) — accounts are listed as label buttons
+		render(<Sidebar {...defaultProps} identities={identities} labels={labels} />);
+		// Both identity names should appear as identity labels
+		expect(screen.getByText("Identity 1")).toBeInTheDocument();
+		expect(screen.getByText("Identity 2")).toBeInTheDocument();
+		// No dropdown (combobox) — identities are listed as label buttons
 		expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 	});
 
-	it("hides accounts section for single account", () => {
-		render(<Sidebar {...defaultProps} accounts={[makeAccount()]} />);
+	it("hides identities section for single identity", () => {
+		render(<Sidebar {...defaultProps} identities={[makeIdentity()]} />);
 		expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-		// "Accounts" heading not shown for single account
-		expect(screen.queryByText("Accounts")).not.toBeInTheDocument();
+		// "Identities" heading not shown for single identity
+		expect(screen.queryByText("Identities")).not.toBeInTheDocument();
 	});
 
 	it("toggles dark mode", async () => {
@@ -241,29 +236,29 @@ describe("Sidebar", () => {
 		expect(screen.getByTitle("Toggle dark mode")).toHaveTextContent(/Light/);
 	});
 
-	it("calls onSelectLabel with account label id when account label is clicked", async () => {
+	it("calls onSelectLabel with identity label id when identity label is clicked", async () => {
 		const onSelectLabel = vi.fn();
-		const accounts = [
-			makeAccount({ id: 1, name: "Account 1", email: "a1@test.com" }),
-			makeAccount({ id: 2, name: "Account 2", email: "a2@test.com" }),
+		const identities = [
+			makeIdentity({ id: 1, name: "Identity 1", email: "a1@test.com" }),
+			makeIdentity({ id: 2, name: "Identity 2", email: "a2@test.com" }),
 		];
 		const labels = [
 			makeLabel({ id: 1, name: "inbox", unread_count: 0 }),
-			makeLabel({ id: 10, name: "Account 1", source: "account" }),
-			makeLabel({ id: 11, name: "Account 2", source: "account" }),
+			makeLabel({ id: 10, name: "Identity 1", source: "identity" }),
+			makeLabel({ id: 11, name: "Identity 2", source: "identity" }),
 		];
 		render(
 			<Sidebar
 				{...defaultProps}
-				accounts={accounts}
+				identities={identities}
 				onSelectLabel={onSelectLabel}
 				labels={labels}
 			/>,
 		);
-		// The "Account 2" label button in the Accounts section
-		const account2Button = screen.getByRole("button", { name: /Account 2/ });
-		await userEvent.click(account2Button);
-		// Clicking an account label calls onSelectLabel with the label id
+		// The "Identity 2" label button in the Identities section
+		const identity2Button = screen.getByRole("button", { name: /Identity 2/ });
+		await userEvent.click(identity2Button);
+		// Clicking an identity label calls onSelectLabel with the label id
 		expect(onSelectLabel).toHaveBeenCalledWith(11);
 	});
 
@@ -330,7 +325,7 @@ describe("Sidebar", () => {
 		expect(screen.getByText("Connecting to server…")).toBeInTheDocument();
 	});
 
-	it("shows multi-account sync indicator", async () => {
+	it("shows multi-identity sync indicator", async () => {
 		const syncStatus: GlobalSyncStatus = {
 			"1": {
 				running: true,
@@ -355,10 +350,10 @@ describe("Sidebar", () => {
 		};
 		render(<Sidebar {...defaultProps} syncing={true} syncStatus={syncStatus} />);
 		await userEvent.click(screen.getByText("Syncing mail…"));
-		expect(screen.getByText("+1 more account syncing")).toBeInTheDocument();
+		expect(screen.getByText("+1 more syncing")).toBeInTheDocument();
 	});
 
-	it("shows plural accounts syncing when 3+ accounts sync", async () => {
+	it("shows plural identities syncing when 3+ identities sync", async () => {
 		const syncStatus: GlobalSyncStatus = {
 			"1": {
 				running: true,
@@ -378,7 +373,7 @@ describe("Sidebar", () => {
 		};
 		render(<Sidebar {...defaultProps} syncing={true} syncStatus={syncStatus} />);
 		await userEvent.click(screen.getByText("Syncing mail…"));
-		expect(screen.getByText("+2 more accounts syncing")).toBeInTheDocument();
+		expect(screen.getByText("+2 more syncing")).toBeInTheDocument();
 	});
 
 	it("formatDuration shows seconds for sub-minute", async () => {

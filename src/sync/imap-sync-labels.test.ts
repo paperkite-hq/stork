@@ -9,9 +9,9 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
-	createTestAccount,
 	createTestDb,
 	createTestFolder,
+	createTestIdentity,
 	createTestMessage,
 } from "../test-helpers/test-db.js";
 import { ImapSync } from "./imap-sync.js";
@@ -23,33 +23,33 @@ const DUMMY_CONFIG = {
 	auth: { user: "test", pass: "test" },
 };
 
-function makeSync(accountId: number, db: ReturnType<typeof createTestDb>): ImapSync {
-	return new ImapSync(DUMMY_CONFIG, db, accountId);
+function makeSync(identityId: number, db: ReturnType<typeof createTestDb>): ImapSync {
+	return new ImapSync(DUMMY_CONFIG, db, identityId);
 }
 
 // ─── ensureLabelsForFolders ────────────────────────────────────────────────
 
 describe("ensureLabelsForFolders", () => {
 	let db: ReturnType<typeof createTestDb>;
-	let accountId: number;
+	let identityId: number;
 
 	beforeEach(() => {
 		db = createTestDb();
-		accountId = createTestAccount(db);
+		identityId = createTestIdentity(db);
 	});
 
 	test("no folders → no labels created", () => {
-		makeSync(accountId, db).ensureLabelsForFolders();
+		makeSync(identityId, db).ensureLabelsForFolders();
 		const count = (db.prepare("SELECT COUNT(*) as n FROM labels").get() as { n: number }).n;
 		expect(count).toBe(0);
 	});
 
 	test("creates one label per folder using folder name", () => {
-		createTestFolder(db, accountId, "INBOX");
-		createTestFolder(db, accountId, "Sent");
-		createTestFolder(db, accountId, "Drafts");
+		createTestFolder(db, identityId, "INBOX");
+		createTestFolder(db, identityId, "Sent");
+		createTestFolder(db, identityId, "Drafts");
 
-		makeSync(accountId, db).ensureLabelsForFolders();
+		makeSync(identityId, db).ensureLabelsForFolders();
 
 		const labels = db.prepare("SELECT name, source FROM labels ORDER BY name").all() as {
 			name: string;
@@ -64,8 +64,8 @@ describe("ensureLabelsForFolders", () => {
 	});
 
 	test("idempotent — calling twice does not create duplicates", () => {
-		createTestFolder(db, accountId, "INBOX");
-		const sync = makeSync(accountId, db);
+		createTestFolder(db, identityId, "INBOX");
+		const sync = makeSync(identityId, db);
 		sync.ensureLabelsForFolders();
 		sync.ensureLabelsForFolders();
 
@@ -74,13 +74,13 @@ describe("ensureLabelsForFolders", () => {
 	});
 
 	test("ON CONFLICT DO NOTHING preserves existing user label", () => {
-		createTestFolder(db, accountId, "INBOX");
+		createTestFolder(db, identityId, "INBOX");
 		// Pre-create a user-created label with same name
 		db.prepare(
 			"INSERT INTO labels (name, color, source) VALUES ('INBOX', '#ff0000', 'user')",
 		).run();
 
-		makeSync(accountId, db).ensureLabelsForFolders();
+		makeSync(identityId, db).ensureLabelsForFolders();
 
 		const label = db.prepare("SELECT source, color FROM labels WHERE name = 'INBOX'").get() as
 			| { source: string; color: string }
@@ -93,18 +93,18 @@ describe("ensureLabelsForFolders", () => {
 		expect(count).toBe(1);
 	});
 
-	test("labels are global — two accounts sharing a folder name produce one label", () => {
-		const otherAccountId = createTestAccount(db, {
+	test("labels are global — two identities sharing a folder name produce one label", () => {
+		const otherAccountId = createTestIdentity(db, {
 			email: "other@example.com",
 		});
 
-		createTestFolder(db, accountId, "INBOX");
+		createTestFolder(db, identityId, "INBOX");
 		createTestFolder(db, otherAccountId, "INBOX");
 		createTestFolder(db, otherAccountId, "Sent");
 
-		// Sync account1 — creates INBOX label
-		makeSync(accountId, db).ensureLabelsForFolders();
-		// Sync account2 — INBOX already exists (no-op), Sent is new
+		// Sync identity1 — creates INBOX label
+		makeSync(identityId, db).ensureLabelsForFolders();
+		// Sync identity2 — INBOX already exists (no-op), Sent is new
 		makeSync(otherAccountId, db).ensureLabelsForFolders();
 
 		const totalLabels = (db.prepare("SELECT COUNT(*) as n FROM labels").get() as { n: number }).n;
@@ -116,11 +116,11 @@ describe("ensureLabelsForFolders", () => {
 		// createTestFolder stores path in both path and name columns,
 		// but name is just the last segment (mimics real IMAP behaviour)
 		db.prepare(`
-			INSERT INTO folders (account_id, path, name, delimiter, flags, special_use, uid_validity)
+			INSERT INTO folders (identity_id, path, name, delimiter, flags, special_use, uid_validity)
 			VALUES (?, 'Archive/2025', '2025', '/', '[]', null, 1)
-		`).run(accountId);
+		`).run(identityId);
 
-		makeSync(accountId, db).ensureLabelsForFolders();
+		makeSync(identityId, db).ensureLabelsForFolders();
 
 		const label = db.prepare("SELECT name FROM labels").get() as { name: string } | undefined;
 		expect(label?.name).toBe("2025");
@@ -131,28 +131,28 @@ describe("ensureLabelsForFolders", () => {
 
 describe("applyFolderLabelsToMessages", () => {
 	let db: ReturnType<typeof createTestDb>;
-	let accountId: number;
+	let identityId: number;
 
 	beforeEach(() => {
 		db = createTestDb();
-		accountId = createTestAccount(db);
+		identityId = createTestIdentity(db);
 	});
 
 	test("no messages → nothing inserted", () => {
-		createTestFolder(db, accountId, "INBOX");
-		makeSync(accountId, db).ensureLabelsForFolders();
-		makeSync(accountId, db).applyFolderLabelsToMessages();
+		createTestFolder(db, identityId, "INBOX");
+		makeSync(identityId, db).ensureLabelsForFolders();
+		makeSync(identityId, db).applyFolderLabelsToMessages();
 
 		const count = (db.prepare("SELECT COUNT(*) as n FROM message_labels").get() as { n: number }).n;
 		expect(count).toBe(0);
 	});
 
 	test("applies label to each message in matching folder", () => {
-		const folderId = createTestFolder(db, accountId, "INBOX");
-		createTestMessage(db, accountId, folderId, 1);
-		createTestMessage(db, accountId, folderId, 2);
+		const folderId = createTestFolder(db, identityId, "INBOX");
+		createTestMessage(db, identityId, folderId, 1);
+		createTestMessage(db, identityId, folderId, 2);
 
-		const sync = makeSync(accountId, db);
+		const sync = makeSync(identityId, db);
 		sync.ensureLabelsForFolders();
 		sync.applyFolderLabelsToMessages();
 
@@ -161,10 +161,10 @@ describe("applyFolderLabelsToMessages", () => {
 	});
 
 	test("idempotent — calling twice does not create duplicate message_labels rows", () => {
-		const folderId = createTestFolder(db, accountId, "INBOX");
-		createTestMessage(db, accountId, folderId, 1);
+		const folderId = createTestFolder(db, identityId, "INBOX");
+		createTestMessage(db, identityId, folderId, 1);
 
-		const sync = makeSync(accountId, db);
+		const sync = makeSync(identityId, db);
 		sync.ensureLabelsForFolders();
 		sync.applyFolderLabelsToMessages();
 		sync.applyFolderLabelsToMessages();
@@ -174,12 +174,12 @@ describe("applyFolderLabelsToMessages", () => {
 	});
 
 	test("messages in different folders get their own folder labels", () => {
-		const inboxId = createTestFolder(db, accountId, "INBOX");
-		const sentId = createTestFolder(db, accountId, "Sent");
-		const msgInbox = createTestMessage(db, accountId, inboxId, 1);
-		const msgSent = createTestMessage(db, accountId, sentId, 2);
+		const inboxId = createTestFolder(db, identityId, "INBOX");
+		const sentId = createTestFolder(db, identityId, "Sent");
+		const msgInbox = createTestMessage(db, identityId, inboxId, 1);
+		const msgSent = createTestMessage(db, identityId, sentId, 2);
 
-		const sync = makeSync(accountId, db);
+		const sync = makeSync(identityId, db);
 		sync.ensureLabelsForFolders();
 		sync.applyFolderLabelsToMessages();
 
@@ -199,10 +199,10 @@ describe("applyFolderLabelsToMessages", () => {
 	});
 
 	test("already-labelled messages are skipped (INSERT OR IGNORE)", () => {
-		const folderId = createTestFolder(db, accountId, "INBOX");
-		const msgId = createTestMessage(db, accountId, folderId, 1);
+		const folderId = createTestFolder(db, identityId, "INBOX");
+		const msgId = createTestMessage(db, identityId, folderId, 1);
 
-		const sync = makeSync(accountId, db);
+		const sync = makeSync(identityId, db);
 		sync.ensureLabelsForFolders();
 		// Apply once manually
 		sync.applyFolderLabelsToMessages();
@@ -221,17 +221,17 @@ describe("applyFolderLabelsToMessages", () => {
 		void msgId; // just to avoid unused-var lint
 	});
 
-	test("multi-account isolation — only applies labels for the correct account", () => {
-		const otherAccountId = createTestAccount(db, { email: "other@example.com" });
+	test("multi-identity isolation — only applies labels for the correct identity", () => {
+		const otherAccountId = createTestIdentity(db, { email: "other@example.com" });
 
-		const myFolderId = createTestFolder(db, accountId, "INBOX");
+		const myFolderId = createTestFolder(db, identityId, "INBOX");
 		const otherFolderId = createTestFolder(db, otherAccountId, "INBOX");
 
-		createTestMessage(db, accountId, myFolderId, 1);
+		createTestMessage(db, identityId, myFolderId, 1);
 		createTestMessage(db, otherAccountId, otherFolderId, 1);
 
-		// Only sync account 1
-		const sync = makeSync(accountId, db);
+		// Only sync identity 1
+		const sync = makeSync(identityId, db);
 		sync.ensureLabelsForFolders();
 		sync.applyFolderLabelsToMessages();
 
@@ -241,9 +241,9 @@ describe("applyFolderLabelsToMessages", () => {
 				.prepare(`
 					SELECT COUNT(*) as n FROM message_labels ml
 					JOIN messages m ON m.id = ml.message_id
-					WHERE m.account_id = ?
+					WHERE m.identity_id = ?
 				`)
-				.get(accountId) as { n: number }
+				.get(identityId) as { n: number }
 		).n;
 		// Account 2's message has no label (no label was created for it)
 		const otherCount = (
@@ -251,7 +251,7 @@ describe("applyFolderLabelsToMessages", () => {
 				.prepare(`
 					SELECT COUNT(*) as n FROM message_labels ml
 					JOIN messages m ON m.id = ml.message_id
-					WHERE m.account_id = ?
+					WHERE m.identity_id = ?
 				`)
 				.get(otherAccountId) as { n: number }
 		).n;
@@ -261,11 +261,11 @@ describe("applyFolderLabelsToMessages", () => {
 	});
 
 	test("messages without a matching folder label are not labelled", () => {
-		const folderId = createTestFolder(db, accountId, "INBOX");
-		createTestMessage(db, accountId, folderId, 1);
+		const folderId = createTestFolder(db, identityId, "INBOX");
+		createTestMessage(db, identityId, folderId, 1);
 
 		// Don't call ensureLabelsForFolders — no labels exist
-		makeSync(accountId, db).applyFolderLabelsToMessages();
+		makeSync(identityId, db).applyFolderLabelsToMessages();
 
 		const count = (db.prepare("SELECT COUNT(*) as n FROM message_labels").get() as { n: number }).n;
 		expect(count).toBe(0);
@@ -276,27 +276,27 @@ describe("applyFolderLabelsToMessages", () => {
 
 describe("refreshLabelCounts", () => {
 	let db: ReturnType<typeof createTestDb>;
-	let accountId: number;
+	let identityId: number;
 
 	beforeEach(() => {
 		db = createTestDb();
-		accountId = createTestAccount(db);
+		identityId = createTestIdentity(db);
 	});
 
 	test("no labels → no-op", () => {
-		makeSync(accountId, db).refreshLabelCounts();
+		makeSync(identityId, db).refreshLabelCounts();
 		// Just verify it doesn't throw
 	});
 
 	test("sets message_count and unread_count correctly", () => {
-		const folderId = createTestFolder(db, accountId, "INBOX");
-		const sync = makeSync(accountId, db);
+		const folderId = createTestFolder(db, identityId, "INBOX");
+		const sync = makeSync(identityId, db);
 		sync.ensureLabelsForFolders();
 
 		// 2 unread, 1 read
-		createTestMessage(db, accountId, folderId, 1, { flags: "" });
-		createTestMessage(db, accountId, folderId, 2, { flags: "" });
-		createTestMessage(db, accountId, folderId, 3, { flags: "\\Seen" });
+		createTestMessage(db, identityId, folderId, 1, { flags: "" });
+		createTestMessage(db, identityId, folderId, 2, { flags: "" });
+		createTestMessage(db, identityId, folderId, 3, { flags: "\\Seen" });
 		sync.applyFolderLabelsToMessages();
 		sync.refreshLabelCounts();
 
@@ -308,11 +308,11 @@ describe("refreshLabelCounts", () => {
 	});
 
 	test("updates counts after additional messages are applied", () => {
-		const folderId = createTestFolder(db, accountId, "INBOX");
-		const sync = makeSync(accountId, db);
+		const folderId = createTestFolder(db, identityId, "INBOX");
+		const sync = makeSync(identityId, db);
 		sync.ensureLabelsForFolders();
 
-		createTestMessage(db, accountId, folderId, 1, { flags: "" });
+		createTestMessage(db, identityId, folderId, 1, { flags: "" });
 		sync.applyFolderLabelsToMessages();
 		sync.refreshLabelCounts();
 
@@ -322,7 +322,7 @@ describe("refreshLabelCounts", () => {
 		expect(before.message_count).toBe(1);
 		expect(before.unread_count).toBe(1);
 
-		createTestMessage(db, accountId, folderId, 2, { flags: "\\Seen" });
+		createTestMessage(db, identityId, folderId, 2, { flags: "\\Seen" });
 		sync.applyFolderLabelsToMessages();
 		sync.refreshLabelCounts();
 
@@ -333,90 +333,31 @@ describe("refreshLabelCounts", () => {
 		expect(after.unread_count).toBe(1);
 	});
 
-	test("global refresh — counts span all accounts", () => {
-		const otherAccountId = createTestAccount(db);
-		const folderId = createTestFolder(db, accountId, "INBOX");
+	test("global refresh — counts span all identities", () => {
+		const otherAccountId = createTestIdentity(db);
+		const folderId = createTestFolder(db, identityId, "INBOX");
 		const otherFolderId = createTestFolder(db, otherAccountId, "INBOX");
-		const sync = makeSync(accountId, db);
+		const sync = makeSync(identityId, db);
 		const otherSync = makeSync(otherAccountId, db);
 
-		// Both accounts share the global INBOX label
+		// Both identities share the global INBOX label
 		sync.ensureLabelsForFolders();
 		otherSync.ensureLabelsForFolders();
 
-		createTestMessage(db, accountId, folderId, 1, { flags: "" });
+		createTestMessage(db, identityId, folderId, 1, { flags: "" });
 		createTestMessage(db, otherAccountId, otherFolderId, 1, { flags: "" });
 		createTestMessage(db, otherAccountId, otherFolderId, 2, { flags: "" });
 		sync.applyFolderLabelsToMessages();
 		otherSync.applyFolderLabelsToMessages();
 
-		// Refresh using either account's sync — result is the same (global)
+		// Refresh using either identity's sync — result is the same (global)
 		sync.refreshLabelCounts();
 
 		const inboxLabel = db
 			.prepare("SELECT message_count FROM labels WHERE name = 'INBOX'")
 			.get() as { message_count: number };
-		// All 3 messages (1 from account, 2 from otherAccount) are under the global INBOX label
+		// All 3 messages (1 from identity, 2 from otherIdentity) are under the global INBOX label
 		expect(inboxLabel.message_count).toBe(3);
-	});
-});
-
-// ─── refreshAccountCounts ─────────────────────────────────────────────────
-
-describe("refreshAccountCounts", () => {
-	let db: ReturnType<typeof createTestDb>;
-	let accountId: number;
-
-	beforeEach(() => {
-		db = createTestDb();
-		accountId = createTestAccount(db);
-	});
-
-	test("no messages → sets counts to 0", () => {
-		makeSync(accountId, db).refreshAccountCounts();
-		const row = db
-			.prepare("SELECT cached_message_count, cached_unread_count FROM accounts WHERE id = ?")
-			.get(accountId) as { cached_message_count: number; cached_unread_count: number };
-		expect(row.cached_message_count).toBe(0);
-		expect(row.cached_unread_count).toBe(0);
-	});
-
-	test("sets total and unread counts correctly", () => {
-		const folderId = createTestFolder(db, accountId, "INBOX");
-		createTestMessage(db, accountId, folderId, 1, { flags: "" });
-		createTestMessage(db, accountId, folderId, 2, { flags: "" });
-		createTestMessage(db, accountId, folderId, 3, { flags: "\\Seen" });
-
-		makeSync(accountId, db).refreshAccountCounts();
-
-		const row = db
-			.prepare("SELECT cached_message_count, cached_unread_count FROM accounts WHERE id = ?")
-			.get(accountId) as { cached_message_count: number; cached_unread_count: number };
-		expect(row.cached_message_count).toBe(3);
-		expect(row.cached_unread_count).toBe(2);
-	});
-
-	test("multi-account isolation — only updates the correct account", () => {
-		const otherAccountId = createTestAccount(db);
-		const folderId = createTestFolder(db, accountId, "INBOX");
-		const otherFolderId = createTestFolder(db, otherAccountId, "INBOX");
-		createTestMessage(db, accountId, folderId, 1, { flags: "" });
-		createTestMessage(db, otherAccountId, otherFolderId, 1, { flags: "" });
-		createTestMessage(db, otherAccountId, otherFolderId, 2, { flags: "" });
-
-		// Only refresh accountId, not otherAccountId
-		makeSync(accountId, db).refreshAccountCounts();
-
-		const myRow = db
-			.prepare("SELECT cached_message_count FROM accounts WHERE id = ?")
-			.get(accountId) as { cached_message_count: number };
-		expect(myRow.cached_message_count).toBe(1);
-
-		const otherRow = db
-			.prepare("SELECT cached_message_count FROM accounts WHERE id = ?")
-			.get(otherAccountId) as { cached_message_count: number | null };
-		// Other account not refreshed — stays NULL
-		expect(otherRow.cached_message_count).toBeNull();
 	});
 });
 
@@ -431,7 +372,7 @@ import {
 
 describe("syncAll — label pipeline integration", () => {
 	let db: ReturnType<typeof createTestDb>;
-	let accountId: number;
+	let identityId: number;
 	let server: MockImapServer;
 	let port: number;
 
@@ -468,10 +409,26 @@ describe("syncAll — label pipeline integration", () => {
 
 		db = createTestDb();
 		db.prepare(`
-			INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-			VALUES ('Test', 'testuser@example.com', '127.0.0.1', ?, 0, 'testuser', 'testpass')
+			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+			VALUES ('Test Inbound', 'imap', '127.0.0.1', ?, 0, 'testuser', 'testpass')
 		`).run(port);
-		accountId = Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
+		const inboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(`
+			INSERT INTO outbound_connectors (name, type)
+			VALUES ('Test Outbound', 'smtp')
+		`).run();
+		const outboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(`
+			INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+			VALUES ('Test', 'testuser@example.com', ?, ?)
+		`).run(inboundId, outboundId);
+		identityId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
 	});
 
 	afterEach(async () => {
@@ -483,7 +440,7 @@ describe("syncAll — label pipeline integration", () => {
 		const sync = new ImapSync(
 			{ host: "127.0.0.1", port, secure: false, auth: { user: "testuser", pass: "testpass" } },
 			db,
-			accountId,
+			identityId,
 		);
 		await sync.connect();
 		await sync.syncAll();
@@ -502,9 +459,9 @@ describe("syncAll — label pipeline integration", () => {
 				SELECT l.name FROM message_labels ml
 				JOIN labels l ON l.id = ml.label_id
 				JOIN messages m ON m.id = ml.message_id
-				WHERE m.account_id = ?
+				WHERE m.identity_id = ?
 			`)
-			.get(accountId) as { name: string } | undefined;
+			.get(identityId) as { name: string } | undefined;
 		expect(msgLabel?.name).toBe("INBOX");
 	});
 });
@@ -513,7 +470,7 @@ describe("syncAll — label pipeline integration", () => {
 
 describe("syncAll — sub-batch label application during large folder sync", () => {
 	let db: ReturnType<typeof createTestDb>;
-	let accountId: number;
+	let identityId: number;
 	let server: MockImapServer;
 	let port: number;
 
@@ -551,10 +508,26 @@ describe("syncAll — sub-batch label application during large folder sync", () 
 
 		db = createTestDb();
 		db.prepare(`
-			INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-			VALUES ('Test', 'testuser@example.com', '127.0.0.1', ?, 0, 'testuser', 'testpass')
+			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+			VALUES ('Test Inbound', 'imap', '127.0.0.1', ?, 0, 'testuser', 'testpass')
 		`).run(port);
-		accountId = Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
+		const inboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(`
+			INSERT INTO outbound_connectors (name, type)
+			VALUES ('Test Outbound', 'smtp')
+		`).run();
+		const outboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(`
+			INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+			VALUES ('Test', 'testuser@example.com', ?, ?)
+		`).run(inboundId, outboundId);
+		identityId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
 	});
 
 	afterEach(async () => {
@@ -568,7 +541,7 @@ describe("syncAll — sub-batch label application during large folder sync", () 
 		const sync = new ImapSync(
 			{ host: "127.0.0.1", port, secure: false, auth: { user: "testuser", pass: "testpass" } },
 			db,
-			accountId,
+			identityId,
 			2, // subBatchLabelSize
 		);
 
@@ -584,7 +557,7 @@ describe("syncAll — sub-batch label application during large folder sync", () 
 		//   3) final pass at end of syncAll
 		expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2);
 
-		// All 3 messages must be labelled in the end — each gets a folder label + an account label
+		// All 3 messages must be labelled in the end — each gets a folder label + an identity label
 		const count = (db.prepare("SELECT COUNT(*) as n FROM message_labels").get() as { n: number }).n;
 		expect(count).toBe(6);
 	});

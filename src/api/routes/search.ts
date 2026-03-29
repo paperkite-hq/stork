@@ -10,12 +10,12 @@ export function searchRoutes(getDb: () => Database.Database): Hono {
 		const query = c.req.query("q");
 		if (!query) return c.json({ error: "Query parameter 'q' is required" }, 400);
 
-		const rawAccountId = c.req.query("account_id");
-		let accountId: number | undefined;
-		if (rawAccountId !== undefined) {
-			accountId = Number(rawAccountId);
-			if (!Number.isFinite(accountId) || accountId < 1) {
-				return c.json({ error: "Invalid account_id: must be a positive integer" }, 400);
+		const rawIdentityId = c.req.query("identity_id");
+		let identityId: number | undefined;
+		if (rawIdentityId !== undefined) {
+			identityId = Number(rawIdentityId);
+			if (!Number.isFinite(identityId) || identityId < 1) {
+				return c.json({ error: "Invalid identity_id: must be a positive integer" }, 400);
 			}
 		}
 		const pagination = parsePagination(c);
@@ -23,7 +23,7 @@ export function searchRoutes(getDb: () => Database.Database): Hono {
 		const { limit, offset } = pagination;
 
 		const search = new MessageSearch(getDb());
-		const results = search.search(query, { accountId, limit, offset });
+		const results = search.search(query, { identityId: identityId, limit, offset });
 		return c.json(results);
 	});
 

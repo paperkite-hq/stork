@@ -3,10 +3,10 @@ import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createApp } from "../../api/server.js";
 import {
-	createTestAccount,
 	createTestContext,
 	createTestDb,
 	createTestFolder,
+	createTestIdentity,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
 import { messageRoutes } from "./messages.js";
@@ -42,20 +42,20 @@ describe("Messages API", () => {
 
 	// ─── Message list and detail ─────────────────────────────
 	describe("Message list and detail", () => {
-		let accountId: number;
+		let identityId: number;
 		let folderId: number;
 
 		beforeEach(() => {
-			accountId = createTestAccount(db);
-			folderId = createTestFolder(db, accountId, "INBOX");
+			identityId = createTestIdentity(db);
+			folderId = createTestFolder(db, identityId, "INBOX");
 		});
 
 		test("GET messages list returns messages", async () => {
-			createTestMessage(db, accountId, folderId, 1, { subject: "Hello" });
-			createTestMessage(db, accountId, folderId, 2, { subject: "World" });
+			createTestMessage(db, identityId, folderId, 1, { subject: "Hello" });
+			createTestMessage(db, identityId, folderId, 2, { subject: "World" });
 
 			const { status, body } = await jsonRequest(
-				`/api/accounts/${accountId}/folders/${folderId}/messages`,
+				`/api/identities/${identityId}/folders/${folderId}/messages`,
 			);
 			expect(status).toBe(200);
 			expect(body).toHaveLength(2);
@@ -63,23 +63,23 @@ describe("Messages API", () => {
 
 		test("GET messages list supports pagination", async () => {
 			for (let i = 1; i <= 5; i++) {
-				createTestMessage(db, accountId, folderId, i);
+				createTestMessage(db, identityId, folderId, i);
 			}
 
 			const { body: page1 } = await jsonRequest(
-				`/api/accounts/${accountId}/folders/${folderId}/messages?limit=2&offset=0`,
+				`/api/identities/${identityId}/folders/${folderId}/messages?limit=2&offset=0`,
 			);
 			expect(page1).toHaveLength(2);
 
 			const { body: page2 } = await jsonRequest(
-				`/api/accounts/${accountId}/folders/${folderId}/messages?limit=2&offset=2`,
+				`/api/identities/${identityId}/folders/${folderId}/messages?limit=2&offset=2`,
 			);
 			expect(page2).toHaveLength(2);
 			expect(page2[0].id).not.toBe(page1[0].id);
 		});
 
 		test("GET /api/messages/:id returns full message", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1, {
+			const msgId = createTestMessage(db, identityId, folderId, 1, {
 				subject: "Detailed",
 				textBody: "Full body text",
 				htmlBody: "<p>Full body</p>",
@@ -99,7 +99,7 @@ describe("Messages API", () => {
 		});
 
 		test("DELETE /api/messages/:id deletes message", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			const { status } = await jsonRequest(`/api/messages/${msgId}`, { method: "DELETE" });
 			expect(status).toBe(200);
@@ -142,23 +142,38 @@ describe("Messages API", () => {
 		}
 
 		test("does not call IMAP when sync_delete_from_server is 0", async () => {
-			const accountId = createTestAccount(deleteDb);
-			const folderId = createTestFolder(deleteDb, accountId, "INBOX");
-			const msgId = createTestMessage(deleteDb, accountId, folderId, 1);
+			const identityId = createTestIdentity(deleteDb);
+			const folderId = createTestFolder(deleteDb, identityId, "INBOX");
+			const msgId = createTestMessage(deleteDb, identityId, folderId, 1);
 
 			await req(`/messages/${msgId}`, { method: "DELETE" });
 			expect(mockImapDelete).not.toHaveBeenCalled();
 		});
 
 		test("calls IMAP delete with correct folder and uid when sync_delete_from_server is 1", async () => {
-			const syncAccountId = deleteDb
+			deleteDb
 				.prepare(
-					`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
-					 smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, sync_delete_from_server)
-					 VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, 0, NULL, NULL, 1)`,
+					`INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
+					 VALUES ('Sync Inbound', 'imap', 'imap.example.com', 993, 1, 'syncuser', 'syncpass', 1)`,
 				)
-				.run("Sync Account", "sync@example.com", "imap.example.com", 993, "syncuser", "syncpass")
-				.lastInsertRowid as number;
+				.run();
+			const inboundId = Number(
+				(deleteDb.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			deleteDb
+				.prepare(`INSERT INTO outbound_connectors (name, type) VALUES ('Sync Outbound', 'smtp')`)
+				.run();
+			const outboundId = Number(
+				(deleteDb.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			const syncAccountId = Number(
+				deleteDb
+					.prepare(
+						`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+						 VALUES ('Sync Account', 'sync@example.com', ?, ?)`,
+					)
+					.run(inboundId, outboundId).lastInsertRowid,
+			);
 			const syncFolderId = createTestFolder(deleteDb, syncAccountId, "INBOX");
 			const msgId = createTestMessage(deleteDb, syncAccountId, syncFolderId, 42);
 
@@ -172,14 +187,29 @@ describe("Messages API", () => {
 
 		test("still deletes locally when IMAP delete fails", async () => {
 			mockImapDelete.mockRejectedValueOnce(new Error("IMAP connection refused"));
-			const syncAccountId = deleteDb
+			deleteDb
 				.prepare(
-					`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
-					 smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, sync_delete_from_server)
-					 VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, 0, NULL, NULL, 1)`,
+					`INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
+					 VALUES ('Sync Inbound', 'imap', 'imap.example.com', 993, 1, 'syncuser', 'syncpass', 1)`,
 				)
-				.run("Sync Account", "sync@example.com", "imap.example.com", 993, "syncuser", "syncpass")
-				.lastInsertRowid as number;
+				.run();
+			const inboundId = Number(
+				(deleteDb.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			deleteDb
+				.prepare(`INSERT INTO outbound_connectors (name, type) VALUES ('Sync Outbound', 'smtp')`)
+				.run();
+			const outboundId = Number(
+				(deleteDb.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			const syncAccountId = Number(
+				deleteDb
+					.prepare(
+						`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+						 VALUES ('Sync Account', 'sync@example.com', ?, ?)`,
+					)
+					.run(inboundId, outboundId).lastInsertRowid,
+			);
 			const syncFolderId = createTestFolder(deleteDb, syncAccountId, "INBOX");
 			const msgId = createTestMessage(deleteDb, syncAccountId, syncFolderId, 7);
 
@@ -194,44 +224,48 @@ describe("Messages API", () => {
 	// ─── Pagination edge cases ───────────────────────────────
 	describe("Pagination edge cases", () => {
 		test("default limit is 50", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
 			for (let i = 1; i <= 60; i++) {
-				createTestMessage(db, accountId, folderId, i);
+				createTestMessage(db, identityId, folderId, i);
 			}
 
-			const { body } = await jsonRequest(`/api/accounts/${accountId}/folders/${folderId}/messages`);
+			const { body } = await jsonRequest(
+				`/api/identities/${identityId}/folders/${folderId}/messages`,
+			);
 			expect(body).toHaveLength(50);
 		});
 
 		test("offset beyond total returns empty", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			createTestMessage(db, identityId, folderId, 1);
 
 			const { body } = await jsonRequest(
-				`/api/accounts/${accountId}/folders/${folderId}/messages?offset=100`,
+				`/api/identities/${identityId}/folders/${folderId}/messages?offset=100`,
 			);
 			expect(body).toHaveLength(0);
 		});
 
 		test("messages are ordered by date DESC", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			createTestMessage(db, accountId, folderId, 1, {
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			createTestMessage(db, identityId, folderId, 1, {
 				date: "2026-01-01T00:00:00Z",
 				subject: "Oldest",
 			});
-			createTestMessage(db, accountId, folderId, 2, {
+			createTestMessage(db, identityId, folderId, 2, {
 				date: "2026-01-03T00:00:00Z",
 				subject: "Newest",
 			});
-			createTestMessage(db, accountId, folderId, 3, {
+			createTestMessage(db, identityId, folderId, 3, {
 				date: "2026-01-02T00:00:00Z",
 				subject: "Middle",
 			});
 
-			const { body } = await jsonRequest(`/api/accounts/${accountId}/folders/${folderId}/messages`);
+			const { body } = await jsonRequest(
+				`/api/identities/${identityId}/folders/${folderId}/messages`,
+			);
 			expect(body[0].subject).toBe("Newest");
 			expect(body[1].subject).toBe("Middle");
 			expect(body[2].subject).toBe("Oldest");
@@ -240,16 +274,16 @@ describe("Messages API", () => {
 
 	// ─── Flags ───────────────────────────────────────────────
 	describe("Flags", () => {
-		let accountId: number;
+		let identityId: number;
 		let folderId: number;
 
 		beforeEach(() => {
-			accountId = createTestAccount(db);
-			folderId = createTestFolder(db, accountId, "INBOX");
+			identityId = createTestIdentity(db);
+			folderId = createTestFolder(db, identityId, "INBOX");
 		});
 
 		test("PATCH /api/messages/:id/flags updates flags", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1, { flags: "" });
+			const msgId = createTestMessage(db, identityId, folderId, 1, { flags: "" });
 
 			const { status, body } = await jsonRequest(`/api/messages/${msgId}/flags`, {
 				method: "PATCH",
@@ -262,7 +296,7 @@ describe("Messages API", () => {
 		});
 
 		test("PATCH /api/messages/:id/flags can remove flags", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			await jsonRequest(`/api/messages/${msgId}/flags`, {
 				method: "PATCH",
@@ -289,7 +323,7 @@ describe("Messages API", () => {
 		});
 
 		test("adding duplicate flags does not create duplicates", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			await jsonRequest(`/api/messages/${msgId}/flags`, {
 				method: "PATCH",
@@ -308,7 +342,7 @@ describe("Messages API", () => {
 		});
 
 		test("removing non-existent flag is a no-op", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			const { status, body } = await jsonRequest(`/api/messages/${msgId}/flags`, {
 				method: "PATCH",
@@ -320,7 +354,7 @@ describe("Messages API", () => {
 		});
 
 		test("add and remove in same request works correctly", async () => {
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			await jsonRequest(`/api/messages/${msgId}/flags`, {
 				method: "PATCH",
@@ -343,13 +377,13 @@ describe("Messages API", () => {
 	// ─── Thread reconstruction ───────────────────────────────
 	describe("Thread reconstruction", () => {
 		test("GET /api/messages/:id/thread returns thread", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msg1Id = createTestMessage(db, accountId, folderId, 1, {
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msg1Id = createTestMessage(db, identityId, folderId, 1, {
 				messageId: "<thread-1@test.local>",
 				subject: "Original",
 			});
-			createTestMessage(db, accountId, folderId, 2, {
+			createTestMessage(db, identityId, folderId, 2, {
 				messageId: "<thread-2@test.local>",
 				inReplyTo: "<thread-1@test.local>",
 				references: "<thread-1@test.local>",
@@ -362,9 +396,9 @@ describe("Messages API", () => {
 		});
 
 		test("single message with no threading info returns itself", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1, {
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1, {
 				messageId: "<standalone@test.local>",
 				subject: "No thread",
 			});
@@ -375,13 +409,13 @@ describe("Messages API", () => {
 		});
 
 		test("message with NULL message_id returns itself via fallback path", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
 			db.prepare(`
-				INSERT INTO messages (account_id, folder_id, uid, message_id, subject,
+				INSERT INTO messages (identity_id, folder_id, uid, message_id, subject,
 					from_address, to_addresses, date, text_body, size)
 				VALUES (?, ?, 99, NULL, 'Null ID Message', 'a@b.com', '[]', '2024-01-01', 'body', 100)
-			`).run(accountId, folderId);
+			`).run(identityId, folderId);
 			const msgId = Number(
 				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 			);
@@ -393,20 +427,20 @@ describe("Messages API", () => {
 		});
 
 		test("thread with References chain returns all related messages", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
 
-			createTestMessage(db, accountId, folderId, 1, {
+			createTestMessage(db, identityId, folderId, 1, {
 				messageId: "<root@test.local>",
 				subject: "Thread start",
 			});
-			createTestMessage(db, accountId, folderId, 2, {
+			createTestMessage(db, identityId, folderId, 2, {
 				messageId: "<reply1@test.local>",
 				inReplyTo: "<root@test.local>",
 				references: "<root@test.local>",
 				subject: "Re: Thread start",
 			});
-			const msg3Id = createTestMessage(db, accountId, folderId, 3, {
+			const msg3Id = createTestMessage(db, identityId, folderId, 3, {
 				messageId: "<reply2@test.local>",
 				inReplyTo: "<reply1@test.local>",
 				references: "<root@test.local> <reply1@test.local>",
@@ -418,20 +452,20 @@ describe("Messages API", () => {
 		});
 
 		test("thread with JSON array references (IMAP sync format) returns all related messages", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
 
-			createTestMessage(db, accountId, folderId, 1, {
+			createTestMessage(db, identityId, folderId, 1, {
 				messageId: "<json-root@test.local>",
 				subject: "JSON thread start",
 			});
-			createTestMessage(db, accountId, folderId, 2, {
+			createTestMessage(db, identityId, folderId, 2, {
 				messageId: "<json-reply@test.local>",
 				inReplyTo: "<json-root@test.local>",
 				references: '["<json-root@test.local>"]',
 				subject: "Re: JSON thread start",
 			});
-			const msg3Id = createTestMessage(db, accountId, folderId, 3, {
+			const msg3Id = createTestMessage(db, identityId, folderId, 3, {
 				messageId: "<json-reply2@test.local>",
 				inReplyTo: "<json-reply@test.local>",
 				references: '["<json-root@test.local>","<json-reply@test.local>"]',
@@ -443,16 +477,16 @@ describe("Messages API", () => {
 		});
 
 		test("thread does not leak messages from other accounts", async () => {
-			const accountA = createTestAccount(db, { name: "A", email: "a@test.com" });
-			const accountB = createTestAccount(db, { name: "B", email: "b@test.com" });
-			const folderA = createTestFolder(db, accountA, "INBOX");
-			const folderB = createTestFolder(db, accountB, "INBOX");
+			const identityA = createTestIdentity(db, { name: "A", email: "a@test.com" });
+			const identityB = createTestIdentity(db, { name: "B", email: "b@test.com" });
+			const folderA = createTestFolder(db, identityA, "INBOX");
+			const folderB = createTestFolder(db, identityB, "INBOX");
 
-			const msgA = createTestMessage(db, accountA, folderA, 1, {
+			const msgA = createTestMessage(db, identityA, folderA, 1, {
 				messageId: "<shared-id@test.local>",
 				subject: "Account A message",
 			});
-			createTestMessage(db, accountB, folderB, 1, {
+			createTestMessage(db, identityB, folderB, 1, {
 				messageId: "<shared-id@test.local>",
 				subject: "Account B message with same ID",
 			});
@@ -472,10 +506,10 @@ describe("Messages API", () => {
 	// ─── Move message ────────────────────────────────────────
 	describe("Move message", () => {
 		test("POST /api/messages/:id/move moves message to target folder", async () => {
-			const accountId = createTestAccount(db);
-			const folder1 = createTestFolder(db, accountId, "INBOX");
-			const folder2 = createTestFolder(db, accountId, "Archive");
-			const msgId = createTestMessage(db, accountId, folder1, 1);
+			const identityId = createTestIdentity(db);
+			const folder1 = createTestFolder(db, identityId, "INBOX");
+			const folder2 = createTestFolder(db, identityId, "Archive");
+			const msgId = createTestMessage(db, identityId, folder1, 1);
 
 			const { status, body } = await jsonRequest(`/api/messages/${msgId}/move`, {
 				method: "POST",
@@ -492,9 +526,9 @@ describe("Messages API", () => {
 		});
 
 		test("POST /api/messages/:id/move returns 400 when folder_id missing", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			const { status, body } = await jsonRequest(`/api/messages/${msgId}/move`, {
 				method: "POST",
@@ -516,9 +550,9 @@ describe("Messages API", () => {
 		});
 
 		test("POST /api/messages/:id/move returns 404 for non-existent folder", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			const { status, body } = await jsonRequest(`/api/messages/${msgId}/move`, {
 				method: "POST",
@@ -532,18 +566,18 @@ describe("Messages API", () => {
 
 	// ─── Bulk operations ────────────────────────────────────
 	describe("Bulk operations", () => {
-		let accountId: number;
+		let identityId: number;
 		let folderId: number;
 		let msg1: number;
 		let msg2: number;
 		let msg3: number;
 
 		beforeEach(() => {
-			accountId = createTestAccount(db);
-			folderId = createTestFolder(db, accountId, "INBOX");
-			msg1 = createTestMessage(db, accountId, folderId, 1);
-			msg2 = createTestMessage(db, accountId, folderId, 2);
-			msg3 = createTestMessage(db, accountId, folderId, 3);
+			identityId = createTestIdentity(db);
+			folderId = createTestFolder(db, identityId, "INBOX");
+			msg1 = createTestMessage(db, identityId, folderId, 1);
+			msg2 = createTestMessage(db, identityId, folderId, 2);
+			msg3 = createTestMessage(db, identityId, folderId, 3);
 		});
 
 		function bulkPost(payload: unknown) {
@@ -681,7 +715,7 @@ describe("Messages API", () => {
 
 		describe("action: move", () => {
 			test("moves messages to another folder", async () => {
-				const targetFolder = createTestFolder(db, accountId, "Archive");
+				const targetFolder = createTestFolder(db, identityId, "Archive");
 
 				const { status, body } = await bulkPost({
 					ids: [msg1, msg2],
@@ -758,15 +792,46 @@ describe("Messages API", () => {
 			return { status: res.status, body };
 		}
 
-		test("calls IMAP for messages with sync_delete_from_server=1", async () => {
-			const syncAccountId = bulkDeleteDb
+		function createSyncIdentity(
+			testDb: Database.Database,
+			name: string,
+			email: string,
+			imapUser: string,
+			imapPass: string,
+		): number {
+			testDb
 				.prepare(
-					`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
-					 smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, sync_delete_from_server)
-					 VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, 0, NULL, NULL, 1)`,
+					`INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
+					 VALUES (?, 'imap', 'imap.example.com', 993, 1, ?, ?, 1)`,
 				)
-				.run("Sync Account", "sync@example.com", "imap.example.com", 993, "syncuser", "syncpass")
-				.lastInsertRowid as number;
+				.run(`${name} (Inbound)`, imapUser, imapPass);
+			const inboundId = Number(
+				(testDb.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			testDb
+				.prepare(`INSERT INTO outbound_connectors (name, type) VALUES (?, 'smtp')`)
+				.run(`${name} (Outbound)`);
+			const outboundId = Number(
+				(testDb.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			return Number(
+				testDb
+					.prepare(
+						`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+						 VALUES (?, ?, ?, ?)`,
+					)
+					.run(name, email, inboundId, outboundId).lastInsertRowid,
+			);
+		}
+
+		test("calls IMAP for messages with sync_delete_from_server=1", async () => {
+			const syncAccountId = createSyncIdentity(
+				bulkDeleteDb,
+				"Sync Account",
+				"sync@example.com",
+				"syncuser",
+				"syncpass",
+			);
 			const syncFolderId = createTestFolder(bulkDeleteDb, syncAccountId, "INBOX");
 			const msg1 = createTestMessage(bulkDeleteDb, syncAccountId, syncFolderId, 101);
 			const msg2 = createTestMessage(bulkDeleteDb, syncAccountId, syncFolderId, 102);
@@ -783,10 +848,10 @@ describe("Messages API", () => {
 		});
 
 		test("does not call IMAP for messages with sync_delete_from_server=0", async () => {
-			const accountId = createTestAccount(bulkDeleteDb);
-			const folderId = createTestFolder(bulkDeleteDb, accountId, "INBOX");
-			const msg1 = createTestMessage(bulkDeleteDb, accountId, folderId, 1);
-			const msg2 = createTestMessage(bulkDeleteDb, accountId, folderId, 2);
+			const identityId = createTestIdentity(bulkDeleteDb);
+			const folderId = createTestFolder(bulkDeleteDb, identityId, "INBOX");
+			const msg1 = createTestMessage(bulkDeleteDb, identityId, folderId, 1);
+			const msg2 = createTestMessage(bulkDeleteDb, identityId, folderId, 2);
 
 			const { status } = await bulkReq({ ids: [msg1, msg2], action: "delete" });
 
@@ -796,20 +861,13 @@ describe("Messages API", () => {
 
 		test("still deletes locally when IMAP bulk delete fails", async () => {
 			mockBulkImapDelete.mockRejectedValueOnce(new Error("IMAP connection refused"));
-			const syncAccountId = bulkDeleteDb
-				.prepare(
-					`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
-					 smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, sync_delete_from_server)
-					 VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, 0, NULL, NULL, 1)`,
-				)
-				.run(
-					"Sync Account2",
-					"sync2@example.com",
-					"imap.example.com",
-					993,
-					"syncuser2",
-					"syncpass2",
-				).lastInsertRowid as number;
+			const syncAccountId = createSyncIdentity(
+				bulkDeleteDb,
+				"Sync Account2",
+				"sync2@example.com",
+				"syncuser2",
+				"syncpass2",
+			);
 			const syncFolderId = createTestFolder(bulkDeleteDb, syncAccountId, "INBOX");
 			const msgId = createTestMessage(bulkDeleteDb, syncAccountId, syncFolderId, 201);
 
@@ -821,20 +879,13 @@ describe("Messages API", () => {
 		});
 
 		test("groups messages by folder for efficient IMAP deletion", async () => {
-			const syncAccountId = bulkDeleteDb
-				.prepare(
-					`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
-					 smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, sync_delete_from_server)
-					 VALUES (?, ?, ?, ?, 1, ?, ?, NULL, NULL, 0, NULL, NULL, 1)`,
-				)
-				.run(
-					"Sync Account3",
-					"sync3@example.com",
-					"imap.example.com",
-					993,
-					"syncuser3",
-					"syncpass3",
-				).lastInsertRowid as number;
+			const syncAccountId = createSyncIdentity(
+				bulkDeleteDb,
+				"Sync Account3",
+				"sync3@example.com",
+				"syncuser3",
+				"syncpass3",
+			);
 			const inboxId = createTestFolder(bulkDeleteDb, syncAccountId, "INBOX");
 			const sentId = createTestFolder(bulkDeleteDb, syncAccountId, "Sent");
 			const inboxMsg = createTestMessage(bulkDeleteDb, syncAccountId, inboxId, 301);

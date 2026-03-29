@@ -235,7 +235,7 @@ describe("useSyncPoller", () => {
 		expect(mockStatus).not.toHaveBeenCalled();
 	});
 
-	it("handles multiple accounts", async () => {
+	it("handles multiple identities", async () => {
 		const status: GlobalSyncStatus = {
 			"1": { running: true, lastSync: null, lastError: null, consecutiveErrors: 0, progress: null },
 			"2": { running: false, lastSync: 500, lastError: null, consecutiveErrors: 0, progress: null },

@@ -83,7 +83,7 @@ function defaultProps(overrides: Record<string, unknown> = {}) {
 	return {
 		message: makeMessage(),
 		folders: mockFolders,
-		accountId: 1,
+		identityId: 1,
 		onMessageChanged: vi.fn(),
 		onMessageDeleted: vi.fn(),
 		onLabelsChanged: vi.fn(),
@@ -206,7 +206,7 @@ describe("MessageHeaderActions", () => {
 		expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 	});
 
-	it("always renders label picker regardless of accountId", () => {
+	it("always renders label picker regardless of identityId", () => {
 		render(<MessageHeaderActions {...defaultProps()} />);
 		expect(screen.getByTestId("label-picker-1")).toBeInTheDocument();
 	});
@@ -228,7 +228,7 @@ describe("MessageHeaderActions", () => {
 		const onMessageChanged = vi.fn();
 		render(
 			<MessageHeaderActions
-				{...defaultProps({ accountId: 1, onLabelsChanged, onMessageChanged })}
+				{...defaultProps({ identityId: 1, onLabelsChanged, onMessageChanged })}
 			/>,
 		);
 		fireEvent.click(screen.getByRole("button", { name: "Change Labels" }));

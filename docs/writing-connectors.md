@@ -12,7 +12,7 @@ There are two connector interfaces:
 Each connector is a TypeScript class that implements one of these interfaces. The registry (`src/connectors/registry.ts`) maps configuration objects to connector instances via factory functions.
 
 ```
-Account Settings
+Identity Settings
        │
        ▼
   Registry (factory)
@@ -87,7 +87,7 @@ For push-based connectors:
 - `connect()` / `disconnect()` manage the ready state (no network connection needed)
 - `fetchMessages()` yields buffered messages
 - Provide an `acknowledge()` method to clear processed messages
-- The account's `ingest_connector_type` must be set so the sync scheduler skips it (only IMAP accounts are polled)
+- The identity's `ingest_connector_type` must be set so the sync scheduler skips it (only IMAP identities are polled)
 
 See `CloudflareEmailIngestConnector` for a complete push-based example.
 
@@ -213,13 +213,13 @@ export function createIngestConnector(config: IngestConnectorConfig): IngestConn
 Add a schema migration in `src/storage/schema.ts` for any connector-specific configuration columns:
 
 ```sql
-ALTER TABLE accounts ADD COLUMN my_connector_api_key TEXT;
-ALTER TABLE accounts ADD COLUMN my_connector_endpoint TEXT;
+ALTER TABLE identities ADD COLUMN my_connector_api_key TEXT;
+ALTER TABLE identities ADD COLUMN my_connector_endpoint TEXT;
 ```
 
-### 4. Update the Account API
+### 4. Update the Identity API
 
-In `src/api/routes/accounts.ts`:
+In `src/api/routes/identities.ts`:
 - Add new columns to the `allowedFields` array in the PUT handler
 - Add validation for required fields in the POST handler
 - Include new columns in SELECT queries
@@ -260,14 +260,14 @@ Add cases for your connector in `src/connectors/registry.test.ts`.
 
 ## Health Checks
 
-The `GET /api/accounts/:accountId/connector-health` endpoint tests both connectors for an account:
+The `GET /api/identities/:identityId/connector-health` endpoint tests both connectors for an identity:
 
 - **IMAP**: Connects, lists folders, disconnects
 - **Cloudflare Email**: Verifies webhook secret is configured
 - **SMTP**: Calls `verify()` to test credentials
 - **SES**: Calls `verify()` to test AWS credentials via `GetAccount`
 
-The response includes sync scheduler status for IMAP accounts:
+The response includes sync scheduler status for IMAP identities:
 
 ```json
 {

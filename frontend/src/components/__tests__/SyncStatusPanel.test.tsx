@@ -4,14 +4,14 @@ import { SyncStatusPanel } from "../settings/SyncStatusPanel";
 
 vi.mock("../../api", () => ({
 	api: {
-		accounts: {
+		identities: {
 			syncStatus: vi.fn(),
 		},
 	},
 }));
 
 import { api } from "../../api";
-const mockApi = api as unknown as { accounts: { syncStatus: ReturnType<typeof vi.fn> } };
+const mockApi = api as unknown as { identities: { syncStatus: ReturnType<typeof vi.fn> } };
 
 describe("SyncStatusPanel", () => {
 	beforeEach(() => {
@@ -19,14 +19,14 @@ describe("SyncStatusPanel", () => {
 	});
 
 	it("shows loading state while fetching", async () => {
-		mockApi.accounts.syncStatus.mockReturnValue(new Promise(() => {}));
-		render(<SyncStatusPanel accountId={1} />);
+		mockApi.identities.syncStatus.mockReturnValue(new Promise(() => {}));
+		render(<SyncStatusPanel identityId={1} />);
 		expect(screen.getByText("Loading sync status...")).toBeInTheDocument();
 	});
 
 	it("renders folder rows with message counts and relative time", async () => {
 		const pastDate = new Date(Date.now() - 3_600_000).toISOString(); // 1h ago
-		mockApi.accounts.syncStatus.mockResolvedValue([
+		mockApi.identities.syncStatus.mockResolvedValue([
 			{
 				id: 1,
 				name: "Inbox",
@@ -37,7 +37,7 @@ describe("SyncStatusPanel", () => {
 				last_uid: 100,
 			},
 		]);
-		render(<SyncStatusPanel accountId={1} />);
+		render(<SyncStatusPanel identityId={1} />);
 		await waitFor(() => expect(screen.getByText("Inbox")).toBeInTheDocument());
 		expect(screen.getByText("42")).toBeInTheDocument();
 		expect(screen.getByText("5")).toBeInTheDocument();
@@ -46,7 +46,7 @@ describe("SyncStatusPanel", () => {
 	});
 
 	it("shows Never when last_synced_at is null", async () => {
-		mockApi.accounts.syncStatus.mockResolvedValue([
+		mockApi.identities.syncStatus.mockResolvedValue([
 			{
 				id: 2,
 				name: "Sent",
@@ -57,21 +57,21 @@ describe("SyncStatusPanel", () => {
 				last_uid: null,
 			},
 		]);
-		render(<SyncStatusPanel accountId={1} />);
+		render(<SyncStatusPanel identityId={1} />);
 		await waitFor(() => expect(screen.getByText("Sent")).toBeInTheDocument());
 		expect(screen.getByText("Never")).toBeInTheDocument();
 	});
 
 	it("shows empty-state message when no folders are synced yet", async () => {
-		mockApi.accounts.syncStatus.mockResolvedValue([]);
-		render(<SyncStatusPanel accountId={1} />);
+		mockApi.identities.syncStatus.mockResolvedValue([]);
+		render(<SyncStatusPanel identityId={1} />);
 		await waitFor(() => expect(screen.getByText("No folders synced yet")).toBeInTheDocument());
 	});
 
 	it("shows empty-state message when syncStatus is null (API returns null)", async () => {
 		// Exercises the `syncStatus ?? []` null-coalescing branch
-		mockApi.accounts.syncStatus.mockResolvedValue(null);
-		render(<SyncStatusPanel accountId={1} />);
+		mockApi.identities.syncStatus.mockResolvedValue(null);
+		render(<SyncStatusPanel identityId={1} />);
 		await waitFor(() => expect(screen.getByText("No folders synced yet")).toBeInTheDocument());
 	});
 });

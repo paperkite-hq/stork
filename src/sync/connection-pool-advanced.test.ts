@@ -29,15 +29,15 @@ function createMockSync(): ImapSync {
 // Patch ConnectionPool to use mock connections
 function createTestPool(
 	db: Database.Database,
-	options: { maxPerAccount?: number; maxTotal?: number; idleTimeoutMs?: number } = {},
+	options: { maxPerIdentity?: number; maxTotal?: number; idleTimeoutMs?: number } = {},
 ): ConnectionPool {
 	const pool = new ConnectionPool(db, options);
 
 	// Override acquire to inject mock ImapSync instead of connecting to real IMAP
-	pool.acquire = async (accountId, _config) => {
+	pool.acquire = async (identityId, _config) => {
 		// Directly manipulate the pool's internal state to add a mock connection
 		const conns = (pool as unknown as { connections: Map<number, unknown[]> }).connections;
-		const accountConns = conns.get(accountId) ?? [];
+		const accountConns = conns.get(identityId) ?? [];
 
 		// Check for idle connection to reuse
 		const idle = (accountConns as { busy: boolean; sync: ImapSync; lastUsed: number }[]).find(
@@ -49,12 +49,12 @@ function createTestPool(
 			return idle.sync;
 		}
 
-		// Check per-account limit
+		// Check per-identity limit
 		if (
-			accountConns.length >= ((pool as unknown as { maxPerAccount: number }).maxPerAccount ?? 1)
+			accountConns.length >= ((pool as unknown as { maxPerIdentity: number }).maxPerIdentity ?? 1)
 		) {
 			throw new Error(
-				`Connection limit reached for account ${accountId} (max: ${(pool as unknown as { maxPerAccount: number }).maxPerAccount})`,
+				`Connection limit reached for identity ${identityId} (max: ${(pool as unknown as { maxPerIdentity: number }).maxPerIdentity})`,
 			);
 		}
 
@@ -73,15 +73,15 @@ function createTestPool(
 		const mockSync = createMockSync();
 		const pooled = {
 			sync: mockSync,
-			accountId,
+			identityId,
 			lastUsed: Date.now(),
 			busy: true,
 		};
 
-		if (!conns.has(accountId)) {
-			conns.set(accountId, []);
+		if (!conns.has(identityId)) {
+			conns.set(identityId, []);
 		}
-		conns.get(accountId)?.push(pooled);
+		conns.get(identityId)?.push(pooled);
 
 		return mockSync;
 	};
@@ -103,17 +103,17 @@ describe("ConnectionPool — acquire/release lifecycle", () => {
 	});
 
 	test("acquire creates a connection and increments count", async () => {
-		pool = createTestPool(db, { maxPerAccount: 3, maxTotal: 10 });
+		pool = createTestPool(db, { maxPerIdentity: 3, maxTotal: 10 });
 		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
 
 		const sync = await pool.acquire(1, config);
 		expect(sync).toBeDefined();
 		expect(pool.totalConnections()).toBe(1);
-		expect(pool.accountConnections(1)).toBe(1);
+		expect(pool.identityConnections(1)).toBe(1);
 	});
 
 	test("release marks connection as idle for reuse", async () => {
-		pool = createTestPool(db, { maxPerAccount: 3, maxTotal: 10 });
+		pool = createTestPool(db, { maxPerIdentity: 3, maxTotal: 10 });
 		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
 
 		const sync1 = await pool.acquire(1, config);
@@ -125,48 +125,50 @@ describe("ConnectionPool — acquire/release lifecycle", () => {
 		expect(pool.totalConnections()).toBe(1); // Still 1, not 2
 	});
 
-	test("per-account limit prevents excessive connections", async () => {
-		pool = createTestPool(db, { maxPerAccount: 1, maxTotal: 10 });
+	test("per-identity limit prevents excessive connections", async () => {
+		pool = createTestPool(db, { maxPerIdentity: 1, maxTotal: 10 });
 		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
 
 		await pool.acquire(1, config);
-		// Second acquire for same account should fail (first is still busy)
-		await expect(pool.acquire(1, config)).rejects.toThrow("Connection limit reached for account 1");
+		// Second acquire for same identity should fail (first is still busy)
+		await expect(pool.acquire(1, config)).rejects.toThrow(
+			"Connection limit reached for identity 1",
+		);
 	});
 
 	test("total limit prevents too many connections across accounts", async () => {
-		pool = createTestPool(db, { maxPerAccount: 5, maxTotal: 2 });
+		pool = createTestPool(db, { maxPerIdentity: 5, maxTotal: 2 });
 		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
 
 		await pool.acquire(1, config);
 		await pool.acquire(2, config);
 
-		// Third acquire for a new account should fail (both are busy, nothing to evict)
+		// Third acquire for a new identity should fail (both are busy, nothing to evict)
 		await expect(pool.acquire(3, config)).rejects.toThrow(
 			"Total connection limit reached (max: 2), all connections busy",
 		);
 	});
 
 	test("total limit evicts oldest idle connection when at capacity", async () => {
-		pool = createTestPool(db, { maxPerAccount: 5, maxTotal: 2 });
+		pool = createTestPool(db, { maxPerIdentity: 5, maxTotal: 2 });
 		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
 
 		const sync1 = await pool.acquire(1, config);
 		await pool.acquire(2, config);
 
-		// Release account 1's connection (making it idle)
+		// Release identity 1's connection (making it idle)
 		pool.release(1, sync1);
 
-		// Now acquiring for account 3 should evict account 1's idle connection
+		// Now acquiring for identity 3 should evict identity 1's idle connection
 		const sync3 = await pool.acquire(3, config);
 		expect(sync3).toBeDefined();
 		expect(pool.totalConnections()).toBe(2);
-		expect(pool.accountConnections(1)).toBe(0); // Evicted
-		expect(pool.accountConnections(3)).toBe(1);
+		expect(pool.identityConnections(1)).toBe(0); // Evicted
+		expect(pool.identityConnections(3)).toBe(1);
 	});
 
 	test("multiple accounts can have connections simultaneously", async () => {
-		pool = createTestPool(db, { maxPerAccount: 2, maxTotal: 10 });
+		pool = createTestPool(db, { maxPerIdentity: 2, maxTotal: 10 });
 		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
 
 		await pool.acquire(1, config);
@@ -174,13 +176,13 @@ describe("ConnectionPool — acquire/release lifecycle", () => {
 		await pool.acquire(3, config);
 
 		expect(pool.totalConnections()).toBe(3);
-		expect(pool.accountConnections(1)).toBe(1);
-		expect(pool.accountConnections(2)).toBe(1);
-		expect(pool.accountConnections(3)).toBe(1);
+		expect(pool.identityConnections(1)).toBe(1);
+		expect(pool.identityConnections(2)).toBe(1);
+		expect(pool.identityConnections(3)).toBe(1);
 	});
 
 	test("shutdown clears all connections and stops cleanup timer", async () => {
-		pool = createTestPool(db, { maxPerAccount: 3, maxTotal: 10 });
+		pool = createTestPool(db, { maxPerIdentity: 3, maxTotal: 10 });
 		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
 
 		await pool.acquire(1, config);
@@ -191,14 +193,14 @@ describe("ConnectionPool — acquire/release lifecycle", () => {
 		expect(pool.totalConnections()).toBe(0);
 	});
 
-	test("release is safe for non-existent account", () => {
+	test("release is safe for non-existent identity", () => {
 		pool = createTestPool(db, {});
 		pool.release(999, {} as ImapSync);
 		expect(pool.totalConnections()).toBe(0);
 	});
 
 	test("release is safe for non-matching sync object", async () => {
-		pool = createTestPool(db, { maxPerAccount: 3, maxTotal: 10 });
+		pool = createTestPool(db, { maxPerIdentity: 3, maxTotal: 10 });
 		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
 
 		await pool.acquire(1, config);
@@ -212,7 +214,7 @@ describe("ConnectionPool — idle eviction (evictIdle)", () => {
 	type InternalPool = {
 		connections: Map<
 			number,
-			{ sync: ImapSync; accountId: number; lastUsed: number; busy: boolean }[]
+			{ sync: ImapSync; identityId: number; lastUsed: number; busy: boolean }[]
 		>;
 		evictIdle: () => void;
 	};
@@ -229,20 +231,20 @@ describe("ConnectionPool — idle eviction (evictIdle)", () => {
 		db.close();
 	});
 
-	test("evictIdle removes timed-out idle connections and deletes account entry", () => {
+	test("evictIdle removes timed-out idle connections and deletes identity entry", () => {
 		pool = new ConnectionPool(db, { idleTimeoutMs: 1000 });
 		const mockSync = createMockSync();
 		const internal = pool as unknown as InternalPool;
 
 		internal.connections.set(1, [
-			{ sync: mockSync, accountId: 1, lastUsed: Date.now() - 5000, busy: false },
+			{ sync: mockSync, identityId: 1, lastUsed: Date.now() - 5000, busy: false },
 		]);
 
 		expect(pool.totalConnections()).toBe(1);
 		internal.evictIdle();
 
 		expect(pool.totalConnections()).toBe(0);
-		expect(pool.accountConnections(1)).toBe(0);
+		expect(pool.identityConnections(1)).toBe(0);
 		expect(mockSync.disconnect).toHaveBeenCalledTimes(1);
 	});
 
@@ -252,7 +254,7 @@ describe("ConnectionPool — idle eviction (evictIdle)", () => {
 		const internal = pool as unknown as InternalPool;
 
 		internal.connections.set(1, [
-			{ sync: mockSync, accountId: 1, lastUsed: Date.now() - 1000, busy: false },
+			{ sync: mockSync, identityId: 1, lastUsed: Date.now() - 1000, busy: false },
 		]);
 
 		internal.evictIdle();
@@ -267,7 +269,7 @@ describe("ConnectionPool — idle eviction (evictIdle)", () => {
 		const internal = pool as unknown as InternalPool;
 
 		internal.connections.set(1, [
-			{ sync: mockSync, accountId: 1, lastUsed: Date.now() - 10000, busy: true },
+			{ sync: mockSync, identityId: 1, lastUsed: Date.now() - 10000, busy: true },
 		]);
 
 		internal.evictIdle();
@@ -276,22 +278,22 @@ describe("ConnectionPool — idle eviction (evictIdle)", () => {
 		expect(mockSync.disconnect).not.toHaveBeenCalled();
 	});
 
-	test("evictIdle evicts only stale idle connections when account has mixed connections", () => {
-		pool = new ConnectionPool(db, { idleTimeoutMs: 1000, maxPerAccount: 3 });
+	test("evictIdle evicts only stale idle connections when identity has mixed connections", () => {
+		pool = new ConnectionPool(db, { idleTimeoutMs: 1000, maxPerIdentity: 3 });
 		const staleSync = createMockSync();
 		const activeSync = createMockSync();
 		const internal = pool as unknown as InternalPool;
 
 		internal.connections.set(1, [
-			{ sync: staleSync, accountId: 1, lastUsed: Date.now() - 5000, busy: false },
-			{ sync: activeSync, accountId: 1, lastUsed: Date.now(), busy: true },
+			{ sync: staleSync, identityId: 1, lastUsed: Date.now() - 5000, busy: false },
+			{ sync: activeSync, identityId: 1, lastUsed: Date.now(), busy: true },
 		]);
 
 		internal.evictIdle();
 
-		// stale idle evicted; account still exists with 1 connection
+		// stale idle evicted; identity still exists with 1 connection
 		expect(pool.totalConnections()).toBe(1);
-		expect(pool.accountConnections(1)).toBe(1);
+		expect(pool.identityConnections(1)).toBe(1);
 		expect(staleSync.disconnect).toHaveBeenCalledTimes(1);
 		expect(activeSync.disconnect).not.toHaveBeenCalled();
 	});
@@ -304,18 +306,20 @@ describe("ConnectionPool — idle eviction (evictIdle)", () => {
 		const internal = pool as unknown as InternalPool;
 
 		internal.connections.set(1, [
-			{ sync: stale1, accountId: 1, lastUsed: Date.now() - 5000, busy: false },
+			{ sync: stale1, identityId: 1, lastUsed: Date.now() - 5000, busy: false },
 		]);
 		internal.connections.set(2, [
-			{ sync: stale2, accountId: 2, lastUsed: Date.now() - 5000, busy: false },
+			{ sync: stale2, identityId: 2, lastUsed: Date.now() - 5000, busy: false },
 		]);
-		internal.connections.set(3, [{ sync: fresh, accountId: 3, lastUsed: Date.now(), busy: false }]);
+		internal.connections.set(3, [
+			{ sync: fresh, identityId: 3, lastUsed: Date.now(), busy: false },
+		]);
 
 		internal.evictIdle();
 
-		expect(pool.accountConnections(1)).toBe(0); // evicted
-		expect(pool.accountConnections(2)).toBe(0); // evicted
-		expect(pool.accountConnections(3)).toBe(1); // kept
+		expect(pool.identityConnections(1)).toBe(0); // evicted
+		expect(pool.identityConnections(2)).toBe(0); // evicted
+		expect(pool.identityConnections(3)).toBe(1); // kept
 		expect(stale1.disconnect).toHaveBeenCalledTimes(1);
 		expect(stale2.disconnect).toHaveBeenCalledTimes(1);
 		expect(fresh.disconnect).not.toHaveBeenCalled();
@@ -344,31 +348,31 @@ describe("ConnectionPool — real acquire() limit checks", () => {
 		db.close();
 	});
 
-	test("throws per-account limit error when all connections for account are busy", async () => {
-		const pool = new ConnectionPool(db, { maxPerAccount: 1, maxTotal: 10 });
+	test("throws per-identity limit error when all connections for identity are busy", async () => {
+		const pool = new ConnectionPool(db, { maxPerIdentity: 1, maxTotal: 10 });
 		const internal = pool as unknown as InternalPool;
 
-		// Directly inject a busy connection for account 1 (bypassing connect())
+		// Directly inject a busy connection for identity 1 (bypassing connect())
 		const mockSync = {
 			connect: vi.fn(() => Promise.resolve()),
 			disconnect: vi.fn(() => Promise.resolve()),
 			forceClose: vi.fn(),
 		} as unknown as ImapSync;
 		internal.connections.set(1, [
-			{ sync: mockSync, accountId: 1, lastUsed: Date.now(), busy: true },
+			{ sync: mockSync, identityId: 1, lastUsed: Date.now(), busy: true },
 		]);
 
 		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
-		// Acquire should throw: account is at maxPerAccount=1 with no idle connection to discard
+		// Acquire should throw: account is at maxPerIdentity=1 with no idle connection to discard
 		await expect(pool.acquire(1, config)).rejects.toThrow(
-			"Connection limit reached for account 1 (max: 1)",
+			"Connection limit reached for identity 1 (max: 1)",
 		);
 
 		await pool.shutdown();
 	});
 
 	test("throws total limit error when all connections across accounts are busy", async () => {
-		const pool = new ConnectionPool(db, { maxPerAccount: 5, maxTotal: 2 });
+		const pool = new ConnectionPool(db, { maxPerIdentity: 5, maxTotal: 2 });
 		const internal = pool as unknown as InternalPool;
 
 		// Directly inject two busy connections (filling total capacity)
@@ -383,14 +387,14 @@ describe("ConnectionPool — real acquire() limit checks", () => {
 			forceClose: vi.fn(),
 		} as unknown as ImapSync;
 		internal.connections.set(1, [
-			{ sync: mockSync1, accountId: 1, lastUsed: Date.now(), busy: true },
+			{ sync: mockSync1, identityId: 1, lastUsed: Date.now(), busy: true },
 		]);
 		internal.connections.set(2, [
-			{ sync: mockSync2, accountId: 2, lastUsed: Date.now(), busy: true },
+			{ sync: mockSync2, identityId: 2, lastUsed: Date.now(), busy: true },
 		]);
 
 		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
-		// Acquire for a third account: total=2=maxTotal, evictOldestIdle() finds nothing → throws
+		// Acquire for a third identity: total=2=maxTotal, evictOldestIdle() finds nothing → throws
 		await expect(pool.acquire(3, config)).rejects.toThrow(
 			"Total connection limit reached (max: 2), all connections busy",
 		);
@@ -433,10 +437,10 @@ describe("ConnectionPool — evictOldestIdle() direct tests", () => {
 		} as unknown as ImapSync;
 	}
 
-	test("evictOldestIdle evicts idle connection and removes empty account entry", async () => {
+	test("evictOldestIdle evicts idle connection and removes empty identity entry", async () => {
 		const pool = makePool();
 		const sync1 = mockSync();
-		pool.connections.set(1, [{ sync: sync1, accountId: 1, lastUsed: 0, busy: false }]);
+		pool.connections.set(1, [{ sync: sync1, identityId: 1, lastUsed: 0, busy: false }]);
 
 		const result = pool.evictOldestIdle();
 
@@ -454,30 +458,30 @@ describe("ConnectionPool — evictOldestIdle() direct tests", () => {
 		const newSync = mockSync();
 
 		// Account 1 has older idle connection
-		pool.connections.set(1, [{ sync: oldSync, accountId: 1, lastUsed: 100, busy: false }]);
+		pool.connections.set(1, [{ sync: oldSync, identityId: 1, lastUsed: 100, busy: false }]);
 		// Account 2 has newer idle connection
-		pool.connections.set(2, [{ sync: newSync, accountId: 2, lastUsed: Date.now(), busy: false }]);
+		pool.connections.set(2, [{ sync: newSync, identityId: 2, lastUsed: Date.now(), busy: false }]);
 
 		const result = pool.evictOldestIdle();
 
 		expect(result).toBe(true);
 		expect(oldSync.disconnect).toHaveBeenCalledTimes(1);
 		expect(newSync.disconnect).not.toHaveBeenCalled();
-		expect(pool.connections.has(1)).toBe(false); // account 1 removed
-		expect(pool.connections.has(2)).toBe(true); // account 2 still present
+		expect(pool.connections.has(1)).toBe(false); // identity 1 removed
+		expect(pool.connections.has(2)).toBe(true); // identity 2 still present
 
 		await pool.shutdown();
 	});
 
-	test("evictOldestIdle keeps account entry when other connections remain for that account", async () => {
+	test("evictOldestIdle keeps identity entry when other connections remain for that identity", async () => {
 		const pool = makePool();
 		const idleSync = mockSync();
 		const busySync = mockSync();
 
 		// Account 1 has two connections: one old idle, one busy
 		pool.connections.set(1, [
-			{ sync: idleSync, accountId: 1, lastUsed: 0, busy: false },
-			{ sync: busySync, accountId: 1, lastUsed: Date.now(), busy: true },
+			{ sync: idleSync, identityId: 1, lastUsed: 0, busy: false },
+			{ sync: busySync, identityId: 1, lastUsed: Date.now(), busy: true },
 		]);
 
 		const result = pool.evictOldestIdle();
@@ -495,7 +499,7 @@ describe("ConnectionPool — evictOldestIdle() direct tests", () => {
 	test("evictOldestIdle returns false when all connections are busy", async () => {
 		const pool = makePool();
 		const busy = mockSync();
-		pool.connections.set(1, [{ sync: busy, accountId: 1, lastUsed: 0, busy: true }]);
+		pool.connections.set(1, [{ sync: busy, identityId: 1, lastUsed: 0, busy: true }]);
 
 		const result = pool.evictOldestIdle();
 

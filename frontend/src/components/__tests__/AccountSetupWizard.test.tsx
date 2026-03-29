@@ -44,7 +44,7 @@ vi.mock("../../api", () => ({
 				create: vi.fn().mockResolvedValue({ id: 20 }),
 			},
 		},
-		accounts: {
+		identities: {
 			create: vi.fn().mockResolvedValue({ id: 99 }),
 		},
 	},
@@ -67,12 +67,12 @@ describe("AccountSetupWizard", () => {
 				onCancel={onCancel}
 			/>,
 		);
-		expect(screen.getByText("Add Account")).toBeInTheDocument();
+		expect(screen.getByText("Add Email Identity")).toBeInTheDocument();
 		expect(screen.getByLabelText(/Display Name/i)).toBeInTheDocument();
 		expect(screen.getByLabelText(/Email Address/i)).toBeInTheDocument();
 	});
 
-	it("advances to step 2 after filling account basics", async () => {
+	it("advances to step 2 after filling identity basics", async () => {
 		render(
 			<AccountSetupWizard
 				existingInbound={[]}
@@ -131,7 +131,7 @@ describe("AccountSetupWizard", () => {
 			/>,
 		);
 
-		// Step 1: account basics
+		// Step 1: identity basics
 		fireEvent.change(screen.getByLabelText(/Display Name/i), { target: { value: "Work" } });
 		fireEvent.change(screen.getByLabelText(/Email Address/i), {
 			target: { value: "work@example.com" },
@@ -147,15 +147,15 @@ describe("AccountSetupWizard", () => {
 		fireEvent.click(screen.getByText(/Review →/i));
 
 		// Step 4: review
-		await waitFor(() => expect(screen.getByText(/Create Account/i)).toBeInTheDocument());
+		await waitFor(() => expect(screen.getByText(/Create Email Identity/i)).toBeInTheDocument());
 		expect(screen.getByText(/Work <work@example.com>/i)).toBeInTheDocument();
-		fireEvent.click(screen.getByText("Create Account"));
+		fireEvent.click(screen.getByText("Create Email Identity"));
 
 		await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
 		// No new connectors created — existing ones used
 		expect(api.connectors.inbound.create).not.toHaveBeenCalled();
 		expect(api.connectors.outbound.create).not.toHaveBeenCalled();
-		expect(api.accounts.create).toHaveBeenCalledWith(
+		expect(api.identities.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				name: "Work",
 				email: "work@example.com",
@@ -198,15 +198,15 @@ describe("AccountSetupWizard", () => {
 		fireEvent.click(screen.getByText(/Review →/i));
 
 		// Step 4
-		await waitFor(() => expect(screen.getByText("Create Account")).toBeInTheDocument());
-		fireEvent.click(screen.getByText("Create Account"));
+		await waitFor(() => expect(screen.getByText("Create Email Identity")).toBeInTheDocument());
+		fireEvent.click(screen.getByText("Create Email Identity"));
 
 		await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
 		expect(api.connectors.inbound.create).toHaveBeenCalledWith(
 			expect.objectContaining({ name: "My IMAP", imap_host: "imap.example.com" }),
 		);
 		expect(api.connectors.outbound.create).not.toHaveBeenCalled();
-		expect(api.accounts.create).toHaveBeenCalledWith(
+		expect(api.identities.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				name: "Personal",
 				email: "me@example.com",

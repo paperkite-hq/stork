@@ -11,7 +11,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Your encrypted database, accounts, labels, and all synced email carry forward automatically.
+Your encrypted database, identities, labels, and all synced email carry forward automatically.
 
 ## How migrations work
 

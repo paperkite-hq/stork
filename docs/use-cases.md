@@ -14,7 +14,7 @@ You want a local, searchable copy of your Gmail that's encrypted at rest — so 
    docker compose up -d
    ```
 3. Open `http://localhost:3100`, set your encryption password, and save your recovery mnemonic.
-4. Add your Gmail account:
+4. Add your Gmail identity:
    - IMAP host: `imap.gmail.com`, port `993`
    - SMTP host: `smtp.gmail.com`, port `587`
    - Username: your email address
@@ -51,7 +51,7 @@ You run [Mailcow](https://mailcow.email/) for your family or small team and want
    volumes:
      stork-data:
    ```
-2. Add your Mailcow account in Stork:
+2. Add your Mailcow email in Stork:
    - IMAP host: `mail.yourdomain.com`, port `993`
    - SMTP host: `mail.yourdomain.com`, port `587`
 3. Put Stork behind your existing reverse proxy (Nginx, Caddy, Traefik) with TLS.

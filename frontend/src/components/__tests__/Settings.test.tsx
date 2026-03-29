@@ -43,7 +43,7 @@ vi.mock("../../api", () => ({
 				test: vi.fn().mockResolvedValue({ ok: true }),
 			},
 		},
-		accounts: {
+		identities: {
 			list: vi.fn().mockResolvedValue([
 				{
 					id: 1,
@@ -156,7 +156,7 @@ describe("Settings", () => {
 		expect(onClose).toHaveBeenCalledOnce();
 	});
 
-	it("shows account list after loading", async () => {
+	it("shows identity list after loading", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
 			expect(screen.getByText("Work Email")).toBeInTheDocument();
@@ -171,7 +171,7 @@ describe("Settings", () => {
 		});
 	});
 
-	it("shows Edit and Delete buttons for accounts", async () => {
+	it("shows Edit and Delete buttons for identities", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
 			expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1);
@@ -179,7 +179,7 @@ describe("Settings", () => {
 		expect(screen.getAllByText("Delete").length).toBeGreaterThanOrEqual(1);
 	});
 
-	it("shows Sync Status button for accounts", async () => {
+	it("shows Sync Status button for identities", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
 			expect(screen.getByText("Sync Status")).toBeInTheDocument();
@@ -231,9 +231,9 @@ describe("Settings", () => {
 		expect(screen.getByText("Inbound Connector")).toBeInTheDocument();
 	});
 
-	it("shows no identities message when account list is empty", async () => {
+	it("shows no identities message when identity list is empty", async () => {
 		const { api } = await import("../../api");
-		(api.accounts.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+		(api.identities.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
 			expect(screen.getByText("No identities assigned to this connector.")).toBeInTheDocument();
@@ -277,7 +277,7 @@ describe("Settings", () => {
 
 	it("shows empty sync status message when no folders synced", async () => {
 		const { api } = await import("../../api");
-		(api.accounts.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
 			expect(screen.getByText("Sync Status")).toBeInTheDocument();
@@ -297,13 +297,13 @@ describe("Settings", () => {
 		const editBtns = screen.getAllByText("Edit");
 		await userEvent.click(editBtns[editBtns.length - 1] as HTMLElement);
 		await waitFor(() => {
-			// Form should be pre-filled with existing account data after loading
+			// Form should be pre-filled with existing identity data after loading
 			expect(screen.getByDisplayValue("Work Email")).toBeInTheDocument();
 		});
 		expect(screen.getByDisplayValue("work@example.com")).toBeInTheDocument();
 	});
 
-	it("submits edit form and refreshes account list", async () => {
+	it("submits edit form and refreshes identity list", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
@@ -319,7 +319,7 @@ describe("Settings", () => {
 		// Click Save
 		await userEvent.click(screen.getByRole("button", { name: "Save" }));
 		await waitFor(() => {
-			expect(api.accounts.update).toHaveBeenCalled();
+			expect(api.identities.update).toHaveBeenCalled();
 		});
 	});
 
@@ -361,7 +361,7 @@ describe("Settings", () => {
 		expect(screen.getByText("Outbound Connectors")).toBeInTheDocument();
 	});
 
-	it("shows delete confirmation dialog and deletes account", async () => {
+	it("shows delete confirmation dialog and deletes identity", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
@@ -377,7 +377,7 @@ describe("Settings", () => {
 		// Click Delete Identity
 		await userEvent.click(screen.getByText("Delete Identity"));
 		await waitFor(() => {
-			expect(api.accounts.delete).toHaveBeenCalledWith(1);
+			expect(api.identities.delete).toHaveBeenCalledWith(1);
 		});
 	});
 
@@ -396,7 +396,7 @@ describe("Settings", () => {
 		await waitFor(() => {
 			expect(screen.queryByText("Delete identity")).not.toBeInTheDocument();
 		});
-		expect(api.accounts.delete).not.toHaveBeenCalled();
+		expect(api.identities.delete).not.toHaveBeenCalled();
 	});
 
 	it("saves dark theme preference", async () => {
@@ -494,10 +494,10 @@ describe("Settings", () => {
 		expect(screen.getByDisplayValue("Light")).toBeInTheDocument();
 	});
 
-	it("shows Loading state when editing account data is loading", async () => {
+	it("shows Loading state when editing identity data is loading", async () => {
 		const { api } = await import("../../api");
 		let resolveGet: (v: unknown) => void = () => {};
-		(api.accounts.get as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+		(api.identities.get as ReturnType<typeof vi.fn>).mockReturnValueOnce(
 			new Promise((r) => {
 				resolveGet = r;
 			}),
@@ -552,7 +552,7 @@ describe("Settings", () => {
 	it("shows formatRelative outputs for sync status times", async () => {
 		const { api } = await import("../../api");
 		const now = new Date();
-		(api.accounts.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
 			{
 				id: 1,
 				name: "Inbox",
@@ -586,7 +586,7 @@ describe("Settings", () => {
 	it("shows minutes-ago format for recent sync times", async () => {
 		const { api } = await import("../../api");
 		const now = new Date();
-		(api.accounts.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
 			{
 				id: 1,
 				name: "Inbox",
@@ -608,7 +608,7 @@ describe("Settings", () => {
 	it("shows hours-ago format for sync times within the same day", async () => {
 		const { api } = await import("../../api");
 		const now = new Date();
-		(api.accounts.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
 			{
 				id: 1,
 				name: "Inbox",
@@ -630,7 +630,7 @@ describe("Settings", () => {
 	it("shows days-ago format for sync times within the same week", async () => {
 		const { api } = await import("../../api");
 		const now = new Date();
-		(api.accounts.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
 			{
 				id: 1,
 				name: "Inbox",
@@ -652,7 +652,7 @@ describe("Settings", () => {
 	it("shows locale date string for sync times older than one week", async () => {
 		const { api } = await import("../../api");
 		const twoWeeksAgo = new Date(Date.now() - 14 * 86400000);
-		(api.accounts.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
 			{
 				id: 1,
 				name: "Inbox",
@@ -835,7 +835,7 @@ describe("Settings — Security tab", () => {
 	});
 });
 
-describe("Settings — Account form submission", () => {
+describe("Settings — Identity form submission", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		localStorageMock.clear();
@@ -855,28 +855,28 @@ describe("Settings — Account form submission", () => {
 		// Submit the form
 		const form = screen.getByLabelText("Name").closest("form");
 		if (form) fireEvent.submit(form);
-		await waitFor(() => expect(api.accounts.create).toHaveBeenCalled());
+		await waitFor(() => expect(api.identities.create).toHaveBeenCalled());
 	});
 
-	it("stays in loading state when account details fetch fails", async () => {
+	it("stays in loading state when identity details fetch fails", async () => {
 		const { api } = await import("../../api");
-		(api.accounts.get as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-			new Error("Account not found"),
+		(api.identities.get as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+			new Error("Identity not found"),
 		);
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1));
 		const editBtnsF = screen.getAllByText("Edit");
 		await userEvent.click(editBtnsF[editBtnsF.length - 1] as HTMLElement);
-		// When loadAccount fails, loaded stays false — the form shows "Loading..."
+		// When loadIdentity fails, loaded stays false — the form shows "Loading..."
 		// but the error was set (even though it's not visible due to the early return)
-		await waitFor(() => expect(api.accounts.get).toHaveBeenCalledWith(1));
+		await waitFor(() => expect(api.identities.get).toHaveBeenCalledWith(1));
 		// The component stays in the loading state since loaded is never set to true
 		expect(screen.getByText("Loading...")).toBeInTheDocument();
 	});
 
 	it("shows error when update API fails", async () => {
 		const { api } = await import("../../api");
-		(api.accounts.update as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+		(api.identities.update as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
 			new Error("Update failed"),
 		);
 		render(<Settings onClose={vi.fn()} />);
@@ -892,7 +892,7 @@ describe("Settings — Account form submission", () => {
 
 	it("shows error when create API fails", async () => {
 		const { api } = await import("../../api");
-		(api.accounts.create as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+		(api.identities.create as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
 			new Error("Missing required fields"),
 		);
 		render(<Settings onClose={vi.fn()} />);
@@ -1041,14 +1041,14 @@ describe("Settings — TrustedSendersPanel", () => {
 		await waitFor(() => expect(screen.getByText("Delete identity")).toBeInTheDocument());
 		await userEvent.click(screen.getByRole("button", { name: "Delete Identity" }));
 		await waitFor(() => {
-			expect(api.accounts.delete).toHaveBeenCalledWith(1);
+			expect(api.identities.delete).toHaveBeenCalledWith(1);
 		});
 	});
 
 	it("shows entry remains in list when remove fails", async () => {
 		// If delete fails, error is alerted; identity remains
 		const { api } = await import("../../api");
-		(api.accounts.delete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+		(api.identities.delete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
 			new Error("Server error"),
 		);
 		// jsdom may not have window.alert — define it if needed
@@ -1075,7 +1075,7 @@ describe("Settings — TrustedSendersPanel", () => {
 	});
 });
 
-describe("Settings — AccountForm field interactions", () => {
+describe("Settings — IdentityForm field interactions", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 	});

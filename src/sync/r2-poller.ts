@@ -36,7 +36,7 @@ interface R2ConnectorRow {
 
 interface PollerState {
 	connectorId: number;
-	accountId: string;
+	cfAccountId: string;
 	bucketName: string;
 	accessKeyId: string;
 	secretAccessKey: string;
@@ -183,7 +183,7 @@ export class R2Poller {
 	private addConnectorFromRow(row: R2ConnectorRow): void {
 		const state: PollerState = {
 			connectorId: row.id,
-			accountId: row.cf_r2_account_id,
+			cfAccountId: row.cf_r2_account_id,
 			bucketName: row.cf_r2_bucket_name,
 			accessKeyId: row.cf_r2_access_key_id,
 			secretAccessKey: row.cf_r2_secret_access_key,
@@ -258,7 +258,7 @@ export class R2Poller {
 	 * list pending objects → download each → parse + store → delete on success.
 	 */
 	private async pollConnector(state: PollerState): Promise<number> {
-		const baseUrl = `https://${state.accountId}.r2.cloudflarestorage.com`;
+		const baseUrl = `https://${state.cfAccountId}.r2.cloudflarestorage.com`;
 		const keys = await this.listObjects(state, baseUrl);
 
 		let stored = 0;
@@ -298,7 +298,7 @@ export class R2Poller {
 	/**
 	 * Download, parse, and store one R2 object as an inbound email.
 	 * Deletes the object from R2 on success or on unrecoverable parse errors.
-	 * Returns the number of accounts the message was stored for.
+	 * Returns the number of identities the message was stored for.
 	 */
 	private async processObject(state: PollerState, baseUrl: string, key: string): Promise<number> {
 		// Download the object
