@@ -342,6 +342,25 @@ describe("Settings", () => {
 		expect(screen.getByText("Sync Preferences")).toBeInTheDocument();
 	});
 
+	it("shows philosophy intro callout when adding a new account", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await waitFor(() => {
+			expect(screen.getByText("+ Add Account")).toBeInTheDocument();
+		});
+		await userEvent.click(screen.getByText("+ Add Account"));
+		await waitFor(() => {
+			expect(
+				screen.getByText("⚡ Two minutes to understand how Stork thinks about email"),
+			).toBeInTheDocument();
+		});
+		expect(screen.getByText(/your provider is just the delivery edge/i)).toBeInTheDocument();
+		// "Mirror mode (default):" appears in the intro box; may also appear in status boxes
+		const mirrorRefs = screen.getAllByText(/Mirror mode/i);
+		expect(mirrorRefs.length).toBeGreaterThanOrEqual(1);
+		const connectorRefs = screen.getAllByText(/Connector mode/i);
+		expect(connectorRefs.length).toBeGreaterThanOrEqual(1);
+	});
+
 	it("shows delete confirmation dialog and deletes account", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);

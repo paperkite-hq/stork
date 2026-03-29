@@ -158,6 +158,32 @@ export function AccountForm({
 				</div>
 			)}
 
+			{/* Philosophy intro — shown only when adding a new account */}
+			{accountId === null && (
+				<div className="rounded-lg border-2 border-stork-300 dark:border-stork-700 bg-stork-50 dark:bg-stork-950 px-4 py-3 space-y-2">
+					<p className="text-sm font-bold text-stork-800 dark:text-stork-200">
+						⚡ Two minutes to understand how Stork thinks about email
+					</p>
+					<p className="text-xs text-stork-700 dark:text-stork-300">
+						Most email clients treat your mail provider (Gmail, Fastmail, etc.) as the permanent
+						home for your email. Stork{"'"}s philosophy is different:{" "}
+						<strong>your provider is just the delivery edge</strong>. Mail arrives there, Stork
+						picks it up and stores it encrypted on your own hardware, and — when you{"'"}re ready —
+						clears it from the provider.
+					</p>
+					<p className="text-xs text-stork-700 dark:text-stork-300">
+						<strong>Mirror mode (default):</strong> Stork reads alongside your provider. Both have
+						copies. Perfect for trying Stork — your provider stays your safety net. Heads up:
+						actions you take in Stork (delete, label, archive) stay local and don{"'"}t sync back.
+					</p>
+					<p className="text-xs text-stork-700 dark:text-stork-300">
+						<strong>Connector mode:</strong> Once you{"'"}re confident, flip the switch. Stork
+						becomes your permanent encrypted email home. Your provider is just a pipe — mail
+						arrives, Stork grabs it and erases it from the server. Back up your Stork database.
+					</p>
+				</div>
+			)}
+
 			{/* Identity */}
 			<div className="grid grid-cols-2 gap-3">
 				<FormField
