@@ -218,8 +218,8 @@ test.describe("Settings", () => {
 		await page.goto("/");
 		// Settings is a gear icon button with title "Settings"
 		await page.getByTitle("Settings").click();
-		// Settings panel should show account info
-		await expect(page.getByText("E2E Test Account")).toBeVisible();
+		// Settings panel should show the Connectors tab with the inbound connector
+		await expect(page.getByText("Inbound Connectors")).toBeVisible();
 	});
 });
 

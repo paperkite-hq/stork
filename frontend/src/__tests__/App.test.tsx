@@ -91,6 +91,24 @@ vi.mock("../api", () => ({
 			add: vi.fn().mockResolvedValue({ id: 1 }),
 			remove: vi.fn().mockResolvedValue({ ok: true }),
 		},
+		connectors: {
+			inbound: {
+				list: vi.fn().mockResolvedValue([]),
+				get: vi.fn(),
+				create: vi.fn().mockResolvedValue({ id: 1 }),
+				update: vi.fn().mockResolvedValue({ ok: true }),
+				delete: vi.fn().mockResolvedValue({ ok: true }),
+				test: vi.fn().mockResolvedValue({ ok: true }),
+			},
+			outbound: {
+				list: vi.fn().mockResolvedValue([]),
+				get: vi.fn(),
+				create: vi.fn().mockResolvedValue({ id: 1 }),
+				update: vi.fn().mockResolvedValue({ ok: true }),
+				delete: vi.fn().mockResolvedValue({ ok: true }),
+				test: vi.fn().mockResolvedValue({ ok: true }),
+			},
+		},
 		search: vi.fn().mockResolvedValue([]),
 	},
 }));

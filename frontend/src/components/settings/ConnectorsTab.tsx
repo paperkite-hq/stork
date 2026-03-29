@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+	type Account,
 	type CreateInboundConnectorRequest,
 	type CreateOutboundConnectorRequest,
 	type InboundConnector,
@@ -7,6 +8,7 @@ import {
 	api,
 } from "../../api";
 import { useAsync } from "../../hooks";
+import { SyncStatusPanel } from "./SyncStatusPanel";
 
 // ── Inbound Connector Form ─────────────────────────────────────────────────
 
@@ -595,6 +597,173 @@ function OutboundConnectorForm({
 	);
 }
 
+// ── Identity Form ──────────────────────────────────────────────────────────
+
+function IdentityForm({
+	outboundConnectorId,
+	accountId,
+	inboundConnectors,
+	onSave,
+	onCancel,
+}: {
+	outboundConnectorId: number;
+	accountId: number | null;
+	inboundConnectors: InboundConnector[];
+	onSave: () => void;
+	onCancel: () => void;
+}) {
+	const [name, setName] = useState("");
+	const [email, setEmail] = useState("");
+	const [inboundId, setInboundId] = useState<number | "">(
+		inboundConnectors.length > 0 ? (inboundConnectors[0]?.id ?? "") : "",
+	);
+	const [saving, setSaving] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [loaded, setLoaded] = useState(accountId === null);
+
+	// Load existing account data when editing
+	useEffect(() => {
+		if (accountId === null) return;
+		api.accounts
+			.get(accountId)
+			.then((detail) => {
+				setName(detail.name);
+				setEmail(detail.email);
+				setInboundId(detail.inbound_connector_id ?? "");
+				setLoaded(true);
+			})
+			.catch((err) => {
+				setError(err instanceof Error ? err.message : String(err));
+			});
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [accountId]);
+
+	if (!loaded) {
+		return <div className="p-3 text-sm text-gray-400 dark:text-gray-500">Loading...</div>;
+	}
+
+	async function handleSubmit(e: React.FormEvent) {
+		e.preventDefault();
+		if (!inboundId) {
+			setError("An inbound connector is required.");
+			return;
+		}
+		setSaving(true);
+		setError(null);
+		try {
+			if (accountId === null) {
+				await api.accounts.create({
+					name,
+					email,
+					inbound_connector_id: Number(inboundId),
+					outbound_connector_id: outboundConnectorId,
+					sync_delete_from_server: 0,
+					default_view: "inbox",
+				});
+			} else {
+				await api.accounts.update(accountId, {
+					name,
+					email,
+					inbound_connector_id: Number(inboundId),
+					outbound_connector_id: outboundConnectorId,
+				});
+			}
+			onSave();
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	return (
+		<form
+			onSubmit={handleSubmit}
+			className="space-y-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 mt-2"
+		>
+			<div className="grid grid-cols-2 gap-3">
+				<div>
+					<label
+						htmlFor="id-name"
+						className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+					>
+						Name
+					</label>
+					<input
+						id="id-name"
+						type="text"
+						required
+						value={name}
+						onChange={(e) => setName(e.target.value)}
+						className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor="id-email"
+						className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+					>
+						Email
+					</label>
+					<input
+						id="id-email"
+						type="email"
+						required
+						value={email}
+						onChange={(e) => setEmail(e.target.value)}
+						className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
+					/>
+				</div>
+			</div>
+			<div>
+				<label
+					htmlFor="id-inbound"
+					className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+				>
+					Inbound Connector
+				</label>
+				{inboundConnectors.length === 0 ? (
+					<p className="text-sm text-amber-700 dark:text-amber-400">
+						No inbound connectors configured.
+					</p>
+				) : (
+					<select
+						id="id-inbound"
+						value={inboundId}
+						onChange={(e) => setInboundId(e.target.value ? Number(e.target.value) : "")}
+						required
+						className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
+					>
+						<option value="">Select inbound connector…</option>
+						{inboundConnectors.map((c) => (
+							<option key={c.id} value={c.id}>
+								{c.name}
+							</option>
+						))}
+					</select>
+				)}
+			</div>
+			{error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+			<div className="flex gap-2">
+				<button
+					type="submit"
+					disabled={saving}
+					className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+				>
+					{saving ? "Saving…" : "Save"}
+				</button>
+				<button
+					type="button"
+					onClick={onCancel}
+					className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+				>
+					Cancel
+				</button>
+			</div>
+		</form>
+	);
+}
+
 // ── Connector List Item ────────────────────────────────────────────────────
 
 function ConnectorBadge({ type }: { type: string }) {
@@ -632,6 +801,7 @@ export function ConnectorsTab() {
 		refetch: refetchOutbound,
 		loading: loadingOutbound,
 	} = useAsync(() => api.connectors.outbound.list(), []);
+	const { data: accounts, refetch: refetchAccounts } = useAsync(() => api.accounts.list(), []);
 
 	const [editingInbound, setEditingInbound] = useState<number | "new" | null>(null);
 	const [editingOutbound, setEditingOutbound] = useState<number | "new" | null>(null);
@@ -642,6 +812,12 @@ export function ConnectorsTab() {
 		msg: string;
 	} | null>(null);
 	const [deleting, setDeleting] = useState<{ id: number; dir: "in" | "out" } | null>(null);
+
+	// Identity (account) editing state — keyed on outbound connector ID
+	const [editingIdentityFor, setEditingIdentityFor] = useState<number | null>(null);
+	const [editingIdentityId, setEditingIdentityId] = useState<number | "new" | null>(null);
+	const [syncStatusIdentityId, setSyncStatusIdentityId] = useState<number | null>(null);
+	const [deletingIdentity, setDeletingIdentity] = useState<Account | null>(null);
 
 	async function handleTestInbound(id: number) {
 		setTestResult(null);
@@ -685,6 +861,16 @@ export function ConnectorsTab() {
 			await api.connectors.outbound.delete(id);
 			setDeleting(null);
 			refetchOutbound();
+		} catch (err) {
+			alert(err instanceof Error ? err.message : String(err));
+		}
+	}
+
+	async function handleDeleteIdentity(id: number) {
+		try {
+			await api.accounts.delete(id);
+			setDeletingIdentity(null);
+			refetchAccounts();
 		} catch (err) {
 			alert(err instanceof Error ? err.message : String(err));
 		}
@@ -864,84 +1050,302 @@ export function ConnectorsTab() {
 					</p>
 				)}
 
-				<ul className="space-y-2">
-					{outbound?.map((c) => (
-						<li
-							key={c.id}
-							className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-						>
-							<div className="min-w-0">
-								<div className="flex items-center gap-2">
-									<span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-										{c.name}
-									</span>
-									<ConnectorBadge type={c.type} />
+				<ul className="space-y-3">
+					{outbound?.map((c) => {
+						const identities = (accounts ?? []).filter((a) => a.outbound_connector_id === c.id);
+						const isEditingIdentityHere = editingIdentityFor === c.id && editingIdentityId !== null;
+
+						return (
+							<li
+								key={c.id}
+								className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden"
+							>
+								{/* Connector row */}
+								<div className="flex items-center justify-between gap-3 p-3">
+									<div className="min-w-0">
+										<div className="flex items-center gap-2">
+											<span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+												{c.name}
+											</span>
+											<ConnectorBadge type={c.type} />
+										</div>
+										<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+											{c.type === "smtp"
+												? `${c.smtp_user ?? ""}@${c.smtp_host ?? ""}:${c.smtp_port}`
+												: `SES — ${c.ses_region ?? "region not set"}`}
+										</p>
+										{testResult?.id === c.id && testResult.dir === "out" && (
+											<p
+												className={`text-xs mt-0.5 ${testResult.ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+											>
+												{testResult.msg}
+											</p>
+										)}
+									</div>
+									<div className="flex items-center gap-1.5 shrink-0">
+										{deleting?.id === c.id && deleting.dir === "out" ? (
+											<>
+												<span className="text-xs text-red-600 dark:text-red-400">Delete?</span>
+												<button
+													type="button"
+													onClick={() => handleDeleteOutbound(c.id)}
+													className="text-xs text-red-600 dark:text-red-400 hover:underline"
+												>
+													Yes
+												</button>
+												<button
+													type="button"
+													onClick={() => setDeleting(null)}
+													className="text-xs text-gray-500 hover:underline"
+												>
+													No
+												</button>
+											</>
+										) : (
+											<>
+												<button
+													type="button"
+													onClick={() => handleTestOutbound(c.id)}
+													className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600"
+												>
+													Test
+												</button>
+												<button
+													type="button"
+													onClick={() => {
+														setEditingOutbound(c.id);
+														setTestResult(null);
+													}}
+													className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+												>
+													Edit
+												</button>
+												<button
+													type="button"
+													onClick={() => setDeleting({ id: c.id, dir: "out" })}
+													className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+												>
+													Delete
+												</button>
+											</>
+										)}
+									</div>
 								</div>
-								<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-									{c.type === "smtp"
-										? `${c.smtp_user ?? ""}@${c.smtp_host ?? ""}:${c.smtp_port}`
-										: `SES — ${c.ses_region ?? "region not set"}`}
-								</p>
-								{testResult?.id === c.id && testResult.dir === "out" && (
-									<p
-										className={`text-xs mt-0.5 ${testResult.ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
-									>
-										{testResult.msg}
+
+								{/* Identities section */}
+								<div className="border-t border-gray-100 dark:border-gray-700/50 px-3 pb-3 pt-2">
+									<p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+										Identities
 									</p>
-								)}
-							</div>
-							<div className="flex items-center gap-1.5 shrink-0">
-								{deleting?.id === c.id && deleting.dir === "out" ? (
-									<>
-										<span className="text-xs text-red-600 dark:text-red-400">Delete?</span>
-										<button
-											type="button"
-											onClick={() => handleDeleteOutbound(c.id)}
-											className="text-xs text-red-600 dark:text-red-400 hover:underline"
-										>
-											Yes
-										</button>
-										<button
-											type="button"
-											onClick={() => setDeleting(null)}
-											className="text-xs text-gray-500 hover:underline"
-										>
-											No
-										</button>
-									</>
-								) : (
-									<>
-										<button
-											type="button"
-											onClick={() => handleTestOutbound(c.id)}
-											className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600"
-										>
-											Test
-										</button>
+
+									{identities.length === 0 && !isEditingIdentityHere && (
+										<p className="text-xs text-gray-400 dark:text-gray-500 italic mb-2">
+											No identities assigned to this connector.
+										</p>
+									)}
+
+									{identities.map((identity) => (
+										<div key={identity.id}>
+											{editingIdentityFor === c.id && editingIdentityId === identity.id ? (
+												<IdentityForm
+													outboundConnectorId={c.id}
+													accountId={identity.id}
+													inboundConnectors={inbound ?? []}
+													onSave={() => {
+														setEditingIdentityFor(null);
+														setEditingIdentityId(null);
+														refetchAccounts();
+													}}
+													onCancel={() => {
+														setEditingIdentityFor(null);
+														setEditingIdentityId(null);
+													}}
+												/>
+											) : (
+												<div className="mb-1">
+													<div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/30">
+														<div className="min-w-0">
+															<span className="text-sm text-gray-900 dark:text-gray-100">
+																{identity.name}
+															</span>
+															<span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
+																{identity.email}
+															</span>
+														</div>
+														<div className="flex items-center gap-1.5 shrink-0">
+															<button
+																type="button"
+																onClick={() =>
+																	setSyncStatusIdentityId(
+																		syncStatusIdentityId === identity.id ? null : identity.id,
+																	)
+																}
+																className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-600"
+															>
+																Sync Status
+															</button>
+															<button
+																type="button"
+																onClick={() => {
+																	setEditingIdentityFor(c.id);
+																	setEditingIdentityId(identity.id);
+																}}
+																className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+															>
+																Edit
+															</button>
+															<button
+																type="button"
+																onClick={() => setDeletingIdentity(identity)}
+																className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+															>
+																Delete
+															</button>
+														</div>
+													</div>
+													{syncStatusIdentityId === identity.id && (
+														<SyncStatusPanel accountId={identity.id} />
+													)}
+												</div>
+											)}
+										</div>
+									))}
+
+									{isEditingIdentityHere && editingIdentityId === "new" && (
+										<IdentityForm
+											outboundConnectorId={c.id}
+											accountId={null}
+											inboundConnectors={inbound ?? []}
+											onSave={() => {
+												setEditingIdentityFor(null);
+												setEditingIdentityId(null);
+												refetchAccounts();
+											}}
+											onCancel={() => {
+												setEditingIdentityFor(null);
+												setEditingIdentityId(null);
+											}}
+										/>
+									)}
+
+									{!isEditingIdentityHere && (
 										<button
 											type="button"
 											onClick={() => {
-												setEditingOutbound(c.id);
-												setTestResult(null);
+												setEditingIdentityFor(c.id);
+												setEditingIdentityId("new");
 											}}
-											className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+											className="mt-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
 										>
-											Edit
+											+ Add Identity
 										</button>
-										<button
-											type="button"
-											onClick={() => setDeleting({ id: c.id, dir: "out" })}
-											className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-										>
-											Delete
-										</button>
-									</>
-								)}
-							</div>
-						</li>
-					))}
+									)}
+								</div>
+							</li>
+						);
+					})}
 				</ul>
+
+				{/* Unassigned identities */}
+				{(() => {
+					const unassigned = (accounts ?? []).filter((a) => a.outbound_connector_id === null);
+					if (unassigned.length === 0) return null;
+					return (
+						<div className="mt-3 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+							<p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+								Unassigned identities: {unassigned.length} account
+								{unassigned.length !== 1 ? "s" : ""} have no outbound connector assigned. Edit them
+								below.
+							</p>
+							{unassigned.map((identity) => (
+								<div key={identity.id}>
+									{editingIdentityFor === -1 && editingIdentityId === identity.id ? (
+										outbound && outbound.length > 0 ? (
+											<IdentityForm
+												outboundConnectorId={outbound[0]?.id ?? 0}
+												accountId={identity.id}
+												inboundConnectors={inbound ?? []}
+												onSave={() => {
+													setEditingIdentityFor(null);
+													setEditingIdentityId(null);
+													refetchAccounts();
+												}}
+												onCancel={() => {
+													setEditingIdentityFor(null);
+													setEditingIdentityId(null);
+												}}
+											/>
+										) : (
+											<p className="text-xs text-gray-500">Add an outbound connector first.</p>
+										)
+									) : (
+										<div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded hover:bg-amber-100 dark:hover:bg-amber-900/30">
+											<div className="min-w-0">
+												<span className="text-sm text-gray-900 dark:text-gray-100">
+													{identity.name}
+												</span>
+												<span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
+													{identity.email}
+												</span>
+											</div>
+											<div className="flex items-center gap-1.5 shrink-0">
+												<button
+													type="button"
+													onClick={() => {
+														setEditingIdentityFor(-1);
+														setEditingIdentityId(identity.id);
+													}}
+													className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+												>
+													Edit
+												</button>
+												<button
+													type="button"
+													onClick={() => setDeletingIdentity(identity)}
+													className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+												>
+													Delete
+												</button>
+											</div>
+										</div>
+									)}
+								</div>
+							))}
+						</div>
+					);
+				})()}
 			</section>
+
+			{/* Delete identity confirmation */}
+			{deletingIdentity && (
+				<div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50">
+					<div className="bg-white dark:bg-gray-900 rounded-lg p-6 shadow-xl max-w-sm w-full mx-4 space-y-4">
+						<h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+							Delete identity
+						</h4>
+						<p className="text-sm text-gray-600 dark:text-gray-400">
+							Delete &ldquo;{deletingIdentity.name}&rdquo; ({deletingIdentity.email})? This removes
+							all synced messages and cannot be undone.
+						</p>
+						<div className="flex gap-2 justify-end">
+							<button
+								type="button"
+								onClick={() => setDeletingIdentity(null)}
+								className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={() => handleDeleteIdentity(deletingIdentity.id)}
+								className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+							>
+								Delete Identity
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

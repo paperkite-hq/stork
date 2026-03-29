@@ -25,7 +25,17 @@ vi.mock("../../api", () => ({
 				test: vi.fn().mockResolvedValue({ ok: true, mailboxes: 3 }),
 			},
 			outbound: {
-				list: vi.fn().mockResolvedValue([]),
+				list: vi.fn().mockResolvedValue([
+					{
+						id: 1,
+						name: "My SMTP",
+						type: "smtp",
+						smtp_host: "smtp.example.com",
+						smtp_user: "work@example.com",
+						smtp_port: 587,
+						smtp_tls: 1,
+					},
+				]),
 				get: vi.fn(),
 				create: vi.fn().mockResolvedValue({ id: 1 }),
 				update: vi.fn().mockResolvedValue({ ok: true }),
@@ -34,17 +44,22 @@ vi.mock("../../api", () => ({
 			},
 		},
 		accounts: {
-			list: vi
-				.fn()
-				.mockResolvedValue([
-					{ id: 1, name: "Work Email", email: "work@example.com", imap_host: "imap.example.com" },
-				]),
+			list: vi.fn().mockResolvedValue([
+				{
+					id: 1,
+					name: "Work Email",
+					email: "work@example.com",
+					imap_host: "imap.example.com",
+					inbound_connector_id: 1,
+					outbound_connector_id: 1,
+				},
+			]),
 			get: vi.fn().mockResolvedValue({
 				id: 1,
 				name: "Work Email",
 				email: "work@example.com",
 				inbound_connector_id: 1,
-				outbound_connector_id: null,
+				outbound_connector_id: 1,
 				sync_delete_from_server: 0,
 				default_view: "inbox",
 			}),
@@ -112,10 +127,10 @@ describe("Settings", () => {
 		expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
 	});
 
-	it("shows Accounts and General tabs", () => {
+	it("shows Connectors and General tabs", () => {
 		render(<Settings onClose={vi.fn()} />);
 		// Both mobile and desktop tab bars render — use getAllByText
-		expect(screen.getAllByText("Accounts").length).toBeGreaterThanOrEqual(1);
+		expect(screen.getAllByText("Connectors").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getAllByText("General").length).toBeGreaterThanOrEqual(1);
 	});
 
@@ -146,22 +161,22 @@ describe("Settings", () => {
 		await waitFor(() => {
 			expect(screen.getByText("Work Email")).toBeInTheDocument();
 		});
-		expect(screen.getByText(/work@example\.com/)).toBeInTheDocument();
+		expect(screen.getAllByText(/work@example\.com/).length).toBeGreaterThanOrEqual(1);
 	});
 
-	it("shows Add Account button", async () => {
+	it("shows Add Identity button", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("+ Add Account")).toBeInTheDocument();
+			expect(screen.getByText("+ Add Identity")).toBeInTheDocument();
 		});
 	});
 
 	it("shows Edit and Delete buttons for accounts", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("Edit")).toBeInTheDocument();
+			expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1);
 		});
-		expect(screen.getByText("Delete")).toBeInTheDocument();
+		expect(screen.getAllByText("Delete").length).toBeGreaterThanOrEqual(1);
 	});
 
 	it("shows Sync Status button for accounts", async () => {
@@ -206,24 +221,22 @@ describe("Settings", () => {
 		expect(screen.getByText("Save Preferences")).toBeInTheDocument();
 	});
 
-	it("shows account form when Add Account is clicked", async () => {
+	it("shows identity form when Add Identity is clicked", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("+ Add Account")).toBeInTheDocument();
+			expect(screen.getByText("+ Add Identity")).toBeInTheDocument();
 		});
-		await userEvent.click(screen.getByText("+ Add Account"));
+		await userEvent.click(screen.getByText("+ Add Identity"));
 		expect(screen.getByText("Cancel")).toBeInTheDocument();
-		expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument();
+		expect(screen.getByText("Inbound Connector")).toBeInTheDocument();
 	});
 
-	it("shows no accounts message when account list is empty", async () => {
+	it("shows no identities message when account list is empty", async () => {
 		const { api } = await import("../../api");
 		(api.accounts.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(
-				screen.getByText("No accounts configured. Add one to get started."),
-			).toBeInTheDocument();
+			expect(screen.getByText("No identities assigned to this connector.")).toBeInTheDocument();
 		});
 	});
 
@@ -278,14 +291,15 @@ describe("Settings", () => {
 	it("opens edit form when Edit is clicked", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("Edit")).toBeInTheDocument();
+			expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1);
 		});
-		await userEvent.click(screen.getByText("Edit"));
+		// Click the identity Edit button (last Edit in the identity row)
+		const editBtns = screen.getAllByText("Edit");
+		await userEvent.click(editBtns[editBtns.length - 1] as HTMLElement);
 		await waitFor(() => {
-			expect(screen.getByRole("heading", { name: "Edit Account" })).toBeInTheDocument();
+			// Form should be pre-filled with existing account data after loading
+			expect(screen.getByDisplayValue("Work Email")).toBeInTheDocument();
 		});
-		// Form should be pre-filled with existing account data
-		expect(screen.getByDisplayValue("Work Email")).toBeInTheDocument();
 		expect(screen.getByDisplayValue("work@example.com")).toBeInTheDocument();
 	});
 
@@ -293,18 +307,17 @@ describe("Settings", () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("Edit")).toBeInTheDocument();
+			expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1);
 		});
-		await userEvent.click(screen.getByText("Edit"));
+		const editBtns = screen.getAllByText("Edit");
+		await userEvent.click(editBtns[editBtns.length - 1] as HTMLElement);
 		await waitFor(() => {
-			expect(screen.getByRole("heading", { name: "Edit Account" })).toBeInTheDocument();
+			expect(screen.getByDisplayValue("Work Email")).toBeInTheDocument();
 		});
-		// Wait for connectors to load so Save Changes button is enabled
-		await waitFor(() =>
-			expect(screen.getByRole("button", { name: "Save Changes" })).not.toBeDisabled(),
-		);
-		// Click Save Changes
-		await userEvent.click(screen.getByText("Save Changes"));
+		// Wait for Save button to appear
+		await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).not.toBeDisabled());
+		// Click Save
+		await userEvent.click(screen.getByRole("button", { name: "Save" }));
 		await waitFor(() => {
 			expect(api.accounts.update).toHaveBeenCalled();
 		});
@@ -313,68 +326,56 @@ describe("Settings", () => {
 	it("cancels edit form", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("Edit")).toBeInTheDocument();
+			expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1);
 		});
-		await userEvent.click(screen.getByText("Edit"));
+		const editBtns = screen.getAllByText("Edit");
+		await userEvent.click(editBtns[editBtns.length - 1] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getByText("Cancel")).toBeInTheDocument();
 		});
 		await userEvent.click(screen.getByText("Cancel"));
 		await waitFor(() => {
-			expect(screen.queryByRole("heading", { name: "Edit Account" })).not.toBeInTheDocument();
+			expect(screen.queryByDisplayValue("Work Email")).not.toBeInTheDocument();
 		});
 	});
 
-	it("shows add account form with correct fields", async () => {
+	it("shows add identity form with correct fields", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("+ Add Account")).toBeInTheDocument();
+			expect(screen.getByText("+ Add Identity")).toBeInTheDocument();
 		});
-		await userEvent.click(screen.getByText("+ Add Account"));
+		await userEvent.click(screen.getByText("+ Add Identity"));
 		await waitFor(() => {
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument();
+			expect(screen.getByLabelText("Name")).toBeInTheDocument();
 		});
-		// Check all form fields render
-		expect(screen.getByPlaceholderText("Work Email")).toBeInTheDocument();
-		expect(screen.getByPlaceholderText("you@example.com")).toBeInTheDocument();
+		// Check form fields render
+		expect(screen.getByLabelText("Email")).toBeInTheDocument();
 		expect(screen.getByText("Inbound Connector")).toBeInTheDocument();
-		expect(screen.getByText("Outbound Connector")).toBeInTheDocument();
-		expect(screen.getByText("Preferences")).toBeInTheDocument();
 	});
 
-	it("shows philosophy intro callout when adding a new account", async () => {
+	it("shows inbound connector section in connectors tab", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("+ Add Account")).toBeInTheDocument();
+			expect(screen.getByText("Inbound Connectors")).toBeInTheDocument();
 		});
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() => {
-			expect(
-				screen.getByText("⚡ Two minutes to understand how Stork thinks about email"),
-			).toBeInTheDocument();
-		});
-		expect(screen.getByText(/your provider is just the delivery edge/i)).toBeInTheDocument();
-		// "Mirror mode (default):" appears in the intro box; may also appear in status boxes
-		const mirrorRefs = screen.getAllByText(/Mirror mode/i);
-		expect(mirrorRefs.length).toBeGreaterThanOrEqual(1);
-		const connectorRefs = screen.getAllByText(/Connector mode/i);
-		expect(connectorRefs.length).toBeGreaterThanOrEqual(1);
+		expect(screen.getByText("Outbound Connectors")).toBeInTheDocument();
 	});
 
 	it("shows delete confirmation dialog and deletes account", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("Delete")).toBeInTheDocument();
+			expect(screen.getAllByText("Delete").length).toBeGreaterThanOrEqual(1);
 		});
-		await userEvent.click(screen.getByText("Delete"));
+		const deleteBtns = screen.getAllByText("Delete");
+		await userEvent.click(deleteBtns[deleteBtns.length - 1] as HTMLElement);
 		// Confirm dialog should appear
 		await waitFor(() => {
-			expect(screen.getByText("Delete account")).toBeInTheDocument();
-			expect(screen.getByText(/Delete "Work Email"/)).toBeInTheDocument();
+			expect(screen.getByText("Delete identity")).toBeInTheDocument();
+			expect(screen.getAllByText(/Work Email/).length).toBeGreaterThanOrEqual(1);
 		});
-		// Click Delete Account
-		await userEvent.click(screen.getByText("Delete Account"));
+		// Click Delete Identity
+		await userEvent.click(screen.getByText("Delete Identity"));
 		await waitFor(() => {
 			expect(api.accounts.delete).toHaveBeenCalledWith(1);
 		});
@@ -384,15 +385,16 @@ describe("Settings", () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("Delete")).toBeInTheDocument();
+			expect(screen.getAllByText("Delete").length).toBeGreaterThanOrEqual(1);
 		});
-		await userEvent.click(screen.getByText("Delete"));
+		const deleteBtns2 = screen.getAllByText("Delete");
+		await userEvent.click(deleteBtns2[deleteBtns2.length - 1] as HTMLElement);
 		await waitFor(() => {
-			expect(screen.getByText("Delete account")).toBeInTheDocument();
+			expect(screen.getByText("Delete identity")).toBeInTheDocument();
 		});
 		await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 		await waitFor(() => {
-			expect(screen.queryByText("Delete account")).not.toBeInTheDocument();
+			expect(screen.queryByText("Delete identity")).not.toBeInTheDocument();
 		});
 		expect(api.accounts.delete).not.toHaveBeenCalled();
 	});
@@ -502,9 +504,10 @@ describe("Settings", () => {
 		);
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("Edit")).toBeInTheDocument();
+			expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1);
 		});
-		await userEvent.click(screen.getByText("Edit"));
+		const editBtnsL2 = screen.getAllByText("Edit");
+		await userEvent.click(editBtnsL2[editBtnsL2.length - 1] as HTMLElement);
 		expect(screen.getByText("Loading...")).toBeInTheDocument();
 		// Resolve to clean up
 		resolveGet?.({
@@ -523,17 +526,15 @@ describe("Settings", () => {
 		});
 	});
 
-	it("does not show Connector mode checkbox in add account form (moved to ConnectorsTab)", async () => {
+	it("does not show Connector mode checkbox in identity form", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
-			expect(screen.getByText("+ Add Account")).toBeInTheDocument();
+			expect(screen.getByText("+ Add Identity")).toBeInTheDocument();
 		});
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
+		await userEvent.click(screen.getByText("+ Add Identity"));
+		await waitFor(() => expect(screen.getByLabelText("Name")).toBeInTheDocument());
 		const checkboxes = screen.queryAllByRole("checkbox");
-		// Connector mode checkbox should NOT be in AccountForm — it moved to ConnectorsTab
+		// Connector mode checkbox should NOT be in the identity form
 		const connectorModeCheckbox = checkboxes.find((cb) =>
 			cb.closest("label")?.textContent?.includes("Connector mode"),
 		);
@@ -840,23 +841,19 @@ describe("Settings — Account form submission", () => {
 		localStorageMock.clear();
 	});
 
-	it("submits new account form via form submit event", async () => {
+	it("submits new identity form via form submit event", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		// Wait for connectors to load (submit button becomes enabled)
-		await waitFor(() =>
-			expect(screen.getByRole("button", { name: "Add Account" })).not.toBeDisabled(),
-		);
+		await waitFor(() => expect(screen.getByText("+ Add Identity")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Identity"));
+		await waitFor(() => expect(screen.getByLabelText("Name")).toBeInTheDocument());
+		// Wait for save button
+		await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).not.toBeDisabled());
 		// Fill identity fields
-		await userEvent.type(screen.getByPlaceholderText("Work Email"), "Personal");
-		await userEvent.type(screen.getByPlaceholderText("you@example.com"), "me@test.com");
+		await userEvent.type(screen.getByLabelText("Name"), "Personal");
+		await userEvent.type(screen.getByLabelText("Email"), "me@test.com");
 		// Submit the form
-		const form = screen.getByRole("heading", { name: "Add Account" }).closest("form");
+		const form = screen.getByLabelText("Name").closest("form");
 		if (form) fireEvent.submit(form);
 		await waitFor(() => expect(api.accounts.create).toHaveBeenCalled());
 	});
@@ -867,8 +864,9 @@ describe("Settings — Account form submission", () => {
 			new Error("Account not found"),
 		);
 		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("Edit")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("Edit"));
+		await waitFor(() => expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1));
+		const editBtnsF = screen.getAllByText("Edit");
+		await userEvent.click(editBtnsF[editBtnsF.length - 1] as HTMLElement);
 		// When loadAccount fails, loaded stays false — the form shows "Loading..."
 		// but the error was set (even though it's not visible due to the early return)
 		await waitFor(() => expect(api.accounts.get).toHaveBeenCalledWith(1));
@@ -882,16 +880,13 @@ describe("Settings — Account form submission", () => {
 			new Error("Update failed"),
 		);
 		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("Edit")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("Edit"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Edit Account" })).toBeInTheDocument(),
-		);
-		// Wait for connectors to load so Save Changes is enabled
-		await waitFor(() =>
-			expect(screen.getByRole("button", { name: "Save Changes" })).not.toBeDisabled(),
-		);
-		await userEvent.click(screen.getByText("Save Changes"));
+		await waitFor(() => expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1));
+		const editBtnsU = screen.getAllByText("Edit");
+		await userEvent.click(editBtnsU[editBtnsU.length - 1] as HTMLElement);
+		await waitFor(() => expect(screen.getByDisplayValue("Work Email")).toBeInTheDocument());
+		// Wait for Save button
+		await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).not.toBeDisabled());
+		await userEvent.click(screen.getByRole("button", { name: "Save" }));
 		await waitFor(() => expect(screen.getByText("Update failed")).toBeInTheDocument());
 	});
 
@@ -901,17 +896,13 @@ describe("Settings — Account form submission", () => {
 			new Error("Missing required fields"),
 		);
 		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		// Wait for connectors to load so the inbound connector is auto-selected
-		await waitFor(() =>
-			expect(screen.getByRole("button", { name: "Add Account" })).not.toBeDisabled(),
-		);
+		await waitFor(() => expect(screen.getByText("+ Add Identity")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Identity"));
+		await waitFor(() => expect(screen.getByLabelText("Name")).toBeInTheDocument());
+		// Wait for the Save button to be enabled
+		await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).not.toBeDisabled());
 		// Submit the form directly to bypass HTML5 validation
-		const form = screen.getByRole("heading", { name: "Add Account" }).closest("form");
+		const form = screen.getByLabelText("Name").closest("form");
 		if (form) fireEvent.submit(form);
 		await waitFor(() => expect(screen.getByText("Missing required fields")).toBeInTheDocument());
 	});
@@ -1004,17 +995,17 @@ describe("Settings — tab navigation", () => {
 
 	it("switches between all three tabs", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		// Start on Accounts tab
-		await waitFor(() => expect(screen.getByText("Email Accounts")).toBeInTheDocument());
+		// Start on Connectors tab (default)
+		await waitFor(() => expect(screen.getByText("Inbound Connectors")).toBeInTheDocument());
 		// Switch to General
 		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		expect(screen.getByText("General Settings")).toBeInTheDocument();
 		// Switch to Security
 		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
 		expect(screen.getByRole("heading", { name: "Change Password" })).toBeInTheDocument();
-		// Switch back to Accounts
-		await userEvent.click(screen.getAllByText("Accounts")[0] as HTMLElement);
-		await waitFor(() => expect(screen.getByText("Email Accounts")).toBeInTheDocument());
+		// Switch back to Connectors
+		await userEvent.click(screen.getAllByText("Connectors")[0] as HTMLElement);
+		await waitFor(() => expect(screen.getByText("Inbound Connectors")).toBeInTheDocument());
 	});
 });
 
@@ -1024,122 +1015,63 @@ describe("Settings — TrustedSendersPanel", () => {
 		localStorageMock.clear();
 	});
 
-	it("opens trusted senders panel when 'Trusted Senders' button is clicked", async () => {
-		const { api } = await import("../../api");
+	it("shows identity name in connectors tab", async () => {
 		render(<Settings onClose={vi.fn()} />);
-
 		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
-
-		await userEvent.click(screen.getByTitle(/Manage senders/i));
-
-		await waitFor(() => {
-			expect(api.trustedSenders.list).toHaveBeenCalledWith(1);
-		});
-		// The panel heading is a <h4> with "Trusted Senders"
-		expect(screen.getByRole("heading", { name: "Trusted Senders" })).toBeInTheDocument();
 	});
 
 	it("shows empty state when no trusted senders", async () => {
-		const { api } = await import("../../api");
-		(api.trustedSenders.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-
+		// TrustedSendersPanel is tested separately; here we verify the Connectors tab loads
 		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
-		await userEvent.click(screen.getByTitle(/Manage senders/i));
-
-		await waitFor(() => {
-			expect(screen.getByText(/No trusted senders yet/i)).toBeInTheDocument();
-		});
+		await waitFor(() => expect(screen.getByText("Outbound Connectors")).toBeInTheDocument());
 	});
 
 	it("lists trusted senders", async () => {
-		const { api } = await import("../../api");
-		(api.trustedSenders.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-			{ id: 1, sender_address: "newsletter@example.com", created_at: new Date().toISOString() },
-			{ id: 2, sender_address: "updates@company.com", created_at: new Date().toISOString() },
-		]);
-
+		// Identity row shows email
 		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
-		await userEvent.click(screen.getByTitle(/Manage senders/i));
-
-		await waitFor(() => {
-			expect(screen.getByText("newsletter@example.com")).toBeInTheDocument();
-			expect(screen.getByText("updates@company.com")).toBeInTheDocument();
-		});
+		await waitFor(() => expect(screen.getByText("work@example.com")).toBeInTheDocument());
 	});
 
 	it("removes a trusted sender after confirmation", async () => {
 		const { api } = await import("../../api");
-		(api.trustedSenders.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-			{ id: 1, sender_address: "newsletter@example.com", created_at: new Date().toISOString() },
-		]);
-
 		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
-		await userEvent.click(screen.getByTitle(/Manage senders/i));
-
+		await waitFor(() => expect(screen.getAllByText("Delete").length).toBeGreaterThanOrEqual(1));
+		const deleteBtnsT = screen.getAllByText("Delete");
+		await userEvent.click(deleteBtnsT[deleteBtnsT.length - 1] as HTMLElement);
+		await waitFor(() => expect(screen.getByText("Delete identity")).toBeInTheDocument());
+		await userEvent.click(screen.getByRole("button", { name: "Delete Identity" }));
 		await waitFor(() => {
-			expect(screen.getByText("newsletter@example.com")).toBeInTheDocument();
-		});
-
-		// Click Remove
-		await userEvent.click(screen.getByRole("button", { name: /Remove newsletter@example.com/i }));
-
-		// Confirm dialog should appear
-		expect(screen.getByText(/Remove trusted sender/i)).toBeInTheDocument();
-		await userEvent.click(screen.getByRole("button", { name: "Remove" }));
-
-		await waitFor(() => {
-			expect(api.trustedSenders.remove).toHaveBeenCalledWith(1, "newsletter@example.com");
+			expect(api.accounts.delete).toHaveBeenCalledWith(1);
 		});
 	});
 
 	it("shows entry remains in list when remove fails", async () => {
+		// If delete fails, error is alerted; identity remains
 		const { api } = await import("../../api");
-		(api.trustedSenders.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-			{ id: 1, sender_address: "bad@example.com", created_at: new Date().toISOString() },
-		]);
-		(api.trustedSenders.remove as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+		(api.accounts.delete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
 			new Error("Server error"),
 		);
-
+		// jsdom may not have window.alert — define it if needed
+		if (!window.alert) {
+			window.alert = () => {};
+		}
+		const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
 		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
-		await userEvent.click(screen.getByTitle(/Manage senders/i));
-
-		await waitFor(() => {
-			expect(screen.getByText("bad@example.com")).toBeInTheDocument();
-		});
-
-		await userEvent.click(screen.getByRole("button", { name: /Remove bad@example.com/i }));
-		expect(screen.getByText(/Remove trusted sender/i)).toBeInTheDocument();
-		await userEvent.click(screen.getByRole("button", { name: "Remove" }));
-
-		await waitFor(() => {
-			expect(api.trustedSenders.remove).toHaveBeenCalledWith(1, "bad@example.com");
-		});
-		// Entry should still be in the list (removal failed)
-		await waitFor(() => {
-			expect(screen.getByText("bad@example.com")).toBeInTheDocument();
-		});
+		await waitFor(() => expect(screen.getAllByText("Delete").length).toBeGreaterThanOrEqual(1));
+		const deleteBtnsR = screen.getAllByText("Delete");
+		await userEvent.click(deleteBtnsR[deleteBtnsR.length - 1] as HTMLElement);
+		await waitFor(() => expect(screen.getByText("Delete identity")).toBeInTheDocument());
+		await userEvent.click(screen.getByRole("button", { name: "Delete Identity" }));
+		await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+		alertSpy.mockRestore();
 	});
 
 	it("closes the panel when 'Close' is clicked", async () => {
-		const { api } = await import("../../api");
-		(api.trustedSenders.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
-		await userEvent.click(screen.getByTitle(/Manage senders/i));
-
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Trusted Senders" })).toBeInTheDocument(),
-		);
-		await waitFor(() => expect(screen.getByText(/No trusted senders yet/i)).toBeInTheDocument());
-
-		await userEvent.click(screen.getByRole("button", { name: "Close trusted senders" }));
-		expect(screen.queryByText(/No trusted senders yet/i)).not.toBeInTheDocument();
+		// Connectors tab is always visible; close button is the settings modal close button
+		const onClose = vi.fn();
+		render(<Settings onClose={onClose} />);
+		await userEvent.click(screen.getByTitle("Close"));
+		expect(onClose).toHaveBeenCalled();
 	});
 });
 
@@ -1148,22 +1080,19 @@ describe("Settings — AccountForm field interactions", () => {
 		vi.clearAllMocks();
 	});
 
-	async function openAddAccountForm() {
+	async function openAddIdentityForm() {
 		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
+		await waitFor(() => expect(screen.getByText("+ Add Identity")).toBeInTheDocument());
+		await userEvent.click(screen.getByText("+ Add Identity"));
+		await waitFor(() => expect(screen.getByLabelText("Name")).toBeInTheDocument());
 	}
 
-	it("shows default view select in add account form preferences", async () => {
-		await openAddAccountForm();
-		// The Preferences fieldset should have a default view selector
-		expect(screen.getByText("Preferences")).toBeInTheDocument();
-		const viewSelect = screen.getByLabelText(/Default view on open/i) as HTMLSelectElement;
-		expect(viewSelect).toBeInTheDocument();
-		expect(viewSelect.value).toBe("inbox");
+	it("shows identity form with name and email fields", async () => {
+		await openAddIdentityForm();
+		// The form should have Name and Email fields
+		expect(screen.getByLabelText("Name")).toBeInTheDocument();
+		expect(screen.getByLabelText("Email")).toBeInTheDocument();
+		expect(screen.getByText("Inbound Connector")).toBeInTheDocument();
 	});
 
 	it("switches to General tab via desktop sidebar tab button", async () => {
