@@ -1,0 +1,193 @@
+/**
+ * Shared helper for storing inbound emails received via push (webhook) or
+ * pull (R2 queue poll) connectors.
+ *
+ * Handles account lookup, message-ID deduplication, DB insertion, auto-labeling,
+ * and folder unread-count maintenance. Both the webhook route and the R2 poller
+ * delegate here so the storage logic stays in one place.
+ */
+
+import type Database from "better-sqlite3-multiple-ciphers";
+import { simpleParser } from "mailparser";
+
+export interface InboundEmailPayload {
+	/** Envelope sender (fallback if From header is absent) */
+	from: string;
+	/** Envelope recipient */
+	to: string;
+	/** Raw RFC 5322 message, base64-encoded */
+	raw: string;
+	/** Size of the raw message in bytes */
+	rawSize: number;
+}
+
+export interface StoreEmailResult {
+	/** Number of accounts the message was stored for */
+	stored: number;
+}
+
+const accountLabelPalette = [
+	"#3b82f6",
+	"#10b981",
+	"#f59e0b",
+	"#8b5cf6",
+	"#ef4444",
+	"#06b6d4",
+	"#ec4899",
+	"#84cc16",
+];
+
+/**
+ * Parse and store an inbound email for all accounts linked to the given connector.
+ *
+ * Returns the number of accounts the message was stored for. Returns 0 if the
+ * connector has no linked accounts or all deliveries were duplicates.
+ *
+ * Throws if `payload.raw` cannot be parsed as a valid RFC 5322 message.
+ */
+export async function storeInboundEmail(
+	db: Database.Database,
+	connectorId: number,
+	payload: InboundEmailPayload,
+): Promise<StoreEmailResult> {
+	// Find all accounts linked to this connector
+	const accounts = db
+		.prepare("SELECT id FROM accounts WHERE inbound_connector_id = ?")
+		.all(connectorId) as { id: number }[];
+
+	if (accounts.length === 0) {
+		return { stored: 0 };
+	}
+
+	// Parse the raw RFC 5322 message
+	const rawBuffer = Buffer.from(payload.raw, "base64");
+	const parsed = await simpleParser(rawBuffer);
+
+	// Extract address fields
+	const fromAddr = parsed.from?.value?.[0];
+	const toAddrs = parsed.to
+		? (Array.isArray(parsed.to) ? parsed.to : [parsed.to]).flatMap((a) =>
+				a.value.map((v) => v.address).filter(Boolean),
+			)
+		: [];
+	const ccAddrs = parsed.cc
+		? (Array.isArray(parsed.cc) ? parsed.cc : [parsed.cc]).flatMap((a) =>
+				a.value.map((v) => v.address).filter(Boolean),
+			)
+		: [];
+	const refs = parsed.references
+		? Array.isArray(parsed.references)
+			? parsed.references
+			: [parsed.references]
+		: null;
+
+	const checkDuplicate = parsed.messageId
+		? db.prepare("SELECT id FROM messages WHERE account_id = ? AND message_id = ? LIMIT 1")
+		: null;
+
+	const insertMessage = db.prepare(`
+		INSERT INTO messages (
+			account_id, folder_id, uid, message_id, in_reply_to, "references",
+			subject, from_address, from_name, to_addresses, cc_addresses,
+			date, text_body, html_body, flags, size, has_attachments
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+	`);
+
+	const ensureAccountLabel = db.prepare(`
+		INSERT INTO labels (name, source, color)
+		VALUES (?, 'account', ?)
+		ON CONFLICT(name) DO UPDATE SET source = 'account'
+	`);
+	const applyAccountLabel = db.prepare(`
+		INSERT OR IGNORE INTO message_labels (message_id, label_id)
+		SELECT ?, l.id FROM labels l WHERE l.name = ? AND l.source = 'account'
+	`);
+	const applyInboxLabel = db.prepare(`
+		INSERT OR IGNORE INTO message_labels (message_id, label_id)
+		SELECT ?, l.id FROM labels l WHERE LOWER(l.name) = 'inbox'
+	`);
+
+	let stored = 0;
+
+	for (const account of accounts) {
+		// Deduplicate by message-id to handle at-least-once delivery
+		if (checkDuplicate) {
+			const existing = checkDuplicate.get(account.id, parsed.messageId) as
+				| { id: number }
+				| undefined;
+			if (existing) continue;
+		}
+
+		const folderId = findOrCreateInbox(db, account.id);
+		const uid = nextInboxUid(db, folderId);
+
+		const result = insertMessage.run(
+			account.id,
+			folderId,
+			uid,
+			parsed.messageId ?? null,
+			parsed.inReplyTo ?? null,
+			refs ? JSON.stringify(refs) : null,
+			parsed.subject ?? null,
+			fromAddr?.address ?? payload.from ?? null,
+			fromAddr?.name ?? null,
+			toAddrs.length > 0 ? JSON.stringify(toAddrs) : null,
+			ccAddrs.length > 0 ? JSON.stringify(ccAddrs) : null,
+			parsed.date ? parsed.date.toISOString() : new Date().toISOString(),
+			parsed.text ?? null,
+			typeof parsed.html === "string" ? parsed.html : null,
+			payload.rawSize ?? 0,
+			(parsed.attachments?.length ?? 0) > 0 ? 1 : 0,
+		);
+		const messageRowId = Number(result.lastInsertRowid);
+
+		// Auto-label with account name and Inbox
+		const accountRow = db.prepare("SELECT name FROM accounts WHERE id = ?").get(account.id) as
+			| { name: string }
+			| undefined;
+		if (accountRow) {
+			const color = accountLabelPalette[(account.id - 1) % accountLabelPalette.length];
+			ensureAccountLabel.run(accountRow.name, color);
+			applyAccountLabel.run(messageRowId, accountRow.name);
+		}
+		applyInboxLabel.run(messageRowId);
+
+		stored++;
+		db.prepare(
+			"UPDATE folders SET unread_count = unread_count + 1, message_count = message_count + 1 WHERE id = ?",
+		).run(folderId);
+	}
+
+	return { stored };
+}
+
+/** Find or create the INBOX folder for an account, returning its ID. */
+function findOrCreateInbox(db: Database.Database, accountId: number): number {
+	const existing = db
+		.prepare(
+			`SELECT id FROM folders
+			WHERE account_id = ? AND (path = 'INBOX' OR special_use = '\\\\Inbox' OR name = 'Inbox')
+			LIMIT 1`,
+		)
+		.get(accountId) as { id: number } | undefined;
+
+	if (existing) return existing.id;
+
+	const result = db
+		.prepare(
+			`INSERT INTO folders (account_id, path, name, delimiter, flags, special_use, message_count, unread_count)
+			VALUES (?, 'INBOX', 'Inbox', '/', '[]', '\\Inbox', 0, 0)`,
+		)
+		.run(accountId);
+	return Number(result.lastInsertRowid);
+}
+
+/** Get the next available positive UID for a folder. */
+function nextInboxUid(db: Database.Database, folderId: number): number {
+	const row = db
+		.prepare(
+			"SELECT COALESCE(MAX(uid), 0) + 1 AS next_uid FROM messages WHERE folder_id = ? AND uid > 0",
+		)
+		.get(folderId) as { next_uid: number };
+	return row.next_uid;
+}
