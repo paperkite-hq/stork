@@ -38,7 +38,7 @@
 		"esbuild": "^0.25.0",
 		"happy-dom": "^20.8.4",
 		"tsx": "^4.19.0",
-		"vitest": "^4.1.0"
+		"vitest": "^4.1.2"
 	},
 	"license": "AGPL-3.0-only"
 }
