@@ -257,6 +257,163 @@ describe("Labels API", () => {
 		});
 	});
 
+	// ─── Multi-label filter ──────────────────────────────────
+	describe("Multi-label filter", () => {
+		let accountId: number;
+		let folderId: number;
+
+		beforeEach(() => {
+			accountId = createTestAccount(db);
+			folderId = createTestFolder(db, accountId, "INBOX");
+		});
+
+		test("GET /api/labels/filter returns messages matching all label IDs", async () => {
+			const l1 = createTestLabel(db, accountId, "Work");
+			const l2 = createTestLabel(db, accountId, "Important");
+			const msg1 = createTestMessage(db, accountId, folderId, 1, { subject: "Both" });
+			const msg2 = createTestMessage(db, accountId, folderId, 2, { subject: "OnlyWork" });
+			addMessageLabel(db, msg1, l1);
+			addMessageLabel(db, msg1, l2);
+			addMessageLabel(db, msg2, l1);
+
+			const { status, body } = await jsonRequest(`/api/labels/filter?ids=${l1},${l2}`);
+			expect(status).toBe(200);
+			expect(body).toHaveLength(1);
+			expect(body[0].subject).toBe("Both");
+		});
+
+		test("GET /api/labels/filter returns 400 when ids missing", async () => {
+			const { status, body } = await jsonRequest("/api/labels/filter");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/ids/);
+		});
+
+		test("GET /api/labels/filter returns 400 for all-invalid ids", async () => {
+			const { status, body } = await jsonRequest("/api/labels/filter?ids=abc,0,-1");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/valid label ID/i);
+		});
+
+		test("GET /api/labels/filter supports pagination", async () => {
+			const l1 = createTestLabel(db, accountId, "Tag");
+			for (let i = 1; i <= 4; i++) {
+				const msgId = createTestMessage(db, accountId, folderId, i);
+				addMessageLabel(db, msgId, l1);
+			}
+			const { body: page1 } = await jsonRequest(`/api/labels/filter?ids=${l1}&limit=2&offset=0`);
+			const { body: page2 } = await jsonRequest(`/api/labels/filter?ids=${l1}&limit=2&offset=2`);
+			expect(page1).toHaveLength(2);
+			expect(page2).toHaveLength(2);
+			expect(page1[0].id).not.toBe(page2[0].id);
+		});
+
+		test("GET /api/labels/filter returns 400 for invalid pagination", async () => {
+			const l1 = createTestLabel(db, accountId, "Tag");
+			const { status } = await jsonRequest(`/api/labels/filter?ids=${l1}&limit=-1`);
+			expect(status).toBe(400);
+		});
+
+		test("GET /api/labels/filter/count returns total and unread", async () => {
+			const l1 = createTestLabel(db, accountId, "Work");
+			const l2 = createTestLabel(db, accountId, "Urgent");
+			const msg1 = createTestMessage(db, accountId, folderId, 1, { flags: "" });
+			const msg2 = createTestMessage(db, accountId, folderId, 2, { flags: "\\Seen" });
+			addMessageLabel(db, msg1, l1);
+			addMessageLabel(db, msg1, l2);
+			addMessageLabel(db, msg2, l1);
+			addMessageLabel(db, msg2, l2);
+
+			const { status, body } = await jsonRequest(`/api/labels/filter/count?ids=${l1},${l2}`);
+			expect(status).toBe(200);
+			expect(body.total).toBe(2);
+			expect(body.unread).toBe(1);
+		});
+
+		test("GET /api/labels/filter/count returns 400 when ids missing", async () => {
+			const { status } = await jsonRequest("/api/labels/filter/count");
+			expect(status).toBe(400);
+		});
+
+		test("GET /api/labels/filter/count returns 400 for all-invalid ids", async () => {
+			const { status } = await jsonRequest("/api/labels/filter/count?ids=0,abc");
+			expect(status).toBe(400);
+		});
+
+		test("GET /api/labels/filter/count returns zeros when no messages match", async () => {
+			const l1 = createTestLabel(db, accountId, "Empty");
+			const { status, body } = await jsonRequest(`/api/labels/filter/count?ids=${l1}`);
+			expect(status).toBe(200);
+			expect(body.total).toBe(0);
+			expect(body.unread).toBe(0);
+		});
+	});
+
+	// ─── Related labels ───────────────────────────────────────
+	describe("Related labels", () => {
+		let accountId: number;
+		let folderId: number;
+
+		beforeEach(() => {
+			accountId = createTestAccount(db);
+			folderId = createTestFolder(db, accountId, "INBOX");
+		});
+
+		test("GET /api/labels/:id/related returns co-occurring labels", async () => {
+			const l1 = createTestLabel(db, accountId, "Inbox");
+			const l2 = createTestLabel(db, accountId, "Work");
+			const l3 = createTestLabel(db, accountId, "Personal");
+			const msg1 = createTestMessage(db, accountId, folderId, 1);
+			const msg2 = createTestMessage(db, accountId, folderId, 2);
+			addMessageLabel(db, msg1, l1);
+			addMessageLabel(db, msg1, l2);
+			addMessageLabel(db, msg2, l1);
+			addMessageLabel(db, msg2, l3);
+
+			const { status, body } = await jsonRequest(`/api/labels/${l1}/related`);
+			expect(status).toBe(200);
+			expect(body).toHaveLength(2);
+			expect(body[0]).toHaveProperty("name");
+			expect(body[0]).toHaveProperty("co_count");
+		});
+
+		test("GET /api/labels/:id/related returns empty array when no co-occurrences", async () => {
+			const l1 = createTestLabel(db, accountId, "Solo");
+			const { status, body } = await jsonRequest(`/api/labels/${l1}/related`);
+			expect(status).toBe(200);
+			expect(body).toEqual([]);
+		});
+
+		test("GET /api/labels/:id/related respects limit parameter", async () => {
+			const l1 = createTestLabel(db, accountId, "Base");
+			for (let i = 0; i < 5; i++) {
+				const li = createTestLabel(db, accountId, `Tag${i}`);
+				const msgId = createTestMessage(db, accountId, folderId, i + 1);
+				addMessageLabel(db, msgId, l1);
+				addMessageLabel(db, msgId, li);
+			}
+			const { body } = await jsonRequest(`/api/labels/${l1}/related?limit=2`);
+			expect(body).toHaveLength(2);
+		});
+
+		test("GET /api/labels/abc/related returns 400 for non-numeric id", async () => {
+			const { status, body } = await jsonRequest("/api/labels/abc/related");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/labelId/);
+		});
+
+		test("GET /api/labels/:id/related defaults to limit 5", async () => {
+			const l1 = createTestLabel(db, accountId, "Base2");
+			for (let i = 0; i < 8; i++) {
+				const li = createTestLabel(db, accountId, `CoTag${i}`);
+				const msgId = createTestMessage(db, accountId, folderId, i + 1);
+				addMessageLabel(db, msgId, l1);
+				addMessageLabel(db, msgId, li);
+			}
+			const { body } = await jsonRequest(`/api/labels/${l1}/related`);
+			expect(body).toHaveLength(5);
+		});
+	});
+
 	// ─── Message Labels ──────────────────────────────────────
 	describe("Message labels", () => {
 		let accountId: number;
@@ -349,6 +506,84 @@ describe("Labels API", () => {
 			expect(body[0]).toHaveProperty("name");
 			expect(body[0]).toHaveProperty("color");
 			expect(body[0]).toHaveProperty("source");
+		});
+	});
+
+	// ─── Related Labels ──────────────────────────────────────
+	describe("Related labels", () => {
+		let accountId: number;
+		let folderId: number;
+
+		beforeEach(() => {
+			accountId = createTestAccount(db);
+			folderId = createTestFolder(db, accountId, "INBOX");
+		});
+
+		test("GET /api/labels/:id/related returns co-occurring labels sorted by frequency", async () => {
+			const inbox = createTestLabel(db, accountId, "Inbox");
+			const work = createTestLabel(db, accountId, "Work");
+			const personal = createTestLabel(db, accountId, "Personal");
+
+			// 3 messages with Inbox+Work, 1 message with Inbox+Personal
+			for (let i = 0; i < 3; i++) {
+				const msgId = createTestMessage(db, accountId, folderId, i + 1);
+				addMessageLabel(db, msgId, inbox);
+				addMessageLabel(db, msgId, work);
+			}
+			const msg4 = createTestMessage(db, accountId, folderId, 4);
+			addMessageLabel(db, msg4, inbox);
+			addMessageLabel(db, msg4, personal);
+
+			const { status, body } = await jsonRequest(`/api/labels/${inbox}/related`);
+			expect(status).toBe(200);
+			expect(body).toHaveLength(2);
+			// Work appears 3 times, Personal 1 time — Work should come first
+			expect(body[0].name).toBe("Work");
+			expect(body[1].name).toBe("Personal");
+		});
+
+		test("GET /api/labels/:id/related does not include the label itself", async () => {
+			const inbox = createTestLabel(db, accountId, "Inbox");
+			const work = createTestLabel(db, accountId, "Work");
+			const msg = createTestMessage(db, accountId, folderId, 1);
+			addMessageLabel(db, msg, inbox);
+			addMessageLabel(db, msg, work);
+
+			const { status, body } = await jsonRequest(`/api/labels/${inbox}/related`);
+			expect(status).toBe(200);
+			const ids = (body as { id: number }[]).map((l) => l.id);
+			expect(ids).not.toContain(inbox);
+		});
+
+		test("GET /api/labels/:id/related returns empty array when no co-occurring labels", async () => {
+			const inbox = createTestLabel(db, accountId, "Inbox");
+			const msg = createTestMessage(db, accountId, folderId, 1);
+			addMessageLabel(db, msg, inbox);
+
+			const { status, body } = await jsonRequest(`/api/labels/${inbox}/related`);
+			expect(status).toBe(200);
+			expect(body).toHaveLength(0);
+		});
+
+		test("GET /api/labels/:id/related respects limit parameter", async () => {
+			const inbox = createTestLabel(db, accountId, "Inbox");
+			const labels = [];
+			for (let i = 0; i < 6; i++) {
+				labels.push(createTestLabel(db, accountId, `Label${i}`));
+			}
+			const msg = createTestMessage(db, accountId, folderId, 1);
+			addMessageLabel(db, msg, inbox);
+			for (const lId of labels) addMessageLabel(db, msg, lId);
+
+			const { status, body } = await jsonRequest(`/api/labels/${inbox}/related?limit=3`);
+			expect(status).toBe(200);
+			expect(body).toHaveLength(3);
+		});
+
+		test("GET /api/labels/abc/related returns 400 for non-numeric labelId", async () => {
+			const { status, body } = await jsonRequest("/api/labels/abc/related");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/labelId/);
 		});
 	});
 });

@@ -34,6 +34,9 @@ vi.mock("../api", () => ({
 			create: vi.fn(),
 			update: vi.fn(),
 			delete: vi.fn(),
+			filter: vi.fn().mockResolvedValue([]),
+			filterCount: vi.fn().mockResolvedValue({ total: 0, unread: 0 }),
+			related: vi.fn().mockResolvedValue([]),
 		},
 		messages: {
 			get: vi.fn().mockResolvedValue(null),
@@ -171,7 +174,11 @@ import { api } from "../api";
 
 const mockApi = api as unknown as {
 	accounts: { list: ReturnType<typeof vi.fn> };
-	labels: { list: ReturnType<typeof vi.fn>; messages: ReturnType<typeof vi.fn> };
+	labels: {
+		list: ReturnType<typeof vi.fn>;
+		messages: ReturnType<typeof vi.fn>;
+		related: ReturnType<typeof vi.fn>;
+	};
 	folders: { list: ReturnType<typeof vi.fn> };
 	messages: {
 		get: ReturnType<typeof vi.fn>;
