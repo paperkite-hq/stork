@@ -40,11 +40,7 @@ describe("ensureLabelsForFolders", () => {
 
 	test("no folders → no labels created", () => {
 		makeSync(accountId, db).ensureLabelsForFolders();
-		const count = (
-			db.prepare("SELECT COUNT(*) as n FROM labels WHERE account_id = ?").get(accountId) as {
-				n: number;
-			}
-		).n;
+		const count = (db.prepare("SELECT COUNT(*) as n FROM labels").get() as { n: number }).n;
 		expect(count).toBe(0);
 	});
 
@@ -55,9 +51,10 @@ describe("ensureLabelsForFolders", () => {
 
 		makeSync(accountId, db).ensureLabelsForFolders();
 
-		const labels = db
-			.prepare("SELECT name, source FROM labels WHERE account_id = ? ORDER BY name")
-			.all(accountId) as { name: string; source: string }[];
+		const labels = db.prepare("SELECT name, source FROM labels ORDER BY name").all() as {
+			name: string;
+			source: string;
+		}[];
 
 		expect(labels).toHaveLength(3);
 		expect(labels.map((l) => l.name)).toEqual(["Drafts", "INBOX", "Sent"]);
@@ -72,11 +69,7 @@ describe("ensureLabelsForFolders", () => {
 		sync.ensureLabelsForFolders();
 		sync.ensureLabelsForFolders();
 
-		const count = (
-			db.prepare("SELECT COUNT(*) as n FROM labels WHERE account_id = ?").get(accountId) as {
-				n: number;
-			}
-		).n;
+		const count = (db.prepare("SELECT COUNT(*) as n FROM labels").get() as { n: number }).n;
 		expect(count).toBe(1);
 	});
 
@@ -84,27 +77,23 @@ describe("ensureLabelsForFolders", () => {
 		createTestFolder(db, accountId, "INBOX");
 		// Pre-create a user-created label with same name
 		db.prepare(
-			"INSERT INTO labels (account_id, name, color, source) VALUES (?, 'INBOX', '#ff0000', 'user')",
-		).run(accountId);
+			"INSERT INTO labels (name, color, source) VALUES ('INBOX', '#ff0000', 'user')",
+		).run();
 
 		makeSync(accountId, db).ensureLabelsForFolders();
 
-		const label = db
-			.prepare("SELECT source, color FROM labels WHERE account_id = ? AND name = 'INBOX'")
-			.get(accountId) as { source: string; color: string } | undefined;
+		const label = db.prepare("SELECT source, color FROM labels WHERE name = 'INBOX'").get() as
+			| { source: string; color: string }
+			| undefined;
 		// Original row preserved — not overwritten by imap source
 		expect(label?.source).toBe("user");
 		expect(label?.color).toBe("#ff0000");
 		// Still only one label
-		const count = (
-			db.prepare("SELECT COUNT(*) as n FROM labels WHERE account_id = ?").get(accountId) as {
-				n: number;
-			}
-		).n;
+		const count = (db.prepare("SELECT COUNT(*) as n FROM labels").get() as { n: number }).n;
 		expect(count).toBe(1);
 	});
 
-	test("multi-account isolation — only creates labels for the correct account", () => {
+	test("labels are global — two accounts sharing a folder name produce one label", () => {
 		const otherAccountId = createTestAccount(db, {
 			email: "other@example.com",
 		});
@@ -113,21 +102,14 @@ describe("ensureLabelsForFolders", () => {
 		createTestFolder(db, otherAccountId, "INBOX");
 		createTestFolder(db, otherAccountId, "Sent");
 
+		// Sync account1 — creates INBOX label
 		makeSync(accountId, db).ensureLabelsForFolders();
+		// Sync account2 — INBOX already exists (no-op), Sent is new
+		makeSync(otherAccountId, db).ensureLabelsForFolders();
 
-		const myLabels = (
-			db.prepare("SELECT COUNT(*) as n FROM labels WHERE account_id = ?").get(accountId) as {
-				n: number;
-			}
-		).n;
-		const otherLabels = (
-			db.prepare("SELECT COUNT(*) as n FROM labels WHERE account_id = ?").get(otherAccountId) as {
-				n: number;
-			}
-		).n;
-
-		expect(myLabels).toBe(1);
-		expect(otherLabels).toBe(0);
+		const totalLabels = (db.prepare("SELECT COUNT(*) as n FROM labels").get() as { n: number }).n;
+		// INBOX (shared) + Sent = 2 global labels
+		expect(totalLabels).toBe(2);
 	});
 
 	test("nested folder path — label name is the folder display name (not full path)", () => {
@@ -140,9 +122,7 @@ describe("ensureLabelsForFolders", () => {
 
 		makeSync(accountId, db).ensureLabelsForFolders();
 
-		const label = db.prepare("SELECT name FROM labels WHERE account_id = ?").get(accountId) as
-			| { name: string }
-			| undefined;
+		const label = db.prepare("SELECT name FROM labels").get() as { name: string } | undefined;
 		expect(label?.name).toBe("2025");
 	});
 });
@@ -321,10 +301,8 @@ describe("refreshLabelCounts", () => {
 		sync.refreshLabelCounts();
 
 		const label = db
-			.prepare(
-				"SELECT message_count, unread_count FROM labels WHERE account_id = ? AND name = 'INBOX'",
-			)
-			.get(accountId) as { message_count: number; unread_count: number };
+			.prepare("SELECT message_count, unread_count FROM labels WHERE name = 'INBOX'")
+			.get() as { message_count: number; unread_count: number };
 		expect(label.message_count).toBe(3);
 		expect(label.unread_count).toBe(2);
 	});
@@ -339,10 +317,8 @@ describe("refreshLabelCounts", () => {
 		sync.refreshLabelCounts();
 
 		const before = db
-			.prepare(
-				"SELECT message_count, unread_count FROM labels WHERE account_id = ? AND name = 'INBOX'",
-			)
-			.get(accountId) as { message_count: number; unread_count: number };
+			.prepare("SELECT message_count, unread_count FROM labels WHERE name = 'INBOX'")
+			.get() as { message_count: number; unread_count: number };
 		expect(before.message_count).toBe(1);
 		expect(before.unread_count).toBe(1);
 
@@ -351,21 +327,20 @@ describe("refreshLabelCounts", () => {
 		sync.refreshLabelCounts();
 
 		const after = db
-			.prepare(
-				"SELECT message_count, unread_count FROM labels WHERE account_id = ? AND name = 'INBOX'",
-			)
-			.get(accountId) as { message_count: number; unread_count: number };
+			.prepare("SELECT message_count, unread_count FROM labels WHERE name = 'INBOX'")
+			.get() as { message_count: number; unread_count: number };
 		expect(after.message_count).toBe(2);
 		expect(after.unread_count).toBe(1);
 	});
 
-	test("multi-account isolation — only updates labels for the correct account", () => {
+	test("global refresh — counts span all accounts", () => {
 		const otherAccountId = createTestAccount(db);
 		const folderId = createTestFolder(db, accountId, "INBOX");
 		const otherFolderId = createTestFolder(db, otherAccountId, "INBOX");
 		const sync = makeSync(accountId, db);
 		const otherSync = makeSync(otherAccountId, db);
 
+		// Both accounts share the global INBOX label
 		sync.ensureLabelsForFolders();
 		otherSync.ensureLabelsForFolders();
 
@@ -375,19 +350,14 @@ describe("refreshLabelCounts", () => {
 		sync.applyFolderLabelsToMessages();
 		otherSync.applyFolderLabelsToMessages();
 
-		// Only refresh account, not otherAccount
+		// Refresh using either account's sync — result is the same (global)
 		sync.refreshLabelCounts();
 
-		const myLabel = db
-			.prepare("SELECT message_count FROM labels WHERE account_id = ? AND name = 'INBOX'")
-			.get(accountId) as { message_count: number };
-		expect(myLabel.message_count).toBe(1);
-
-		const otherLabel = db
-			.prepare("SELECT message_count FROM labels WHERE account_id = ? AND name = 'INBOX'")
-			.get(otherAccountId) as { message_count: number };
-		// Other account not refreshed — counts stay at default 0
-		expect(otherLabel.message_count).toBe(0);
+		const inboxLabel = db
+			.prepare("SELECT message_count FROM labels WHERE name = 'INBOX'")
+			.get() as { message_count: number };
+		// All 3 messages (1 from account, 2 from otherAccount) are under the global INBOX label
+		expect(inboxLabel.message_count).toBe(3);
 	});
 });
 
@@ -520,9 +490,9 @@ describe("syncAll — label pipeline integration", () => {
 		await sync.disconnect();
 
 		// INBOX label must exist with source='imap'
-		const label = db
-			.prepare("SELECT name, source FROM labels WHERE account_id = ?")
-			.get(accountId) as { name: string; source: string } | undefined;
+		const label = db.prepare("SELECT name, source FROM labels WHERE name = 'INBOX'").get() as
+			| { name: string; source: string }
+			| undefined;
 		expect(label?.name).toBe("INBOX");
 		expect(label?.source).toBe("imap");
 

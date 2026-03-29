@@ -1,41 +1,47 @@
 import { useCallback, useEffect, useState } from "react";
-import { type AccountDetail, type UpdateAccountRequest, api } from "../../api";
-import { WELL_KNOWN_PROVIDERS } from "../../utils";
+import {
+	type AccountDetail,
+	type InboundConnector,
+	type OutboundConnector,
+	type UpdateAccountRequest,
+	api,
+} from "../../api";
+import { useAsync } from "../../hooks";
 import { FormField } from "./FormField";
 
-export interface AccountFormData {
+interface AccountFormData {
 	name: string;
 	email: string;
-	imap_host: string;
-	imap_port: number;
-	imap_tls: number;
-	imap_user: string;
-	imap_pass: string;
-	smtp_host: string;
-	smtp_port: number;
-	smtp_tls: number;
-	smtp_user: string;
-	smtp_pass: string;
+	inbound_connector_id: number | null;
+	outbound_connector_id: number | null;
 	sync_delete_from_server: number;
 	default_view: string;
 }
 
-export const emptyForm: AccountFormData = {
+const emptyForm: AccountFormData = {
 	name: "",
 	email: "",
-	imap_host: "",
-	imap_port: 993,
-	imap_tls: 1,
-	imap_user: "",
-	imap_pass: "",
-	smtp_host: "",
-	smtp_port: 587,
-	smtp_tls: 1,
-	smtp_user: "",
-	smtp_pass: "",
+	inbound_connector_id: null,
+	outbound_connector_id: null,
 	sync_delete_from_server: 0,
 	default_view: "inbox",
 };
+
+function connectorLabel(c: InboundConnector | OutboundConnector): string {
+	if ("imap_host" in c && c.type === "imap") {
+		return `${c.name} — IMAP (${c.imap_user ?? ""}@${c.imap_host ?? ""})`;
+	}
+	if (c.type === "cloudflare-email") {
+		return `${c.name} — Cloudflare Email`;
+	}
+	if ("smtp_host" in c && c.type === "smtp") {
+		return `${c.name} — SMTP (${(c as OutboundConnector).smtp_user ?? ""}@${(c as OutboundConnector).smtp_host ?? ""})`;
+	}
+	if (c.type === "ses") {
+		return `${c.name} — AWS SES (${(c as OutboundConnector).ses_region ?? ""})`;
+	}
+	return c.name;
+}
 
 export function AccountForm({
 	accountId,
@@ -50,19 +56,10 @@ export function AccountForm({
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [loaded, setLoaded] = useState(accountId === null);
-	const [testing, setTesting] = useState(false);
-	const [testResult, setTestResult] = useState<{
-		ok: boolean;
-		error?: string;
-		mailboxes?: number;
-	} | null>(null);
-	const [testingSmtp, setTestingSmtp] = useState(false);
-	const [smtpTestResult, setSmtpTestResult] = useState<{
-		ok: boolean;
-		error?: string;
-	} | null>(null);
 
-	// Load existing account data
+	const { data: inboundConnectors } = useAsync(() => api.connectors.inbound.list(), []);
+	const { data: outboundConnectors } = useAsync(() => api.connectors.outbound.list(), []);
+
 	const loadAccount = useCallback(async () => {
 		if (accountId === null) return;
 		try {
@@ -70,16 +67,8 @@ export function AccountForm({
 			setForm({
 				name: detail.name,
 				email: detail.email,
-				imap_host: detail.imap_host ?? "",
-				imap_port: detail.imap_port ?? 993,
-				imap_tls: detail.imap_tls ?? 1,
-				imap_user: detail.imap_user ?? "",
-				imap_pass: "", // Never sent back from server
-				smtp_host: detail.smtp_host ?? "",
-				smtp_port: detail.smtp_port ?? 587,
-				smtp_tls: detail.smtp_tls ?? 1,
-				smtp_user: detail.smtp_user ?? "",
-				smtp_pass: "",
+				inbound_connector_id: detail.inbound_connector_id ?? null,
+				outbound_connector_id: detail.outbound_connector_id ?? null,
 				sync_delete_from_server: detail.sync_delete_from_server,
 				default_view: detail.default_view ?? "inbox",
 			});
@@ -93,86 +82,43 @@ export function AccountForm({
 		loadAccount();
 	}, [loadAccount]);
 
-	const setField = <K extends keyof AccountFormData>(key: K, value: AccountFormData[K]) =>
-		setForm((f) => ({ ...f, [key]: value }));
-
-	const handleEmailChange = (email: string) => {
-		if (accountId !== null) {
-			setField("email", email);
-			return;
+	// Auto-select first inbound connector when creating a new account
+	useEffect(() => {
+		if (accountId !== null) return;
+		if (form.inbound_connector_id !== null) return;
+		const first = inboundConnectors?.[0];
+		if (first) {
+			setForm((f) => ({ ...f, inbound_connector_id: first.id }));
 		}
-		const domain = email.split("@")[1]?.toLowerCase();
-		if (domain && WELL_KNOWN_PROVIDERS[domain]) {
-			const provider = WELL_KNOWN_PROVIDERS[domain];
-			setForm((f) => ({
-				...f,
-				email,
-				imap_host: f.imap_host || provider.imap_host,
-				smtp_host: f.smtp_host || provider.smtp_host,
-				imap_user: !f.imap_user || f.imap_user === f.email ? email : f.imap_user,
-				smtp_user: !f.smtp_user || f.smtp_user === f.email ? email : f.smtp_user,
-			}));
-		} else {
-			setForm((f) => ({
-				...f,
-				email,
-				imap_user: !f.imap_user || f.imap_user === f.email ? email : f.imap_user,
-				smtp_user: !f.smtp_user || f.smtp_user === f.email ? email : f.smtp_user,
-			}));
-		}
-	};
-
-	const handleTestConnection = async () => {
-		setTesting(true);
-		setTestResult(null);
-		try {
-			const result = await api.accounts.testConnection({
-				imap_host: form.imap_host,
-				imap_port: form.imap_port,
-				imap_tls: form.imap_tls,
-				imap_user: form.imap_user,
-				imap_pass: form.imap_pass,
-			});
-			setTestResult(result);
-		} catch (err) {
-			setTestResult({ ok: false, error: (err as Error).message });
-		} finally {
-			setTesting(false);
-		}
-	};
-
-	const handleTestSmtp = async () => {
-		setTestingSmtp(true);
-		setSmtpTestResult(null);
-		try {
-			const result = await api.testSmtp({
-				smtp_host: form.smtp_host,
-				smtp_port: form.smtp_port,
-				smtp_tls: form.smtp_tls,
-				smtp_user: form.smtp_user || form.imap_user,
-				smtp_pass: form.smtp_pass || form.imap_pass,
-			});
-			setSmtpTestResult(result);
-		} catch (err) {
-			setSmtpTestResult({ ok: false, error: (err as Error).message });
-		} finally {
-			setTestingSmtp(false);
-		}
-	};
+	}, [inboundConnectors, accountId, form.inbound_connector_id]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
+		if (!form.inbound_connector_id) {
+			setError("An inbound connector is required. Set one up in the Connectors tab first.");
+			return;
+		}
 		setLoading(true);
 		setError(null);
 
 		try {
 			if (accountId === null) {
-				await api.accounts.create({ ...form });
+				await api.accounts.create({
+					name: form.name,
+					email: form.email,
+					inbound_connector_id: form.inbound_connector_id,
+					...(form.outbound_connector_id
+						? { outbound_connector_id: form.outbound_connector_id }
+						: {}),
+					sync_delete_from_server: form.sync_delete_from_server,
+					default_view: form.default_view,
+				});
 			} else {
-				// UpdateAccountRequest only allows updating name, email, connector IDs, and prefs
 				const update: UpdateAccountRequest = {
 					name: form.name,
 					email: form.email,
+					inbound_connector_id: form.inbound_connector_id,
+					outbound_connector_id: form.outbound_connector_id ?? undefined,
 					sync_delete_from_server: form.sync_delete_from_server,
 					default_view: form.default_view,
 				};
@@ -194,6 +140,9 @@ export function AccountForm({
 		);
 	}
 
+	const hasInbound = inboundConnectors && inboundConnectors.length > 0;
+	const hasOutbound = outboundConnectors && outboundConnectors.length > 0;
+
 	return (
 		<form
 			onSubmit={handleSubmit}
@@ -209,137 +158,97 @@ export function AccountForm({
 				</div>
 			)}
 
-			{accountId === null && (
-				<div className="rounded-lg border-2 border-stork-300 dark:border-stork-700 bg-stork-50 dark:bg-stork-950 px-4 py-3 space-y-1.5">
-					<p className="text-sm font-bold text-stork-800 dark:text-stork-200">
-						⚡ How Stork stores your email
-					</p>
-					<p className="text-xs text-stork-700 dark:text-stork-300">
-						Most email clients treat your provider (Gmail, Fastmail, etc.) as the permanent home for
-						your email. Stork{"'"}s philosophy is different:{" "}
-						<strong>your provider is just the delivery edge</strong>. Mail arrives there, Stork
-						picks it up and stores it encrypted on your own hardware. Choose a sync mode below.
-					</p>
-				</div>
-			)}
-
-			{/* Basic info */}
+			{/* Identity */}
 			<div className="grid grid-cols-2 gap-3">
 				<FormField
 					label="Display Name"
 					value={form.name}
-					onChange={(v) => setField("name", v)}
+					onChange={(v) => setForm((f) => ({ ...f, name: v }))}
 					placeholder="Work Email"
 					required
 				/>
 				<FormField
 					label="Email Address"
 					value={form.email}
-					onChange={handleEmailChange}
+					onChange={(v) => setForm((f) => ({ ...f, email: v }))}
 					placeholder="you@example.com"
 					type="email"
 					required
 				/>
 			</div>
 
-			{/* IMAP Settings */}
-			<fieldset className="space-y-3">
-				<legend className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-					Incoming Mail (IMAP)
-				</legend>
-				<div className="grid grid-cols-3 gap-3">
-					<FormField
-						label="IMAP Host"
-						value={form.imap_host}
-						onChange={(v) => setField("imap_host", v)}
-						placeholder="imap.example.com"
+			{/* Inbound Connector */}
+			<div>
+				<label
+					htmlFor="inbound-connector"
+					className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5"
+				>
+					Inbound Connector <span className="text-red-500">*</span>
+				</label>
+				{!hasInbound ? (
+					<p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded">
+						No inbound connectors configured yet. Go to the <strong>Connectors</strong> tab to add
+						one (IMAP or Cloudflare Email).
+					</p>
+				) : (
+					<select
+						id="inbound-connector"
+						value={form.inbound_connector_id ?? ""}
+						onChange={(e) =>
+							setForm((f) => ({
+								...f,
+								inbound_connector_id: e.target.value ? Number(e.target.value) : null,
+							}))
+						}
 						required
-					/>
-					<FormField
-						label="Port"
-						value={String(form.imap_port)}
-						onChange={(v) => setField("imap_port", Number(v) || 993)}
-						type="number"
-					/>
-					<div className="flex items-end pb-0.5">
-						<label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-							<input
-								type="checkbox"
-								checked={form.imap_tls === 1}
-								onChange={(e) => setField("imap_tls", e.target.checked ? 1 : 0)}
-								className="rounded border-gray-300 dark:border-gray-600"
-							/>
-							Use TLS
-						</label>
-					</div>
-				</div>
-				<div className="grid grid-cols-2 gap-3">
-					<FormField
-						label="Username"
-						value={form.imap_user}
-						onChange={(v) => setField("imap_user", v)}
-						placeholder="you@example.com"
-						required
-					/>
-					<FormField
-						label="Password"
-						value={form.imap_pass}
-						onChange={(v) => setField("imap_pass", v)}
-						type="password"
-						placeholder={accountId ? "(unchanged)" : ""}
-						required={accountId === null}
-					/>
-				</div>
-			</fieldset>
+						className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100"
+					>
+						<option value="">Select inbound connector…</option>
+						{inboundConnectors?.map((c) => (
+							<option key={c.id} value={c.id}>
+								{connectorLabel(c)}
+							</option>
+						))}
+					</select>
+				)}
+			</div>
 
-			{/* SMTP Settings */}
-			<fieldset className="space-y-3">
-				<legend className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-					Outgoing Mail (SMTP)
-				</legend>
-				<div className="grid grid-cols-3 gap-3">
-					<FormField
-						label="SMTP Host"
-						value={form.smtp_host}
-						onChange={(v) => setField("smtp_host", v)}
-						placeholder="smtp.example.com"
-					/>
-					<FormField
-						label="Port"
-						value={String(form.smtp_port)}
-						onChange={(v) => setField("smtp_port", Number(v) || 587)}
-						type="number"
-					/>
-					<div className="flex items-end pb-0.5">
-						<label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-							<input
-								type="checkbox"
-								checked={form.smtp_tls === 1}
-								onChange={(e) => setField("smtp_tls", e.target.checked ? 1 : 0)}
-								className="rounded border-gray-300 dark:border-gray-600"
-							/>
-							Use TLS
-						</label>
-					</div>
-				</div>
-				<div className="grid grid-cols-2 gap-3">
-					<FormField
-						label="Username"
-						value={form.smtp_user}
-						onChange={(v) => setField("smtp_user", v)}
-						placeholder="you@example.com"
-					/>
-					<FormField
-						label="Password"
-						value={form.smtp_pass}
-						onChange={(v) => setField("smtp_pass", v)}
-						type="password"
-						placeholder={accountId ? "(unchanged)" : ""}
-					/>
-				</div>
-			</fieldset>
+			{/* Outbound Connector */}
+			<div>
+				<label
+					htmlFor="outbound-connector"
+					className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5"
+				>
+					Outbound Connector <span className="text-gray-400">(optional)</span>
+				</label>
+				{!hasOutbound ? (
+					<p className="text-sm text-gray-500 dark:text-gray-400 italic">
+						No outbound connectors configured. Add one in the <strong>Connectors</strong> tab to
+						enable sending (SMTP or AWS SES).
+					</p>
+				) : (
+					<select
+						id="outbound-connector"
+						value={form.outbound_connector_id ?? ""}
+						onChange={(e) =>
+							setForm((f) => ({
+								...f,
+								outbound_connector_id: e.target.value ? Number(e.target.value) : null,
+							}))
+						}
+						className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100"
+					>
+						<option value="">None (receive only)</option>
+						{outboundConnectors?.map((c) => (
+							<option key={c.id} value={c.id}>
+								{connectorLabel(c)}
+							</option>
+						))}
+					</select>
+				)}
+			</div>
 
-			{/* Sync preferences */}
+			{/* Sync Preferences */}
 			<fieldset className="space-y-3">
 				<legend className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
 					Sync Preferences
@@ -348,32 +257,31 @@ export function AccountForm({
 					<input
 						type="checkbox"
 						checked={form.sync_delete_from_server === 1}
-						onChange={(e) => setField("sync_delete_from_server", e.target.checked ? 1 : 0)}
+						onChange={(e) =>
+							setForm((f) => ({ ...f, sync_delete_from_server: e.target.checked ? 1 : 0 }))
+						}
 						className="rounded border-gray-300 dark:border-gray-600 mt-0.5 shrink-0"
 					/>
 					<span>
 						<span className="font-medium">Connector mode</span> — after syncing, remove messages
-						from your IMAP server so Stork becomes your permanent encrypted email home
+						from the inbound source so Stork becomes your permanent encrypted email home
 					</span>
 				</label>
 				{form.sync_delete_from_server === 1 ? (
-					<div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded px-3 py-2 space-y-1">
+					<div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded px-3 py-2">
 						<p className="font-medium">
 							Connector mode is on — Stork is your permanent encrypted email home.
 						</p>
 						<p>
-							New messages are removed from your IMAP server after each sync. Your email provider is
-							just the delivery pipe; Stork holds your mail encrypted on your own hardware. Make
-							sure your Stork database is backed up.
+							Messages are removed from the inbound source after each sync. Make sure your Stork
+							database is backed up.
 						</p>
 					</div>
 				) : (
-					<div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-2 space-y-1">
+					<div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-2">
 						<p className="font-medium">Mirror mode is on — Stork reads alongside your provider.</p>
 						<p>
-							Your provider stays authoritative; both hold copies of your messages. Actions in Stork
-							(delete, label, archive) are local only and do not sync back. Enable Connector mode
-							when you{"'"}re ready to make Stork your permanent encrypted home.
+							Your provider stays authoritative; both hold copies. Actions in Stork are local only.
 						</p>
 					</div>
 				)}
@@ -384,7 +292,7 @@ export function AccountForm({
 					<select
 						id="default_view_select"
 						value={form.default_view}
-						onChange={(e) => setField("default_view", e.target.value)}
+						onChange={(e) => setForm((f) => ({ ...f, default_view: e.target.value }))}
 						className="flex-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1 text-sm text-gray-900 dark:text-gray-100"
 					>
 						<option value="inbox">Inbox</option>
@@ -393,34 +301,6 @@ export function AccountForm({
 					</select>
 				</div>
 			</fieldset>
-
-			{/* Test connection results */}
-			{testResult && (
-				<div
-					className={`text-sm px-3 py-2 rounded ${
-						testResult.ok
-							? "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
-							: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20"
-					}`}
-				>
-					{testResult.ok
-						? `IMAP connection successful — ${testResult.mailboxes} mailboxes found`
-						: `IMAP connection failed: ${testResult.error}`}
-				</div>
-			)}
-			{smtpTestResult && (
-				<div
-					className={`text-sm px-3 py-2 rounded ${
-						smtpTestResult.ok
-							? "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
-							: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20"
-					}`}
-				>
-					{smtpTestResult.ok
-						? "SMTP connection successful — ready to send"
-						: `SMTP connection failed: ${smtpTestResult.error}`}
-				</div>
-			)}
 
 			{/* Actions */}
 			<div className="flex items-center justify-end gap-2 pt-2">
@@ -432,26 +312,8 @@ export function AccountForm({
 					Cancel
 				</button>
 				<button
-					type="button"
-					onClick={handleTestConnection}
-					disabled={testing || !form.imap_host || !form.imap_user || !form.imap_pass}
-					className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
-				>
-					{testing ? "Testing..." : "Test IMAP"}
-				</button>
-				{form.smtp_host && (
-					<button
-						type="button"
-						onClick={handleTestSmtp}
-						disabled={testingSmtp || !form.smtp_host}
-						className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
-					>
-						{testingSmtp ? "Testing..." : "Test SMTP"}
-					</button>
-				)}
-				<button
 					type="submit"
-					disabled={loading}
+					disabled={loading || !hasInbound}
 					className="px-4 py-1.5 bg-stork-600 hover:bg-stork-700 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"
 				>
 					{loading ? "Saving..." : accountId === null ? "Add Account" : "Save Changes"}

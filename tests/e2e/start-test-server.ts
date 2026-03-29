@@ -184,8 +184,7 @@ db.prepare(`
 			WHERE ml.label_id = labels.id
 			AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%')
 		)
-	WHERE account_id = ?
-`).run(accountId);
+`).run();
 
 // Refresh cached account counts so count endpoints return correct values.
 db.prepare(`

@@ -456,9 +456,10 @@ export const api = {
 		list: (accountId: number) => fetchJSON<Folder[]>(`/accounts/${accountId}/folders`),
 	},
 	labels: {
-		list: (accountId: number) => fetchJSON<Label[]>(`/accounts/${accountId}/labels`),
-		create: (accountId: number, data: { name: string; color?: string }) =>
-			fetchJSON<{ id: number }>(`/accounts/${accountId}/labels`, {
+		// Labels are now global (no account scoping). accountId params are ignored server-side.
+		list: () => fetchJSON<Label[]>("/labels"),
+		create: (data: { name: string; color?: string }) =>
+			fetchJSON<{ id: number }>("/labels", {
 				method: "POST",
 				body: JSON.stringify(data),
 			}),

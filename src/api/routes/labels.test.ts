@@ -51,7 +51,13 @@ describe("Labels API", () => {
 			expect(body).toEqual([]);
 		});
 
-		test("POST /api/accounts/:id/labels creates a label", async () => {
+		test("GET /api/labels returns empty array initially", async () => {
+			const { status, body } = await jsonRequest("/api/labels");
+			expect(status).toBe(200);
+			expect(body).toEqual([]);
+		});
+
+		test("POST /api/accounts/:id/labels creates a global label", async () => {
 			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/labels`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -65,6 +71,32 @@ describe("Labels API", () => {
 			expect(labels[0].name).toBe("Important");
 			expect(labels[0].color).toBe("#ff0000");
 			expect(labels[0].source).toBe("user");
+
+			// Also visible from the standalone endpoint
+			const { body: allLabels } = await jsonRequest("/api/labels");
+			expect(allLabels).toHaveLength(1);
+		});
+
+		test("POST /api/labels creates a global label", async () => {
+			const { status, body } = await jsonRequest("/api/labels", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ name: "Work" }),
+			});
+			expect(status).toBe(201);
+			expect(body.id).toBeGreaterThan(0);
+		});
+
+		test("GET /api/accounts/:id/labels returns same labels regardless of account", async () => {
+			const accountId2 = createTestAccount(db, { email: "second@example.com" });
+			createTestLabel(db, accountId, "Shared");
+
+			const { body: labels1 } = await jsonRequest(`/api/accounts/${accountId}/labels`);
+			const { body: labels2 } = await jsonRequest(`/api/accounts/${accountId2}/labels`);
+			expect(labels1).toHaveLength(1);
+			expect(labels2).toHaveLength(1);
+			expect(labels1[0].name).toBe("Shared");
+			expect(labels2[0].name).toBe("Shared");
 		});
 
 		test("POST /api/accounts/:id/labels rejects missing name", async () => {
@@ -106,7 +138,7 @@ describe("Labels API", () => {
 			});
 			expect(status).toBe(200);
 
-			const { body: labels } = await jsonRequest(`/api/accounts/${accountId}/labels`);
+			const { body: labels } = await jsonRequest("/api/labels");
 			expect(labels[0].name).toBe("New Name");
 			expect(labels[0].color).toBe("#00ff00");
 		});
@@ -135,7 +167,7 @@ describe("Labels API", () => {
 			const { status } = await jsonRequest(`/api/labels/${labelId}`, { method: "DELETE" });
 			expect(status).toBe(200);
 
-			const { body: labels } = await jsonRequest(`/api/accounts/${accountId}/labels`);
+			const { body: labels } = await jsonRequest("/api/labels");
 			expect(labels).toHaveLength(0);
 		});
 
@@ -185,7 +217,7 @@ describe("Labels API", () => {
 			// Counts are cached columns — populate them as refreshLabelCounts() would
 			db.prepare("UPDATE labels SET message_count = 2, unread_count = 1 WHERE id = ?").run(labelId);
 
-			const { body: labels } = await jsonRequest(`/api/accounts/${accountId}/labels`);
+			const { body: labels } = await jsonRequest("/api/labels");
 			expect(labels).toHaveLength(1);
 			expect(labels[0].message_count).toBe(2);
 			expect(labels[0].unread_count).toBe(1);

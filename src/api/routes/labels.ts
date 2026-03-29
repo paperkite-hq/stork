@@ -5,6 +5,33 @@ import { parseIntParam, parsePagination } from "../validation.js";
 export function labelRoutes(getDb: () => Database.Database): Hono {
 	const api = new Hono();
 
+	// Standalone list — all labels, no account filter (labels are instance-level)
+	api.get("/", (c) => {
+		const labels = getDb()
+			.prepare(
+				"SELECT id, name, color, source, created_at, message_count, unread_count FROM labels ORDER BY name",
+			)
+			.all();
+		return c.json(labels);
+	});
+
+	// Standalone create — no account context needed
+	api.post("/", async (c) => {
+		const body = await c.req.json();
+		if (!body.name) return c.json({ error: "name is required" }, 400);
+		try {
+			const result = getDb()
+				.prepare("INSERT INTO labels (name, color, source) VALUES (?, ?, ?)")
+				.run(body.name, body.color ?? null, body.source ?? "user");
+			return c.json({ id: Number(result.lastInsertRowid) }, 201);
+		} catch (err) {
+			if (String(err).includes("UNIQUE constraint")) {
+				return c.json({ error: "Label already exists" }, 409);
+			}
+			throw err;
+		}
+	});
+
 	api.put("/:labelId", async (c) => {
 		const db = getDb();
 		const labelId = parseIntParam(c, "labelId", c.req.param("labelId"));
