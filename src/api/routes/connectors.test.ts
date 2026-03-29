@@ -147,6 +147,48 @@ describe("Connectors API", () => {
 			expect(body.error).toMatch(/cf_email_webhook_secret/);
 		});
 
+		test("POST /api/connectors/inbound creates a cloudflare-r2 connector", async () => {
+			const { status, body } = await post("/api/connectors/inbound", {
+				name: "My R2",
+				type: "cloudflare-r2",
+				cf_r2_account_id: "acc123",
+				cf_r2_bucket_name: "emails",
+				cf_r2_access_key_id: "AKID",
+				cf_r2_secret_access_key: "SECRET",
+			});
+			expect(status).toBe(201);
+			expect(body.id).toBeGreaterThan(0);
+		});
+
+		test("POST /api/connectors/inbound returns 400 when R2 required fields missing", async () => {
+			const { status, body } = await post("/api/connectors/inbound", {
+				name: "R2 Incomplete",
+				type: "cloudflare-r2",
+				cf_r2_account_id: "acc123",
+				// missing bucket_name, access_key_id, secret_access_key
+			});
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/Missing required R2 fields/);
+		});
+
+		test("PUT /api/connectors/inbound/:id updates R2 credentials and reloads poller", async () => {
+			const { body: created } = await post("/api/connectors/inbound", {
+				name: "R2 Update",
+				type: "cloudflare-r2",
+				cf_r2_account_id: "acc123",
+				cf_r2_bucket_name: "emails",
+				cf_r2_access_key_id: "AKID",
+				cf_r2_secret_access_key: "SECRET",
+			});
+
+			const { status, body } = await put(`/api/connectors/inbound/${created.id}`, {
+				cf_r2_access_key_id: "NEW_AKID",
+				cf_r2_secret_access_key: "NEW_SECRET",
+			});
+			expect(status).toBe(200);
+			expect(body.ok).toBe(true);
+		});
+
 		test("GET /api/connectors/inbound/:id returns connector", async () => {
 			const { body: created } = await post("/api/connectors/inbound", {
 				name: "Fetch me",
@@ -357,6 +399,82 @@ describe("Connectors API", () => {
 			const { status, body } = await post(`/api/connectors/inbound/${id}/test`, {});
 			expect(status).toBe(200);
 			expect(body.ok).toBe(false);
+		});
+
+		test("POST /api/connectors/inbound/:id/test cloudflare-r2 not fully configured returns ok:false", async () => {
+			db.prepare(
+				"INSERT INTO inbound_connectors (name, type) VALUES ('R2 Bare', 'cloudflare-r2')",
+			).run();
+			const id = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			const { status, body } = await post(`/api/connectors/inbound/${id}/test`, {});
+			expect(status).toBe(200);
+			expect(body.ok).toBe(false);
+			expect(body.error).toMatch(/not fully configured/);
+		});
+
+		test("POST /api/connectors/inbound/:id/test cloudflare-r2 with credentials returns result", async () => {
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: true,
+					status: 200,
+					text: () =>
+						Promise.resolve(
+							"<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>",
+						),
+				}),
+			);
+
+			const { body: created } = await post("/api/connectors/inbound", {
+				name: "R2 Full",
+				type: "cloudflare-r2",
+				cf_r2_account_id: "acc123",
+				cf_r2_bucket_name: "my-bucket",
+				cf_r2_access_key_id: "AKID",
+				cf_r2_secret_access_key: "SECRET",
+			});
+
+			const { status, body } = await post(
+				`/api/connectors/inbound/${created.id}/test`,
+				{},
+			);
+			expect(status).toBe(200);
+			expect(body.ok).toBe(true);
+			expect(body.details?.mode).toBe("queue/poll");
+
+			vi.unstubAllGlobals();
+		});
+
+		test("POST /api/connectors/inbound/:id/test cloudflare-r2 fetch error returns ok:false", async () => {
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: false,
+					status: 403,
+					text: () => Promise.resolve("Access Denied"),
+				}),
+			);
+
+			const { body: created } = await post("/api/connectors/inbound", {
+				name: "R2 BadCreds",
+				type: "cloudflare-r2",
+				cf_r2_account_id: "acc123",
+				cf_r2_bucket_name: "my-bucket",
+				cf_r2_access_key_id: "BADKEY",
+				cf_r2_secret_access_key: "BADSECRET",
+			});
+
+			const { status, body } = await post(
+				`/api/connectors/inbound/${created.id}/test`,
+				{},
+			);
+			expect(status).toBe(200);
+			expect(body.ok).toBe(false);
+			expect(body.error).toMatch(/403/);
+
+			vi.unstubAllGlobals();
 		});
 	});
 
