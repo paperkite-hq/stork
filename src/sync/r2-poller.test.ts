@@ -369,4 +369,118 @@ describe("R2Poller", () => {
 		expect(completeCalls).toHaveLength(1);
 		expect(completeCalls[0]).toMatchObject({ connectorId: connId, stored: 1 });
 	});
+
+	test("addConnector replaces existing connector (does not register twice)", () => {
+		const poller = new R2Poller(db);
+		const connId = createR2Connector(db);
+		const row = db
+			.prepare(
+				`SELECT id, cf_r2_account_id, cf_r2_bucket_name,
+					cf_r2_access_key_id, cf_r2_secret_access_key,
+					cf_r2_prefix, cf_r2_poll_interval_ms
+				FROM inbound_connectors WHERE id = ?`,
+			)
+			.get(connId) as {
+			id: number;
+			cf_r2_account_id: string;
+			cf_r2_bucket_name: string;
+			cf_r2_access_key_id: string;
+			cf_r2_secret_access_key: string;
+			cf_r2_prefix: string;
+			cf_r2_poll_interval_ms: number | null;
+		};
+
+		poller.addConnector(row);
+		expect(poller.getStatus().size).toBe(1);
+		// Adding the same connector again replaces it — size stays 1
+		poller.addConnector(row);
+		expect(poller.getStatus().size).toBe(1);
+	});
+
+	test("deletes from R2 when payload is valid JSON but missing raw field", async () => {
+		const connId = createR2Connector(db);
+		createAccount(db, connId);
+
+		// Valid JSON but no 'raw' field
+		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com" });
+
+		makeFetchResponses([
+			{ body: buildListXml(["pending/no-raw.json"]) }, // LIST
+			{ body: payload }, // GET
+			{ body: "", status: 204 }, // DELETE (unrecoverable malformed payload)
+		]);
+
+		const poller = new R2Poller(db);
+		poller.loadConnectorsFromDb();
+		const stored = await poller.pollNow(connId);
+		expect(stored).toBe(0);
+
+		const deleteCalls = fetchMock.mock.calls.filter((c) => c[1]?.method === "DELETE");
+		expect(deleteCalls).toHaveLength(1);
+	});
+
+	test("deleteObject logs error for non-404 failure without throwing", async () => {
+		const connId = createR2Connector(db);
+		createAccount(db, connId);
+
+		const raw = buildRawEmail({ messageId: "<delete-500-fail@example.com>" });
+		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw, rawSize: 100 });
+
+		makeFetchResponses([
+			{ body: buildListXml(["pending/msg.json"]) }, // LIST
+			{ body: payload }, // GET
+			{ body: "Internal Error", status: 500 }, // DELETE — server error
+		]);
+
+		const poller = new R2Poller(db);
+		poller.loadConnectorsFromDb();
+
+		// Should not throw — deleteObject swallows non-fatal delete errors
+		const stored = await poller.pollNow(connId);
+		expect(stored).toBe(1); // message was stored despite delete failure
+	});
+
+	test("stores two distinct messages for same account in one poll cycle", async () => {
+		const connId = createR2Connector(db);
+		createAccount(db, connId);
+
+		const raw1 = buildRawEmail({ messageId: "<first-msg@example.com>", subject: "First" });
+		const payload1 = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw: raw1, rawSize: 100 });
+		const raw2 = buildRawEmail({ messageId: "<second-msg@example.com>", subject: "Second" });
+		const payload2 = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw: raw2, rawSize: 100 });
+
+		makeFetchResponses([
+			{ body: buildListXml(["pending/msg1.json", "pending/msg2.json"]) }, // LIST
+			{ body: payload1 }, // GET msg1
+			{ body: "", status: 204 }, // DELETE msg1
+			{ body: payload2 }, // GET msg2
+			{ body: "", status: 204 }, // DELETE msg2
+		]);
+
+		const poller = new R2Poller(db);
+		poller.loadConnectorsFromDb();
+		const stored = await poller.pollNow(connId);
+		expect(stored).toBe(2);
+
+		const messages = db.prepare("SELECT id FROM messages").all();
+		expect(messages).toHaveLength(2);
+	});
+
+	test("onPollError callback is called when poll fails", async () => {
+		const connId = createR2Connector(db);
+
+		makeFetchResponses([{ body: "<Error>Forbidden</Error>", status: 403 }]);
+
+		const errorCalls: { connectorId: number; error: Error }[] = [];
+		const poller = new R2Poller(db, {
+			onPollError: (connectorId, error) => {
+				errorCalls.push({ connectorId, error });
+			},
+		});
+		poller.loadConnectorsFromDb();
+
+		await expect(poller.pollNow(connId)).rejects.toThrow();
+		expect(errorCalls).toHaveLength(1);
+		expect(errorCalls[0].connectorId).toBe(connId);
+	});
 });
