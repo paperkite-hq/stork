@@ -149,6 +149,32 @@ export function webhookRoutes(context: ContainerContext): Hono {
 
 		let stored = 0;
 
+		// Prepare account-label auto-labeling statements
+		const ensureAccountLabel = db.prepare(`
+			INSERT INTO labels (name, source, color)
+			VALUES (?, 'account', ?)
+			ON CONFLICT(name) DO UPDATE SET source = 'account'
+		`);
+		const applyAccountLabel = db.prepare(`
+			INSERT OR IGNORE INTO message_labels (message_id, label_id)
+			SELECT ?, l.id FROM labels l WHERE l.name = ? AND l.source = 'account'
+		`);
+		const applyInboxLabel = db.prepare(`
+			INSERT OR IGNORE INTO message_labels (message_id, label_id)
+			SELECT ?, l.id FROM labels l WHERE LOWER(l.name) = 'inbox'
+		`);
+
+		const accountLabelPalette = [
+			"#3b82f6",
+			"#10b981",
+			"#f59e0b",
+			"#8b5cf6",
+			"#ef4444",
+			"#06b6d4",
+			"#ec4899",
+			"#84cc16",
+		];
+
 		for (const account of accounts) {
 			// Deduplicate by message-id to handle at-least-once delivery from Cloudflare
 			if (checkDuplicate) {
@@ -161,7 +187,7 @@ export function webhookRoutes(context: ContainerContext): Hono {
 			const folderId = findOrCreateInbox(db, account.id);
 			const uid = nextInboxUid(db, folderId);
 
-			insertMessage.run(
+			const result = insertMessage.run(
 				account.id,
 				folderId,
 				uid,
@@ -179,6 +205,19 @@ export function webhookRoutes(context: ContainerContext): Hono {
 				payload.rawSize ?? 0,
 				(parsed.attachments?.length ?? 0) > 0 ? 1 : 0,
 			);
+			const messageId = Number(result.lastInsertRowid);
+
+			// Auto-label with account name and Inbox
+			const accountName = db.prepare("SELECT name FROM accounts WHERE id = ?").get(account.id) as
+				| { name: string }
+				| undefined;
+			if (accountName) {
+				const color = accountLabelPalette[(account.id - 1) % accountLabelPalette.length];
+				ensureAccountLabel.run(accountName.name, color);
+				applyAccountLabel.run(messageId, accountName.name);
+			}
+			applyInboxLabel.run(messageId);
+
 			stored++;
 			// Update folder unread count
 			db.prepare(

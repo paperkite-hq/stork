@@ -66,6 +66,70 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 		return c.json({ ok: true });
 	});
 
+	// Multi-label filter: returns messages matching ALL specified label IDs (intersection).
+	// Usage: GET /api/labels/filter?ids=1,2,3&limit=50&offset=0
+	api.get("/filter", (c) => {
+		const idsParam = c.req.query("ids");
+		if (!idsParam) return c.json({ error: "ids query parameter is required" }, 400);
+		const ids = idsParam
+			.split(",")
+			.map((s) => Number(s.trim()))
+			.filter((n) => Number.isInteger(n) && n > 0);
+		if (ids.length === 0) return c.json({ error: "At least one valid label ID is required" }, 400);
+
+		const pagination = parsePagination(c);
+		if (pagination instanceof Response) return pagination;
+		const { limit, offset } = pagination;
+
+		const placeholders = ids.map(() => "?").join(",");
+		const messages = getDb()
+			.prepare(`
+				SELECT m.id, m.uid, m.message_id, m.subject, m.from_address, m.from_name,
+					m.to_addresses, m.date, m.flags, m.size, m.has_attachments,
+					SUBSTR(m.text_body, 1, 200) as preview, m.account_id
+				FROM messages m
+				WHERE (
+					SELECT COUNT(DISTINCT ml.label_id)
+					FROM message_labels ml
+					WHERE ml.message_id = m.id AND ml.label_id IN (${placeholders})
+				) = ?
+				ORDER BY m.date DESC
+				LIMIT ? OFFSET ?
+			`)
+			.all(...ids, ids.length, limit, offset);
+
+		return c.json(messages);
+	});
+
+	// Multi-label filter count
+	api.get("/filter/count", (c) => {
+		const idsParam = c.req.query("ids");
+		if (!idsParam) return c.json({ error: "ids query parameter is required" }, 400);
+		const ids = idsParam
+			.split(",")
+			.map((s) => Number(s.trim()))
+			.filter((n) => Number.isInteger(n) && n > 0);
+		if (ids.length === 0) return c.json({ error: "At least one valid label ID is required" }, 400);
+
+		const placeholders = ids.map(() => "?").join(",");
+		const row = getDb()
+			.prepare(`
+				SELECT
+					COUNT(*) as total,
+					SUM(CASE WHEN m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%' THEN 1 ELSE 0 END) as unread
+				FROM messages m
+				WHERE (
+					SELECT COUNT(DISTINCT ml.label_id)
+					FROM message_labels ml
+					WHERE ml.message_id = m.id AND ml.label_id IN (${placeholders})
+				) = ?
+			`)
+			.all(...ids, ids.length) as Array<{ total: number; unread: number }>;
+
+		const result = row[0] ?? { total: 0, unread: 0 };
+		return c.json({ total: result.total ?? 0, unread: result.unread ?? 0 });
+	});
+
 	api.get("/:labelId/messages", (c) => {
 		const labelId = parseIntParam(c, "labelId", c.req.param("labelId"));
 		if (labelId instanceof Response) return labelId;

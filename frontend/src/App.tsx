@@ -60,6 +60,7 @@ export function App() {
 	const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 	const [selectedLabelId, setSelectedLabelId] = useState<number | null>(null);
 	const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
+	const [filterLabelIds, setFilterLabelIds] = useState<number[]>([]);
 
 	// UI state
 	const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
@@ -179,6 +180,7 @@ export function App() {
 		isUnifiedInbox,
 		isUnifiedAllMail,
 		isUnifiedUnread,
+		filterLabelIds,
 	});
 
 	// Fetch selected message detail
@@ -230,19 +232,25 @@ export function App() {
 		]),
 	);
 
-	const currentLabelName = isUnifiedInbox
-		? "All Inboxes"
-		: isUnifiedAllMail
-			? "All Mail"
-			: isUnifiedUnread
-				? "Unread"
-				: isAllMail
+	const currentLabelName =
+		filterLabelIds.length > 1
+			? filterLabelIds
+					.map((id) => labels?.find((l) => l.id === id)?.name)
+					.filter(Boolean)
+					.join(" + ")
+			: isUnifiedInbox
+				? "All Inboxes"
+				: isUnifiedAllMail
 					? "All Mail"
-					: isUnread
+					: isUnifiedUnread
 						? "Unread"
-						: isInbox
-							? "Inbox"
-							: (labels?.find((l) => l.id === effectiveLabelId)?.name ?? "Inbox");
+						: isAllMail
+							? "All Mail"
+							: isUnread
+								? "Unread"
+								: isInbox
+									? "Inbox"
+									: (labels?.find((l) => l.id === effectiveLabelId)?.name ?? "Inbox");
 
 	// Update document title with total unread count
 	const totalUnread = labels?.reduce((sum, l) => sum + (l.unread_count || 0), 0) ?? 0;
@@ -318,13 +326,6 @@ export function App() {
 			setSelectedMessageId(next.id);
 		}
 	}, [searchResultIndex, searchResults]);
-
-	const handleSelectAccount = useCallback((id: number) => {
-		setSelectedAccountId(id);
-		setSelectedLabelId(null);
-		setSelectedMessageId(null);
-		setMessageListIndex(0);
-	}, []);
 
 	// Browser back/forward navigation
 	useHistoryNavigation({
@@ -404,6 +405,7 @@ export function App() {
 	const handleSelectLabel = useCallback(
 		(id: number) => {
 			setSelectedLabelId(id);
+			setFilterLabelIds([]);
 			setSelectedMessageId(null);
 			setMessageListIndex(0);
 			setSidebarOpen(false);
@@ -413,6 +415,45 @@ export function App() {
 		},
 		[bulk],
 	);
+
+	const handleToggleFilterLabel = useCallback(
+		(id: number) => {
+			setFilterLabelIds((prev) => {
+				if (prev.length === 0) {
+					// Starting a multi-label filter: include the currently selected label + the new one
+					const currentIds: number[] = [];
+					if (effectiveLabelId && effectiveLabelId > 0) {
+						currentIds.push(effectiveLabelId);
+					} else if (isInbox && inboxLabelId) {
+						currentIds.push(inboxLabelId);
+					}
+					if (!currentIds.includes(id)) currentIds.push(id);
+					// Need at least 2 labels for multi-filter to be meaningful
+					if (currentIds.length < 2) return [id];
+					setSelectedLabelId(null);
+					return currentIds;
+				}
+				if (prev.includes(id)) {
+					const next = prev.filter((x) => x !== id);
+					// If only one label left, switch to single-label view
+					if (next.length <= 1) {
+						if (next[0]) setSelectedLabelId(next[0]);
+						return [];
+					}
+					return next;
+				}
+				return [...prev, id];
+			});
+			setSelectedMessageId(null);
+			setMessageListIndex(0);
+			bulk.clear();
+		},
+		[effectiveLabelId, isInbox, inboxLabelId, bulk],
+	);
+
+	const handleClearFilter = useCallback(() => {
+		setFilterLabelIds([]);
+	}, []);
 
 	// Compose handlers
 	const handleCompose = useCallback(() => {
@@ -716,10 +757,11 @@ export function App() {
 					<Sidebar
 						accounts={accounts ?? []}
 						labels={labels ?? []}
-						selectedAccountId={effectiveAccountId}
 						selectedLabelId={effectiveLabelId}
-						onSelectAccount={handleSelectAccount}
+						filterLabelIds={filterLabelIds}
 						onSelectLabel={handleSelectLabel}
+						onToggleFilterLabel={handleToggleFilterLabel}
+						onClearFilter={handleClearFilter}
 						onCompose={handleCompose}
 						onSearch={(query) => {
 							setInitialSearchQuery(query);
@@ -808,7 +850,7 @@ export function App() {
 								loadingMore={loadingMore}
 								onToggleStar={handleToggleStar}
 								accounts={
-									isUnifiedInbox || isUnifiedAllMail || isUnifiedUnread
+									isUnifiedInbox || isUnifiedAllMail || isUnifiedUnread || filterLabelIds.length > 1
 										? (accounts ?? undefined)
 										: undefined
 								}

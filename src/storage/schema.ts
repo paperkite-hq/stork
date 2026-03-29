@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -474,5 +474,29 @@ CREATE INDEX IF NOT EXISTS idx_message_labels_label_v15 ON message_labels(label_
 
 COMMIT;
 PRAGMA foreign_keys = ON;
+`,
+	// Version 16: Move sync_delete_from_server to inbound connectors + auto-account labels.
+	//
+	// sync_delete_from_server (Mirror vs Connector mode) is fundamentally a property
+	// of the inbound connector — it controls whether messages are deleted from the
+	// IMAP server after sync. For non-IMAP connectors (e.g. Cloudflare Email Workers),
+	// the concept doesn't apply. Moving it to inbound_connectors aligns the setting
+	// with the entity it actually affects.
+	//
+	// Auto-account labels: instead of a dedicated "Accounts" sidebar section, every
+	// incoming message is auto-labeled with its receiving account's name (source='account').
+	// These labels appear in the sidebar alongside other labels, enabling multi-label
+	// drill-down: click "Work" to see all Work messages, then filter further by "Inbox".
+	`
+ALTER TABLE inbound_connectors ADD COLUMN sync_delete_from_server INTEGER NOT NULL DEFAULT 0;
+
+UPDATE inbound_connectors SET sync_delete_from_server = (
+	SELECT a.sync_delete_from_server FROM accounts a
+	WHERE a.inbound_connector_id = inbound_connectors.id
+	LIMIT 1
+)
+WHERE EXISTS (
+	SELECT 1 FROM accounts a WHERE a.inbound_connector_id = inbound_connectors.id
+);
 `,
 ];

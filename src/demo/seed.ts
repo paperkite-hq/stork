@@ -577,11 +577,36 @@ Approved with those addressed.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function seedDemoData(db: Database.Database): void {
-	// Insert demo account (Connector mode: sync_delete_from_server=1 mirrors expected long-term use)
+	// Create inbound connectors
+	const inbound1Result = db
+		.prepare(
+			`INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
+		 VALUES (?, 'imap', ?, ?, ?, ?, ?, 1)`,
+		)
+		.run(
+			`${DEMO_ACCOUNT.name} (Inbound)`,
+			DEMO_ACCOUNT.imap_host,
+			DEMO_ACCOUNT.imap_port,
+			DEMO_ACCOUNT.imap_tls,
+			DEMO_ACCOUNT.imap_user,
+			DEMO_ACCOUNT.imap_pass,
+		);
+	const inboundId1 = inbound1Result.lastInsertRowid as number;
+
+	// Create outbound connectors (SMTP)
+	const outbound1Result = db
+		.prepare(
+			`INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
+		 VALUES (?, 'smtp', ?, 587, 1, ?, 'demo-not-real')`,
+		)
+		.run(`${DEMO_ACCOUNT.name} (Outbound)`, DEMO_ACCOUNT.imap_host, DEMO_ACCOUNT.email);
+	const outboundId1 = outbound1Result.lastInsertRowid as number;
+
+	// Insert demo account linked to connectors
 	const accountResult = db
 		.prepare(
-			`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+			`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server, inbound_connector_id, outbound_connector_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
 		)
 		.run(
 			DEMO_ACCOUNT.name,
@@ -591,6 +616,8 @@ export function seedDemoData(db: Database.Database): void {
 			DEMO_ACCOUNT.imap_tls,
 			DEMO_ACCOUNT.imap_user,
 			DEMO_ACCOUNT.imap_pass,
+			inboundId1,
+			outboundId1,
 		);
 	const accountId = accountResult.lastInsertRowid as number;
 
@@ -603,17 +630,22 @@ export function seedDemoData(db: Database.Database): void {
 		.run(accountId, DEMO_MESSAGES.length + 1, DEMO_MESSAGES.length, 5);
 	const folderId = folderResult.lastInsertRowid as number;
 
-	// Insert labels
+	// Insert labels (including account label for this account)
 	const labelMap = new Map<string, number>();
 	const insertLabel = db.prepare(
 		"INSERT OR IGNORE INTO labels (name, color, source) VALUES (?, ?, ?)",
 	);
 	const lookupLabel = db.prepare("SELECT id FROM labels WHERE name = ?");
+	// Create account label
+	insertLabel.run(DEMO_ACCOUNT.name, "#3b82f6", "account");
 	for (const label of DEMO_LABELS) {
 		insertLabel.run(label.name, label.color, label.source);
 		const row = lookupLabel.get(label.name) as { id: number };
 		labelMap.set(label.name, row.id);
 	}
+	// Look up account label ID
+	const accountLabelRow = lookupLabel.get(DEMO_ACCOUNT.name) as { id: number };
+	const accountLabelId = accountLabelRow.id;
 
 	// Insert messages
 	const insertMessage = db.prepare(`
@@ -651,8 +683,9 @@ export function seedDemoData(db: Database.Database): void {
 				size,
 			);
 
-			// Assign labels
+			// Assign labels (including account label)
 			const messageId = result.lastInsertRowid as number;
+			insertMessageLabel.run(messageId, accountLabelId);
 			const labels = MESSAGE_LABELS[i] ?? [];
 			for (const labelName of labels) {
 				const labelId = labelMap.get(labelName);
@@ -694,10 +727,33 @@ export function seedDemoData(db: Database.Database): void {
 
 	// ── Second account ──────────────────────────────────────────────────────
 
+	const inbound2Result = db
+		.prepare(
+			`INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
+		 VALUES (?, 'imap', ?, ?, ?, ?, ?, 1)`,
+		)
+		.run(
+			`${DEMO_ACCOUNT_2.name} (Inbound)`,
+			DEMO_ACCOUNT_2.imap_host,
+			DEMO_ACCOUNT_2.imap_port,
+			DEMO_ACCOUNT_2.imap_tls,
+			DEMO_ACCOUNT_2.imap_user,
+			DEMO_ACCOUNT_2.imap_pass,
+		);
+	const inboundId2 = inbound2Result.lastInsertRowid as number;
+
+	const outbound2Result = db
+		.prepare(
+			`INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
+		 VALUES (?, 'smtp', ?, 587, 1, ?, 'demo-not-real')`,
+		)
+		.run(`${DEMO_ACCOUNT_2.name} (Outbound)`, DEMO_ACCOUNT_2.imap_host, DEMO_ACCOUNT_2.email);
+	const outboundId2 = outbound2Result.lastInsertRowid as number;
+
 	const account2Result = db
 		.prepare(
-			`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+			`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server, inbound_connector_id, outbound_connector_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
 		)
 		.run(
 			DEMO_ACCOUNT_2.name,
@@ -707,6 +763,8 @@ export function seedDemoData(db: Database.Database): void {
 			DEMO_ACCOUNT_2.imap_tls,
 			DEMO_ACCOUNT_2.imap_user,
 			DEMO_ACCOUNT_2.imap_pass,
+			inboundId2,
+			outboundId2,
 		);
 	const accountId2 = account2Result.lastInsertRowid as number;
 
@@ -717,6 +775,11 @@ export function seedDemoData(db: Database.Database): void {
 		)
 		.run(accountId2, DEMO_MESSAGES_2.length + 1, DEMO_MESSAGES_2.length, 2);
 	const folderId2 = folder2Result.lastInsertRowid as number;
+
+	// Create account label for second account
+	insertLabel.run(DEMO_ACCOUNT_2.name, "#10b981", "account");
+	const accountLabel2Row = lookupLabel.get(DEMO_ACCOUNT_2.name) as { id: number };
+	const accountLabel2Id = accountLabel2Row.id;
 
 	const labelMap2 = new Map<string, number>();
 	for (const label of DEMO_LABELS_2) {
@@ -749,6 +812,7 @@ export function seedDemoData(db: Database.Database): void {
 				size,
 			);
 			const messageId2 = result.lastInsertRowid as number;
+			insertMessageLabel.run(messageId2, accountLabel2Id);
 			const labels2 = MESSAGE_LABELS_2[i] ?? [];
 			for (const labelName of labels2) {
 				const labelId = labelMap2.get(labelName);

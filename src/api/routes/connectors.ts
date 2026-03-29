@@ -54,7 +54,7 @@ export function connectorRoutes(
 		const connectors = getDb()
 			.prepare(
 				`SELECT id, name, type, imap_host, imap_port, imap_tls, imap_user,
-					cf_email_webhook_secret, created_at, updated_at
+					cf_email_webhook_secret, sync_delete_from_server, created_at, updated_at
 				FROM inbound_connectors ORDER BY name`,
 			)
 			.all();
@@ -95,8 +95,8 @@ export function connectorRoutes(
 		const result = db
 			.prepare(
 				`INSERT INTO inbound_connectors
-					(name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass, cf_email_webhook_secret)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+					(name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass, cf_email_webhook_secret, sync_delete_from_server)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.run(
 				body.name,
@@ -107,6 +107,7 @@ export function connectorRoutes(
 				body.imap_user ?? null,
 				body.imap_pass ?? null,
 				body.cf_email_webhook_secret ?? null,
+				body.sync_delete_from_server ?? 0,
 			);
 
 		return c.json({ id: Number(result.lastInsertRowid) }, 201);
@@ -119,7 +120,7 @@ export function connectorRoutes(
 		const connector = getDb()
 			.prepare(
 				`SELECT id, name, type, imap_host, imap_port, imap_tls, imap_user,
-					cf_email_webhook_secret, created_at, updated_at
+					cf_email_webhook_secret, sync_delete_from_server, created_at, updated_at
 				FROM inbound_connectors WHERE id = ?`,
 			)
 			.get(connectorId);
@@ -156,6 +157,7 @@ export function connectorRoutes(
 			"imap_user",
 			"imap_pass",
 			"cf_email_webhook_secret",
+			"sync_delete_from_server",
 		];
 		const sets: string[] = [];
 		const values: (string | number | null)[] = [];

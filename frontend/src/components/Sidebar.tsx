@@ -66,10 +66,11 @@ export const UNIFIED_UNREAD_LABEL_ID = -6;
 interface SidebarProps {
 	accounts: Account[];
 	labels: Label[];
-	selectedAccountId: number | null;
 	selectedLabelId: number | null;
-	onSelectAccount: (id: number) => void;
+	filterLabelIds: number[];
 	onSelectLabel: (id: number) => void;
+	onToggleFilterLabel: (id: number) => void;
+	onClearFilter: () => void;
 	onCompose: () => void;
 	onSearch: (query: string) => void;
 	onSettings: () => void;
@@ -191,10 +192,11 @@ function SyncProgressDetail({ syncStatus }: { syncStatus: GlobalSyncStatus }) {
 export function Sidebar({
 	accounts,
 	labels,
-	selectedAccountId,
 	selectedLabelId,
-	onSelectAccount,
+	filterLabelIds,
 	onSelectLabel,
+	onToggleFilterLabel,
+	onClearFilter,
 	onCompose,
 	onSearch,
 	onSettings,
@@ -428,50 +430,119 @@ export function Sidebar({
 					</>
 				)}
 
-				{/* Per-account section — shown with multiple accounts so users can drill into one */}
-				{accounts.length > 1 && (
+				{/* Active multi-label filter pills — shown when filtering by 2+ labels */}
+				{filterLabelIds.length > 1 && (
+					<div className="px-3 pb-2">
+						<div className="flex items-center gap-1 flex-wrap">
+							<span className="text-xs text-gray-400 dark:text-gray-500 mr-1">Filtering:</span>
+							{filterLabelIds.map((fid) => {
+								const fl = labels.find((l) => l.id === fid);
+								if (!fl) return null;
+								return (
+									<span
+										key={fid}
+										className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs bg-stork-100 dark:bg-stork-900 text-stork-700 dark:text-stork-300"
+									>
+										{fl.color && (
+											<span
+												className="w-2 h-2 rounded-full flex-shrink-0"
+												style={{ backgroundColor: fl.color }}
+											/>
+										)}
+										{fl.name}
+										<button
+											type="button"
+											onClick={() => onToggleFilterLabel(fid)}
+											className="hover:text-red-500 transition-colors"
+											title={`Remove ${fl.name} filter`}
+										>
+											×
+										</button>
+									</span>
+								);
+							})}
+							<button
+								type="button"
+								onClick={onClearFilter}
+								className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors ml-1"
+								title="Clear all filters"
+							>
+								Clear
+							</button>
+						</div>
+					</div>
+				)}
+
+				{/* Account labels — shown first when multiple accounts exist */}
+				{accounts.length > 1 && labels.filter((l) => l.source === "account").length > 0 && (
 					<>
 						<p className="px-3 pt-1 pb-1 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">
 							Accounts
 						</p>
-						{accounts.map((a) => (
-							<button
-								key={a.id}
-								type="button"
-								onClick={() => {
-									onSelectAccount(a.id);
-									onSelectLabel(INBOX_LABEL_ID);
-								}}
-								className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-									selectedAccountId === a.id && selectedLabelId === INBOX_LABEL_ID
-										? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
-										: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-								}`}
-							>
-								<InboxIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
-								<span className="truncate">{a.name || a.email}</span>
-							</button>
-						))}
+						{labels
+							.filter((l) => l.source === "account")
+							.map((label) => {
+								const active = label.id === selectedLabelId || filterLabelIds.includes(label.id);
+								return (
+									<button
+										key={label.id}
+										type="button"
+										onClick={(e) => {
+											if (e.metaKey || e.ctrlKey) {
+												onToggleFilterLabel(label.id);
+											} else {
+												onSelectLabel(label.id);
+											}
+										}}
+										className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+											active
+												? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
+												: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+										}`}
+										title="Click to view · Cmd/Ctrl+click to add to filter"
+									>
+										{label.color && (
+											<span
+												className="w-3 h-3 rounded-full flex-shrink-0"
+												style={{ backgroundColor: label.color }}
+											/>
+										)}
+										<span className="truncate">{label.name}</span>
+										{label.unread_count > 0 && (
+											<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
+												{label.unread_count}
+											</span>
+										)}
+									</button>
+								);
+							})}
 						<div className="my-2 mx-3 border-t border-gray-200 dark:border-gray-700" />
 					</>
 				)}
 
-				{/* Regular labels — Inbox is excluded since it's promoted above */}
+				{/* Regular labels — Inbox and account labels excluded (promoted above) */}
 				{labels
-					.filter((l) => l.name.toLowerCase() !== "inbox")
+					.filter((l) => l.name.toLowerCase() !== "inbox" && l.source !== "account")
 					.map((label) => {
-						const active = label.id === selectedLabelId;
+						const active = label.id === selectedLabelId || filterLabelIds.includes(label.id);
 						return (
 							<button
 								key={label.id}
 								type="button"
-								onClick={() => onSelectLabel(label.id)}
+								onClick={(e) => {
+									if (e.metaKey || e.ctrlKey) {
+										onToggleFilterLabel(label.id);
+									} else {
+										onSelectLabel(label.id);
+									}
+								}}
 								onContextMenu={(e) => handleLabelContextMenu(e, label)}
 								className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
 									active
 										? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
 										: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
 								}`}
+								title="Click to view · Cmd/Ctrl+click to add to filter"
 							>
 								{labelIcon(label)}
 								<span className="truncate">{label.name}</span>
