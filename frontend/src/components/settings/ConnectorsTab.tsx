@@ -8,6 +8,7 @@ import {
 	api,
 } from "../../api";
 import { useAsync } from "../../hooks";
+import { AccountSetupWizard } from "./AccountSetupWizard";
 import { SyncStatusPanel } from "./SyncStatusPanel";
 
 // ── Inbound Connector Form ─────────────────────────────────────────────────
@@ -803,6 +804,7 @@ export function ConnectorsTab() {
 	} = useAsync(() => api.connectors.outbound.list(), []);
 	const { data: accounts, refetch: refetchAccounts } = useAsync(() => api.accounts.list(), []);
 
+	const [showWizard, setShowWizard] = useState(false);
 	const [editingInbound, setEditingInbound] = useState<number | "new" | null>(null);
 	const [editingOutbound, setEditingOutbound] = useState<number | "new" | null>(null);
 	const [testResult, setTestResult] = useState<{
@@ -883,6 +885,37 @@ export function ConnectorsTab() {
 
 	return (
 		<div className="space-y-8 p-4 sm:p-6">
+			{/* Add Account wizard */}
+			<div className="flex items-center justify-between">
+				<div>
+					<h3 className="font-semibold text-gray-900 dark:text-gray-100">Accounts</h3>
+					<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+						Set up a new email account with inbound and outbound connectors in one flow
+					</p>
+				</div>
+				<button
+					type="button"
+					onClick={() => setShowWizard(true)}
+					className="px-3 py-1.5 text-sm bg-stork-600 hover:bg-stork-700 text-white rounded transition-colors"
+				>
+					+ Add Account
+				</button>
+			</div>
+
+			{showWizard && (
+				<AccountSetupWizard
+					existingInbound={inbound ?? []}
+					existingOutbound={outbound ?? []}
+					onDone={() => {
+						setShowWizard(false);
+						refetchInbound();
+						refetchOutbound();
+						refetchAccounts();
+					}}
+					onCancel={() => setShowWizard(false)}
+				/>
+			)}
+
 			{/* Inbound Connectors */}
 			<section>
 				<div className="flex items-center justify-between mb-3">
