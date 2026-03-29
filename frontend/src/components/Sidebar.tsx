@@ -32,6 +32,16 @@ function labelIcon(label: Label): ReactNode {
 	if (name === "junk" || name === "spam") return <SpamIcon className={cls} />;
 	if (name === "archive" || name === "all mail") return <ArchiveIcon className={cls} />;
 	if (name === "starred" || name === "flagged") return <StarIcon className={cls} filled />;
+	// Account labels get a person icon
+	if (label.source === "account") {
+		return (
+			<svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+				<title>Account</title>
+				<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+				<circle cx="12" cy="7" r="4" />
+			</svg>
+		);
+	}
 	// User-created labels get a colored dot if they have a color, otherwise a tag icon
 	if (label.color) {
 		return (
@@ -473,56 +483,9 @@ export function Sidebar({
 					</div>
 				)}
 
-				{/* Account labels — shown first when multiple accounts exist */}
-				{accounts.length > 1 && labels.filter((l) => l.source === "account").length > 0 && (
-					<>
-						<p className="px-3 pt-1 pb-1 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">
-							Accounts
-						</p>
-						{labels
-							.filter((l) => l.source === "account")
-							.map((label) => {
-								const active = label.id === selectedLabelId || filterLabelIds.includes(label.id);
-								return (
-									<button
-										key={label.id}
-										type="button"
-										onClick={(e) => {
-											if (e.metaKey || e.ctrlKey) {
-												onToggleFilterLabel(label.id);
-											} else {
-												onSelectLabel(label.id);
-											}
-										}}
-										className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-											active
-												? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
-												: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-										}`}
-										title="Click to view · Cmd/Ctrl+click to add to filter"
-									>
-										{label.color && (
-											<span
-												className="w-3 h-3 rounded-full flex-shrink-0"
-												style={{ backgroundColor: label.color }}
-											/>
-										)}
-										<span className="truncate">{label.name}</span>
-										{label.unread_count > 0 && (
-											<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
-												{label.unread_count}
-											</span>
-										)}
-									</button>
-								);
-							})}
-						<div className="my-2 mx-3 border-t border-gray-200 dark:border-gray-700" />
-					</>
-				)}
-
-				{/* Regular labels — Inbox and account labels excluded (promoted above) */}
+				{/* All labels — Inbox excluded (promoted above). Account labels appear inline with person icon. */}
 				{labels
-					.filter((l) => l.name.toLowerCase() !== "inbox" && l.source !== "account")
+					.filter((l) => l.name.toLowerCase() !== "inbox")
 					.map((label) => {
 						const active = label.id === selectedLabelId || filterLabelIds.includes(label.id);
 						return (

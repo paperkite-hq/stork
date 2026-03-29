@@ -491,6 +491,8 @@ export const api = {
 			params.set("ids", ids.join(","));
 			return fetchJSON<{ total: number; unread: number }>(`/labels/filter/count?${params}`);
 		},
+		related: (labelId: number, limit = 5) =>
+			fetchJSON<LabelSummary[]>(`/labels/${labelId}/related?limit=${limit}`),
 	},
 	inbox: {
 		unified: {
