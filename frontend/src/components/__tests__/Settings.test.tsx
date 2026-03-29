@@ -123,10 +123,11 @@ describe("Settings", () => {
 		expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
 	});
 
-	it("shows Connectors and General tabs", () => {
+	it("shows Inbound, Outbound and General tabs", () => {
 		render(<Settings onClose={vi.fn()} />);
 		// Both mobile and desktop tab bars render — use getAllByText
-		expect(screen.getAllByText("Connectors").length).toBeGreaterThanOrEqual(1);
+		expect(screen.getAllByText("Inbound").length).toBeGreaterThanOrEqual(1);
+		expect(screen.getAllByText("Outbound").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getAllByText("General").length).toBeGreaterThanOrEqual(1);
 	});
 
@@ -154,6 +155,7 @@ describe("Settings", () => {
 
 	it("shows identity list after loading", async () => {
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getByText("Work Email")).toBeInTheDocument();
 		});
@@ -162,6 +164,7 @@ describe("Settings", () => {
 
 	it("shows Add Identity button", async () => {
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getByText("+ Add Identity")).toBeInTheDocument();
 		});
@@ -169,6 +172,7 @@ describe("Settings", () => {
 
 	it("shows Edit and Delete buttons for identities", async () => {
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1);
 		});
@@ -219,6 +223,7 @@ describe("Settings", () => {
 
 	it("shows identity form when Add Identity is clicked", async () => {
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getByText("+ Add Identity")).toBeInTheDocument();
 		});
@@ -231,6 +236,7 @@ describe("Settings", () => {
 		const { api } = await import("../../api");
 		(api.identities.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getByText("No identities assigned to this connector.")).toBeInTheDocument();
 		});
@@ -250,7 +256,7 @@ describe("Settings", () => {
 			expect(screen.getByText("Unread")).toBeInTheDocument();
 		});
 		// Folder data should appear
-		expect(screen.getByText("Inbox")).toBeInTheDocument();
+		expect(screen.getAllByText("Inbox").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getByText("42")).toBeInTheDocument();
 		expect(screen.getByText("5")).toBeInTheDocument();
 	});
@@ -286,6 +292,7 @@ describe("Settings", () => {
 
 	it("opens edit form when Edit is clicked", async () => {
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1);
 		});
@@ -302,6 +309,7 @@ describe("Settings", () => {
 	it("submits edit form and refreshes identity list", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1);
 		});
@@ -321,6 +329,7 @@ describe("Settings", () => {
 
 	it("cancels edit form", async () => {
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1);
 		});
@@ -337,6 +346,7 @@ describe("Settings", () => {
 
 	it("shows add identity form with correct fields", async () => {
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getByText("+ Add Identity")).toBeInTheDocument();
 		});
@@ -348,17 +358,25 @@ describe("Settings", () => {
 		expect(screen.getByLabelText("Email")).toBeInTheDocument();
 	});
 
-	it("shows inbound connector section in connectors tab", async () => {
+	it("shows inbound connector section in inbound tab", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
 			expect(screen.getByText("Inbound Connectors")).toBeInTheDocument();
 		});
-		expect(screen.getByText("Outbound Connectors")).toBeInTheDocument();
+	});
+
+	it("shows outbound connector section in outbound tab", async () => {
+		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
+		await waitFor(() => {
+			expect(screen.getByText("Outbound Connectors")).toBeInTheDocument();
+		});
 	});
 
 	it("shows delete confirmation dialog and deletes identity", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getAllByText("Delete").length).toBeGreaterThanOrEqual(1);
 		});
@@ -379,6 +397,7 @@ describe("Settings", () => {
 	it("cancels delete confirmation", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getAllByText("Delete").length).toBeGreaterThanOrEqual(1);
 		});
@@ -498,6 +517,7 @@ describe("Settings", () => {
 			}),
 		);
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1);
 		});
@@ -516,6 +536,7 @@ describe("Settings", () => {
 
 	it("does not show Connector mode checkbox in identity form", async () => {
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => {
 			expect(screen.getByText("+ Add Identity")).toBeInTheDocument();
 		});
@@ -832,6 +853,7 @@ describe("Settings — Identity form submission", () => {
 	it("submits new identity form via form submit event", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getByText("+ Add Identity")).toBeInTheDocument());
 		await userEvent.click(screen.getByText("+ Add Identity"));
 		await waitFor(() => expect(screen.getByLabelText("Name")).toBeInTheDocument());
@@ -852,6 +874,7 @@ describe("Settings — Identity form submission", () => {
 			new Error("Identity not found"),
 		);
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1));
 		const editBtnsF = screen.getAllByText("Edit");
 		await userEvent.click(editBtnsF[editBtnsF.length - 1] as HTMLElement);
@@ -868,6 +891,7 @@ describe("Settings — Identity form submission", () => {
 			new Error("Update failed"),
 		);
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getAllByText("Edit").length).toBeGreaterThanOrEqual(1));
 		const editBtnsU = screen.getAllByText("Edit");
 		await userEvent.click(editBtnsU[editBtnsU.length - 1] as HTMLElement);
@@ -884,6 +908,7 @@ describe("Settings — Identity form submission", () => {
 			new Error("Missing required fields"),
 		);
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getByText("+ Add Identity")).toBeInTheDocument());
 		await userEvent.click(screen.getByText("+ Add Identity"));
 		await waitFor(() => expect(screen.getByLabelText("Name")).toBeInTheDocument());
@@ -981,18 +1006,21 @@ describe("Settings — tab navigation", () => {
 		localStorageMock.clear();
 	});
 
-	it("switches between all three tabs", async () => {
+	it("switches between all four tabs", async () => {
 		render(<Settings onClose={vi.fn()} />);
-		// Start on Connectors tab (default)
+		// Start on Inbound tab (default)
 		await waitFor(() => expect(screen.getByText("Inbound Connectors")).toBeInTheDocument());
+		// Switch to Outbound
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
+		await waitFor(() => expect(screen.getByText("Outbound Connectors")).toBeInTheDocument());
 		// Switch to General
 		await userEvent.click(screen.getAllByText("General")[0] as HTMLElement);
 		expect(screen.getByText("General Settings")).toBeInTheDocument();
 		// Switch to Security
 		await userEvent.click(screen.getAllByRole("button", { name: /security/i })[0] as HTMLElement);
 		expect(screen.getByRole("heading", { name: "Change Password" })).toBeInTheDocument();
-		// Switch back to Connectors
-		await userEvent.click(screen.getAllByText("Connectors")[0] as HTMLElement);
+		// Switch back to Inbound
+		await userEvent.click(screen.getAllByText("Inbound")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getByText("Inbound Connectors")).toBeInTheDocument());
 	});
 });
@@ -1003,26 +1031,30 @@ describe("Settings — TrustedSendersPanel", () => {
 		localStorageMock.clear();
 	});
 
-	it("shows identity name in connectors tab", async () => {
+	it("shows identity name in outbound tab", async () => {
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getByText("Work Email")).toBeInTheDocument());
 	});
 
 	it("shows empty state when no trusted senders", async () => {
-		// TrustedSendersPanel is tested separately; here we verify the Connectors tab loads
+		// TrustedSendersPanel is tested separately; here we verify the Outbound tab loads
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getByText("Outbound Connectors")).toBeInTheDocument());
 	});
 
 	it("lists trusted senders", async () => {
-		// Identity row shows email
+		// Identity row shows email (on Outbound tab)
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getByText("work@example.com")).toBeInTheDocument());
 	});
 
 	it("removes a trusted sender after confirmation", async () => {
 		const { api } = await import("../../api");
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getAllByText("Delete").length).toBeGreaterThanOrEqual(1));
 		const deleteBtnsT = screen.getAllByText("Delete");
 		await userEvent.click(deleteBtnsT[deleteBtnsT.length - 1] as HTMLElement);
@@ -1045,6 +1077,7 @@ describe("Settings — TrustedSendersPanel", () => {
 		}
 		const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getAllByText("Delete").length).toBeGreaterThanOrEqual(1));
 		const deleteBtnsR = screen.getAllByText("Delete");
 		await userEvent.click(deleteBtnsR[deleteBtnsR.length - 1] as HTMLElement);
@@ -1070,6 +1103,7 @@ describe("Settings — IdentityForm field interactions", () => {
 
 	async function openAddIdentityForm() {
 		render(<Settings onClose={vi.fn()} />);
+		await userEvent.click(screen.getAllByText("Outbound")[0] as HTMLElement);
 		await waitFor(() => expect(screen.getByText("+ Add Identity")).toBeInTheDocument());
 		await userEvent.click(screen.getByText("+ Add Identity"));
 		await waitFor(() => expect(screen.getByLabelText("Name")).toBeInTheDocument());

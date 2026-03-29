@@ -21,14 +21,18 @@ interface InboundData {
 	existingId: number | null;
 	// new connector
 	connectorName: string;
-	type: "imap" | "cloudflare-email";
+	type: "imap" | "cloudflare-r2";
 	imap_host: string;
 	imap_port: number;
 	imap_tls: number;
 	imap_user: string;
 	imap_pass: string;
-	cf_email_webhook_secret: string;
 	sync_delete_from_server: number;
+	cf_r2_account_id: string;
+	cf_r2_bucket_name: string;
+	cf_r2_access_key_id: string;
+	cf_r2_secret_access_key: string;
+	cf_r2_prefix: string;
 }
 
 interface OutboundData {
@@ -58,8 +62,12 @@ function defaultInbound(existing: InboundConnector[]): InboundData {
 		imap_tls: 1,
 		imap_user: "",
 		imap_pass: "",
-		cf_email_webhook_secret: "",
 		sync_delete_from_server: 0,
+		cf_r2_account_id: "",
+		cf_r2_bucket_name: "",
+		cf_r2_access_key_id: "",
+		cf_r2_secret_access_key: "",
+		cf_r2_prefix: "pending/",
 	};
 }
 
@@ -233,8 +241,8 @@ function Step2({
 	return (
 		<form onSubmit={handleSubmit} className="space-y-4">
 			<p className="text-sm text-gray-600 dark:text-gray-400">
-				How will Stork receive your email? Stork polls your IMAP server or receives push
-				notifications from Cloudflare Email.
+				How will Stork receive your email? Stork polls your IMAP server or polls a Cloudflare R2
+				bucket for queued emails.
 			</p>
 
 			{/* mode selector */}
@@ -294,14 +302,38 @@ function Step2({
 							id="wiz-ib-type"
 							value={data.type}
 							onChange={(e) =>
-								onChange({ ...data, type: e.target.value as "imap" | "cloudflare-email" })
+								onChange({ ...data, type: e.target.value as "imap" | "cloudflare-r2" })
 							}
 							className={inputCls}
 						>
 							<option value="imap">IMAP</option>
-							<option value="cloudflare-email">Cloudflare Email</option>
+							<option value="cloudflare-r2">Cloudflare R2 (queue/poll)</option>
 						</select>
 					</Field>
+
+					{data.type === "imap" && (
+						<div className="rounded-lg border-2 border-stork-300 dark:border-stork-700 bg-stork-50 dark:bg-stork-950 px-4 py-3 space-y-2">
+							<p className="text-sm font-bold text-stork-800 dark:text-stork-200">
+								⚡ Two minutes to understand how Stork thinks about email
+							</p>
+							<p className="text-xs text-stork-700 dark:text-stork-300">
+								Most email clients treat your mail provider as the permanent home for your email.
+								Stork{"'"}s philosophy is different:{" "}
+								<strong>your provider is just the delivery edge</strong>. Mail arrives there, Stork
+								picks it up and stores it encrypted on your own hardware, and — when you{"'"}re
+								ready — clears it from the provider.
+							</p>
+							<p className="text-xs text-stork-700 dark:text-stork-300">
+								<strong>Mirror mode (default):</strong> Stork reads alongside your provider. Both
+								have copies. Perfect for trying Stork — your provider stays your safety net.
+							</p>
+							<p className="text-xs text-stork-700 dark:text-stork-300">
+								<strong>Connector mode:</strong> Once you{"'"}re confident, Stork becomes your
+								permanent encrypted email home — mail arrives, Stork grabs it and erases it from the
+								server. Back up your Stork database.
+							</p>
+						</div>
+					)}
 
 					{data.type === "imap" && (
 						<>
@@ -388,17 +420,56 @@ function Step2({
 						</>
 					)}
 
-					{data.type === "cloudflare-email" && (
-						<Field label="Webhook Secret" id="wiz-ib-cf-secret" required>
-							<input
-								id="wiz-ib-cf-secret"
-								type="password"
-								required
-								value={data.cf_email_webhook_secret}
-								onChange={(e) => onChange({ ...data, cf_email_webhook_secret: e.target.value })}
-								className={inputCls}
-							/>
-						</Field>
+					{data.type === "cloudflare-r2" && (
+						<>
+							<div className="text-xs text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded px-3 py-2 space-y-1">
+								<p className="font-medium">Cloudflare R2 queue/poll model</p>
+								<p>
+									A Cloudflare Email Worker writes each inbound email as an object to an R2 bucket.
+									Stork polls the bucket on a regular interval — no public webhook required.
+								</p>
+							</div>
+							<Field label="Cloudflare Account ID" id="wiz-ib-r2-account" required>
+								<input
+									id="wiz-ib-r2-account"
+									type="text"
+									required
+									value={data.cf_r2_account_id}
+									onChange={(e) => onChange({ ...data, cf_r2_account_id: e.target.value })}
+									className={inputCls}
+								/>
+							</Field>
+							<Field label="R2 Bucket Name" id="wiz-ib-r2-bucket" required>
+								<input
+									id="wiz-ib-r2-bucket"
+									type="text"
+									required
+									value={data.cf_r2_bucket_name}
+									onChange={(e) => onChange({ ...data, cf_r2_bucket_name: e.target.value })}
+									className={inputCls}
+								/>
+							</Field>
+							<Field label="R2 Access Key ID" id="wiz-ib-r2-aki" required>
+								<input
+									id="wiz-ib-r2-aki"
+									type="text"
+									required
+									value={data.cf_r2_access_key_id}
+									onChange={(e) => onChange({ ...data, cf_r2_access_key_id: e.target.value })}
+									className={inputCls}
+								/>
+							</Field>
+							<Field label="R2 Secret Access Key" id="wiz-ib-r2-sak" required>
+								<input
+									id="wiz-ib-r2-sak"
+									type="password"
+									required
+									value={data.cf_r2_secret_access_key}
+									onChange={(e) => onChange({ ...data, cf_r2_secret_access_key: e.target.value })}
+									className={inputCls}
+								/>
+							</Field>
+						</>
 					)}
 				</div>
 			)}
@@ -602,7 +673,7 @@ function Step3({
 
 			{data.mode === "skip" && (
 				<p className="text-xs text-gray-500 dark:text-gray-400 italic">
-					You can add an outbound connector later from the Connectors tab.
+					You can add an outbound connector later from the Outbound tab in Settings.
 				</p>
 			)}
 
@@ -638,12 +709,12 @@ function Step4({
 			? (() => {
 					const c = existingInbound.find((c) => c.id === inbound.existingId);
 					return c
-						? `${c.name} (existing — ${c.type === "imap" ? `${c.imap_user}@${c.imap_host}` : "Cloudflare Email"})`
+						? `${c.name} (existing — ${c.type === "imap" ? `${c.imap_user}@${c.imap_host}` : `Cloudflare R2: ${c.cf_r2_bucket_name}`})`
 						: "Unknown connector";
 				})()
 			: inbound.type === "imap"
 				? `New IMAP: ${inbound.imap_user}@${inbound.imap_host}:${inbound.imap_port}`
-				: "New Cloudflare Email connector";
+				: `New Cloudflare R2: ${inbound.cf_r2_bucket_name}`;
 
 	const outboundSummary =
 		outbound.mode === "skip"
@@ -671,7 +742,6 @@ function Step4({
 				const payload: CreateInboundConnectorRequest = {
 					name: inbound.connectorName,
 					type: inbound.type,
-					sync_delete_from_server: inbound.sync_delete_from_server,
 					...(inbound.type === "imap"
 						? {
 								imap_host: inbound.imap_host,
@@ -679,8 +749,15 @@ function Step4({
 								imap_tls: inbound.imap_tls,
 								imap_user: inbound.imap_user,
 								imap_pass: inbound.imap_pass,
+								sync_delete_from_server: inbound.sync_delete_from_server,
 							}
-						: { cf_email_webhook_secret: inbound.cf_email_webhook_secret }),
+						: {
+								cf_r2_account_id: inbound.cf_r2_account_id,
+								cf_r2_bucket_name: inbound.cf_r2_bucket_name,
+								cf_r2_access_key_id: inbound.cf_r2_access_key_id,
+								cf_r2_secret_access_key: inbound.cf_r2_secret_access_key,
+								cf_r2_prefix: inbound.cf_r2_prefix || "pending/",
+							}),
 				};
 				await api.connectors.inbound.create(payload);
 			}
@@ -868,7 +945,7 @@ export function AccountSetupWizard({
 			aria-modal="true"
 			aria-label="Add Email Identity"
 		>
-			<div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6 flex flex-col max-h-[90vh] overflow-y-auto">
+			<div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6 flex flex-col min-h-[480px] max-h-[90vh] overflow-y-auto">
 				<div className="flex items-center justify-between mb-2">
 					<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
 						Add Email Identity

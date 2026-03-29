@@ -72,8 +72,12 @@ export interface InboundConnector {
 	imap_port: number;
 	imap_tls: number;
 	imap_user: string | null;
-	cf_email_webhook_secret: string | null;
 	sync_delete_from_server: number;
+	cf_r2_account_id: string | null;
+	cf_r2_bucket_name: string | null;
+	cf_r2_access_key_id: string | null;
+	cf_r2_prefix: string | null;
+	cf_r2_poll_interval_ms: number | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -100,8 +104,13 @@ export interface CreateInboundConnectorRequest {
 	imap_tls?: number;
 	imap_user?: string;
 	imap_pass?: string;
-	cf_email_webhook_secret?: string;
 	sync_delete_from_server?: number;
+	cf_r2_account_id?: string;
+	cf_r2_bucket_name?: string;
+	cf_r2_access_key_id?: string;
+	cf_r2_secret_access_key?: string;
+	cf_r2_prefix?: string;
+	cf_r2_poll_interval_ms?: number;
 }
 
 export interface UpdateInboundConnectorRequest {
@@ -112,8 +121,13 @@ export interface UpdateInboundConnectorRequest {
 	imap_tls?: number;
 	imap_user?: string;
 	imap_pass?: string;
-	cf_email_webhook_secret?: string;
 	sync_delete_from_server?: number;
+	cf_r2_account_id?: string;
+	cf_r2_bucket_name?: string;
+	cf_r2_access_key_id?: string;
+	cf_r2_secret_access_key?: string;
+	cf_r2_prefix?: string;
+	cf_r2_poll_interval_ms?: number;
 }
 
 export interface CreateOutboundConnectorRequest {
@@ -279,7 +293,7 @@ export interface TrustedSender {
 
 export type ContainerState = "setup" | "locked" | "unlocked";
 
-export type IngestConnectorType = "imap" | "cloudflare-email";
+export type IngestConnectorType = "imap" | "cloudflare-r2";
 export type SendConnectorType = "smtp" | "ses";
 
 export interface CreateIdentityRequest {

@@ -1,7 +1,7 @@
 import { type ReactNode, useRef, useState } from "react";
 import { useFocusTrap } from "../hooks";
-import { LinkIcon, SettingsIcon, ShieldIcon, XIcon } from "./Icons";
-import { ConnectorsTab } from "./settings/ConnectorsTab";
+import { InboxIcon, SendIcon, SettingsIcon, ShieldIcon, XIcon } from "./Icons";
+import { InboundConnectorsTab, OutboundConnectorsTab } from "./settings/ConnectorsTab";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SecurityTab } from "./settings/SecurityTab";
 
@@ -9,10 +9,10 @@ interface SettingsProps {
 	onClose: () => void;
 }
 
-type SettingsTab = "connectors" | "general" | "security";
+type SettingsTab = "inbound" | "outbound" | "general" | "security";
 
 export function Settings({ onClose }: SettingsProps) {
-	const [tab, setTab] = useState<SettingsTab>("connectors");
+	const [tab, setTab] = useState<SettingsTab>("inbound");
 	const dialogRef = useRef<HTMLDivElement>(null);
 	useFocusTrap(dialogRef);
 
@@ -49,11 +49,16 @@ export function Settings({ onClose }: SettingsProps) {
 				</div>
 
 				{/* Mobile tab bar — horizontal, shown below md */}
-				<nav className="sm:hidden flex border-b border-gray-200 dark:border-gray-800">
+				<nav className="sm:hidden flex border-b border-gray-200 dark:border-gray-800 overflow-x-auto">
 					<MobileTabButton
-						active={tab === "connectors"}
-						onClick={() => setTab("connectors")}
-						label="Connectors"
+						active={tab === "inbound"}
+						onClick={() => setTab("inbound")}
+						label="Inbound"
+					/>
+					<MobileTabButton
+						active={tab === "outbound"}
+						onClick={() => setTab("outbound")}
+						label="Outbound"
 					/>
 					<MobileTabButton
 						active={tab === "general"}
@@ -71,10 +76,16 @@ export function Settings({ onClose }: SettingsProps) {
 					{/* Sidebar tabs — hidden on mobile */}
 					<nav className="hidden sm:block w-48 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 p-3 space-y-1">
 						<TabButton
-							active={tab === "connectors"}
-							onClick={() => setTab("connectors")}
-							label="Connectors"
-							icon={<LinkIcon className="w-4 h-4" />}
+							active={tab === "inbound"}
+							onClick={() => setTab("inbound")}
+							label="Inbound"
+							icon={<InboxIcon className="w-4 h-4" />}
+						/>
+						<TabButton
+							active={tab === "outbound"}
+							onClick={() => setTab("outbound")}
+							label="Outbound"
+							icon={<SendIcon className="w-4 h-4" />}
 						/>
 						<TabButton
 							active={tab === "general"}
@@ -91,8 +102,9 @@ export function Settings({ onClose }: SettingsProps) {
 					</nav>
 
 					{/* Content */}
-					<div className="flex-1 overflow-y-auto p-4 sm:p-6">
-						{tab === "connectors" && <ConnectorsTab />}
+					<div className="flex-1 overflow-y-auto">
+						{tab === "inbound" && <InboundConnectorsTab />}
+						{tab === "outbound" && <OutboundConnectorsTab />}
 						{tab === "general" && <GeneralTab />}
 						{tab === "security" && <SecurityTab />}
 					</div>

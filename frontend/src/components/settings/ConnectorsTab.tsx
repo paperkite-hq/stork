@@ -8,21 +8,24 @@ import {
 	api,
 } from "../../api";
 import { useAsync } from "../../hooks";
-import { AccountSetupWizard } from "./AccountSetupWizard";
 import { SyncStatusPanel } from "./SyncStatusPanel";
 
 // ── Inbound Connector Form ─────────────────────────────────────────────────
 
 interface InboundFormData {
 	name: string;
-	type: "imap" | "cloudflare-email";
+	type: "imap" | "cloudflare-r2";
 	imap_host: string;
 	imap_port: number;
 	imap_tls: number;
 	imap_user: string;
 	imap_pass: string;
-	cf_email_webhook_secret: string;
 	sync_delete_from_server: number;
+	cf_r2_account_id: string;
+	cf_r2_bucket_name: string;
+	cf_r2_access_key_id: string;
+	cf_r2_secret_access_key: string;
+	cf_r2_prefix: string;
 }
 
 function defaultInboundForm(): InboundFormData {
@@ -34,8 +37,12 @@ function defaultInboundForm(): InboundFormData {
 		imap_tls: 1,
 		imap_user: "",
 		imap_pass: "",
-		cf_email_webhook_secret: "",
 		sync_delete_from_server: 0,
+		cf_r2_account_id: "",
+		cf_r2_bucket_name: "",
+		cf_r2_access_key_id: "",
+		cf_r2_secret_access_key: "",
+		cf_r2_prefix: "pending/",
 	};
 }
 
@@ -58,8 +65,12 @@ function InboundConnectorForm({
 					imap_tls: initial.imap_tls,
 					imap_user: initial.imap_user ?? "",
 					imap_pass: "",
-					cf_email_webhook_secret: initial.cf_email_webhook_secret ?? "",
 					sync_delete_from_server: initial.sync_delete_from_server ?? 0,
+					cf_r2_account_id: initial.cf_r2_account_id ?? "",
+					cf_r2_bucket_name: initial.cf_r2_bucket_name ?? "",
+					cf_r2_access_key_id: initial.cf_r2_access_key_id ?? "",
+					cf_r2_secret_access_key: "",
+					cf_r2_prefix: initial.cf_r2_prefix ?? "pending/",
 				}
 			: defaultInboundForm(),
 	);
@@ -74,17 +85,23 @@ function InboundConnectorForm({
 			const payload: CreateInboundConnectorRequest = {
 				name: form.name,
 				type: form.type,
-				sync_delete_from_server: form.sync_delete_from_server,
 				...(form.type === "imap"
 					? {
 							imap_host: form.imap_host,
 							imap_port: form.imap_port,
 							imap_tls: form.imap_tls,
 							imap_user: form.imap_user,
+							sync_delete_from_server: form.sync_delete_from_server,
 							...(form.imap_pass ? { imap_pass: form.imap_pass } : {}),
 						}
 					: {
-							cf_email_webhook_secret: form.cf_email_webhook_secret,
+							cf_r2_account_id: form.cf_r2_account_id,
+							cf_r2_bucket_name: form.cf_r2_bucket_name,
+							cf_r2_access_key_id: form.cf_r2_access_key_id,
+							cf_r2_prefix: form.cf_r2_prefix || "pending/",
+							...(form.cf_r2_secret_access_key
+								? { cf_r2_secret_access_key: form.cf_r2_secret_access_key }
+								: {}),
 						}),
 			};
 			if (initial) {
@@ -129,15 +146,38 @@ function InboundConnectorForm({
 				<select
 					id="ib-type"
 					value={form.type}
-					onChange={(e) =>
-						setForm({ ...form, type: e.target.value as "imap" | "cloudflare-email" })
-					}
+					onChange={(e) => setForm({ ...form, type: e.target.value as "imap" | "cloudflare-r2" })}
 					className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
 				>
 					<option value="imap">IMAP</option>
-					<option value="cloudflare-email">Cloudflare Email</option>
+					<option value="cloudflare-r2">Cloudflare R2 (queue/poll)</option>
 				</select>
 			</div>
+
+			{form.type === "imap" && !initial && (
+				<div className="rounded-lg border-2 border-stork-300 dark:border-stork-700 bg-stork-50 dark:bg-stork-950 px-4 py-3 space-y-2">
+					<p className="text-sm font-bold text-stork-800 dark:text-stork-200">
+						⚡ Two minutes to understand how Stork thinks about email
+					</p>
+					<p className="text-xs text-stork-700 dark:text-stork-300">
+						Most email clients treat your mail provider (Gmail, Fastmail, etc.) as the permanent
+						home for your email. Stork{"'"}s philosophy is different:{" "}
+						<strong>your provider is just the delivery edge</strong>. Mail arrives there, Stork
+						picks it up and stores it encrypted on your own hardware, and — when you{"'"}re ready —
+						clears it from the provider.
+					</p>
+					<p className="text-xs text-stork-700 dark:text-stork-300">
+						<strong>Mirror mode (default):</strong> Stork reads alongside your provider. Both have
+						copies. Perfect for trying Stork — your provider stays your safety net. Heads up:
+						actions you take in Stork (delete, label, archive) stay local and don{"'"}t sync back.
+					</p>
+					<p className="text-xs text-stork-700 dark:text-stork-300">
+						<strong>Connector mode:</strong> Once you{"'"}re confident, flip the switch. Stork
+						becomes your permanent encrypted email home. Your provider is just a pipe — mail
+						arrives, Stork grabs it and erases it from the server. Back up your Stork database.
+					</p>
+				</div>
+			)}
 
 			{form.type === "imap" && (
 				<>
@@ -264,23 +304,98 @@ function InboundConnectorForm({
 				</>
 			)}
 
-			{form.type === "cloudflare-email" && (
-				<div>
-					<label
-						htmlFor="ib-cf-secret"
-						className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-					>
-						Webhook Secret
-					</label>
-					<input
-						id="ib-cf-secret"
-						type="password"
-						required={!initial}
-						value={form.cf_email_webhook_secret}
-						onChange={(e) => setForm({ ...form, cf_email_webhook_secret: e.target.value })}
-						className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
-					/>
-				</div>
+			{form.type === "cloudflare-r2" && (
+				<>
+					<div className="text-xs text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded px-3 py-2 space-y-1">
+						<p className="font-medium">Cloudflare R2 queue/poll model</p>
+						<p>
+							A Cloudflare Email Worker writes each inbound email as an object to an R2 bucket.
+							Stork polls the bucket on a regular interval, downloads and stores each message, then
+							deletes the object. This works reliably behind a VPN or without a public-facing
+							webhook endpoint.
+						</p>
+					</div>
+					<div>
+						<label
+							htmlFor="ib-r2-account"
+							className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+						>
+							Cloudflare Account ID
+						</label>
+						<input
+							id="ib-r2-account"
+							type="text"
+							required
+							value={form.cf_r2_account_id}
+							onChange={(e) => setForm({ ...form, cf_r2_account_id: e.target.value })}
+							className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
+						/>
+					</div>
+					<div>
+						<label
+							htmlFor="ib-r2-bucket"
+							className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+						>
+							R2 Bucket Name
+						</label>
+						<input
+							id="ib-r2-bucket"
+							type="text"
+							required
+							value={form.cf_r2_bucket_name}
+							onChange={(e) => setForm({ ...form, cf_r2_bucket_name: e.target.value })}
+							className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
+						/>
+					</div>
+					<div>
+						<label
+							htmlFor="ib-r2-aki"
+							className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+						>
+							R2 Access Key ID
+						</label>
+						<input
+							id="ib-r2-aki"
+							type="text"
+							required
+							value={form.cf_r2_access_key_id}
+							onChange={(e) => setForm({ ...form, cf_r2_access_key_id: e.target.value })}
+							className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
+						/>
+					</div>
+					<div>
+						<label
+							htmlFor="ib-r2-sak"
+							className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+						>
+							R2 Secret Access Key{initial ? " (leave blank to keep existing)" : ""}
+						</label>
+						<input
+							id="ib-r2-sak"
+							type="password"
+							required={!initial}
+							value={form.cf_r2_secret_access_key}
+							onChange={(e) => setForm({ ...form, cf_r2_secret_access_key: e.target.value })}
+							className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
+						/>
+					</div>
+					<div>
+						<label
+							htmlFor="ib-r2-prefix"
+							className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+						>
+							Object Prefix <span className="text-gray-400 font-normal">(default: pending/)</span>
+						</label>
+						<input
+							id="ib-r2-prefix"
+							type="text"
+							value={form.cf_r2_prefix}
+							onChange={(e) => setForm({ ...form, cf_r2_prefix: e.target.value })}
+							placeholder="pending/"
+							className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
+						/>
+					</div>
+				</>
 			)}
 
 			{error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -729,13 +844,13 @@ function IdentityForm({
 function ConnectorBadge({ type }: { type: string }) {
 	const colors: Record<string, string> = {
 		imap: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-		"cloudflare-email": "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
+		"cloudflare-r2": "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
 		smtp: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
 		ses: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
 	};
 	const label: Record<string, string> = {
 		imap: "IMAP",
-		"cloudflare-email": "Cloudflare",
+		"cloudflare-r2": "Cloudflare R2",
 		smtp: "SMTP",
 		ses: "SES",
 	};
@@ -748,42 +863,24 @@ function ConnectorBadge({ type }: { type: string }) {
 	);
 }
 
-// ── Main ConnectorsTab ─────────────────────────────────────────────────────
+// ── Inbound Connectors Tab ─────────────────────────────────────────────────
 
-export function ConnectorsTab() {
+export function InboundConnectorsTab() {
 	const {
 		data: inbound,
 		refetch: refetchInbound,
 		loading: loadingInbound,
 	} = useAsync(() => api.connectors.inbound.list(), []);
-	const {
-		data: outbound,
-		refetch: refetchOutbound,
-		loading: loadingOutbound,
-	} = useAsync(() => api.connectors.outbound.list(), []);
-	const { data: identities, refetch: refetchIdentities } = useAsync(
-		() => api.identities.list(),
-		[],
-	);
 
-	const [showWizard, setShowWizard] = useState(false);
 	const [editingInbound, setEditingInbound] = useState<number | "new" | null>(null);
-	const [editingOutbound, setEditingOutbound] = useState<number | "new" | null>(null);
-	const [testResult, setTestResult] = useState<{
-		id: number;
-		dir: "in" | "out";
-		ok: boolean;
-		msg: string;
-	} | null>(null);
-	const [deleting, setDeleting] = useState<{ id: number; dir: "in" | "out" } | null>(null);
-
-	// Inbound connector sync status display
+	const [testResult, setTestResult] = useState<{ id: number; ok: boolean; msg: string } | null>(
+		null,
+	);
+	const [deleting, setDeleting] = useState<number | null>(null);
 	const [syncStatusConnectorId, setSyncStatusConnectorId] = useState<number | null>(null);
 
-	// Identity editing state — keyed on outbound connector ID
-	const [editingIdentityFor, setEditingIdentityFor] = useState<number | null>(null);
-	const [editingIdentityId, setEditingIdentityId] = useState<number | "new" | null>(null);
-	const [deletingIdentity, setDeletingIdentity] = useState<Identity | null>(null);
+	const inboundEditing =
+		editingInbound === "new" ? undefined : inbound?.find((c) => c.id === editingInbound);
 
 	async function handleTestInbound(id: number) {
 		setTestResult(null);
@@ -791,24 +888,13 @@ export function ConnectorsTab() {
 			const r = await api.connectors.inbound.test(id);
 			setTestResult({
 				id,
-				dir: "in",
 				ok: r.ok,
 				msg: r.ok
 					? `OK${r.details?.folders != null ? ` — ${r.details.folders} folders` : ""}`
 					: (r.error ?? "Test failed"),
 			});
 		} catch (err) {
-			setTestResult({ id, dir: "in", ok: false, msg: String(err) });
-		}
-	}
-
-	async function handleTestOutbound(id: number) {
-		setTestResult(null);
-		try {
-			const r = await api.connectors.outbound.test(id);
-			setTestResult({ id, dir: "out", ok: r.ok, msg: r.ok ? "OK" : (r.error ?? "Test failed") });
-		} catch (err) {
-			setTestResult({ id, dir: "out", ok: false, msg: String(err) });
+			setTestResult({ id, ok: false, msg: String(err) });
 		}
 	}
 
@@ -819,6 +905,179 @@ export function ConnectorsTab() {
 			refetchInbound();
 		} catch (err) {
 			alert(err instanceof Error ? err.message : String(err));
+		}
+	}
+
+	return (
+		<div className="space-y-4 p-4 sm:p-6">
+			<div className="flex items-center justify-between mb-1">
+				<div>
+					<h3 className="font-semibold text-gray-900 dark:text-gray-100">Inbound Connectors</h3>
+					<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+						Receive email via IMAP polling or Cloudflare R2 queue/poll
+					</p>
+				</div>
+				{editingInbound === null && (
+					<button
+						type="button"
+						onClick={() => setEditingInbound("new")}
+						className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+					>
+						Add Inbound
+					</button>
+				)}
+			</div>
+
+			{editingInbound !== null && (
+				<div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+					<h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">
+						{editingInbound === "new" ? "New Inbound Connector" : "Edit Inbound Connector"}
+					</h4>
+					<InboundConnectorForm
+						initial={inboundEditing}
+						onSave={() => {
+							setEditingInbound(null);
+							refetchInbound();
+						}}
+						onCancel={() => setEditingInbound(null)}
+					/>
+				</div>
+			)}
+
+			{loadingInbound && <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>}
+
+			{!loadingInbound && inbound?.length === 0 && (
+				<p className="text-sm text-gray-500 dark:text-gray-400 italic">
+					No inbound connectors configured yet.
+				</p>
+			)}
+
+			<ul className="space-y-2">
+				{inbound?.map((c) => (
+					<Fragment key={c.id}>
+						<li className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+							<div className="min-w-0">
+								<div className="flex items-center gap-2">
+									<span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+										{c.name}
+									</span>
+									<ConnectorBadge type={c.type} />
+								</div>
+								<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+									{c.type === "imap"
+										? `${c.imap_user ?? ""}@${c.imap_host ?? ""}:${c.imap_port}`
+										: `R2: ${c.cf_r2_bucket_name ?? "bucket not set"}`}
+								</p>
+								{testResult?.id === c.id && (
+									<p
+										className={`text-xs mt-0.5 ${testResult.ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+									>
+										{testResult.msg}
+									</p>
+								)}
+							</div>
+							<div className="flex items-center gap-1.5 shrink-0">
+								{deleting === c.id ? (
+									<>
+										<span className="text-xs text-red-600 dark:text-red-400">Delete?</span>
+										<button
+											type="button"
+											onClick={() => handleDeleteInbound(c.id)}
+											className="text-xs text-red-600 dark:text-red-400 hover:underline"
+										>
+											Yes
+										</button>
+										<button
+											type="button"
+											onClick={() => setDeleting(null)}
+											className="text-xs text-gray-500 hover:underline"
+										>
+											No
+										</button>
+									</>
+								) : (
+									<>
+										<button
+											type="button"
+											onClick={() =>
+												setSyncStatusConnectorId(syncStatusConnectorId === c.id ? null : c.id)
+											}
+											className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600"
+										>
+											Sync Status
+										</button>
+										<button
+											type="button"
+											onClick={() => handleTestInbound(c.id)}
+											className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600"
+										>
+											Test
+										</button>
+										<button
+											type="button"
+											onClick={() => {
+												setEditingInbound(c.id);
+												setTestResult(null);
+											}}
+											className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+										>
+											Edit
+										</button>
+										<button
+											type="button"
+											onClick={() => setDeleting(c.id)}
+											className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+										>
+											Delete
+										</button>
+									</>
+								)}
+							</div>
+						</li>
+						{syncStatusConnectorId === c.id && (
+							<li className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+								<SyncStatusPanel connectorId={c.id} />
+							</li>
+						)}
+					</Fragment>
+				))}
+			</ul>
+		</div>
+	);
+}
+
+// ── Outbound Connectors Tab ────────────────────────────────────────────────
+
+export function OutboundConnectorsTab() {
+	const {
+		data: outbound,
+		refetch: refetchOutbound,
+		loading: loadingOutbound,
+	} = useAsync(() => api.connectors.outbound.list(), []);
+	const { data: identities, refetch: refetchIdentities } = useAsync(
+		() => api.identities.list(),
+		[],
+	);
+
+	const [editingOutbound, setEditingOutbound] = useState<number | "new" | null>(null);
+	const [testResult, setTestResult] = useState<{ id: number; ok: boolean; msg: string } | null>(
+		null,
+	);
+	const [deleting, setDeleting] = useState<number | null>(null);
+	const [editingIdentityFor, setEditingIdentityFor] = useState<number | null>(null);
+	const [editingIdentityId, setEditingIdentityId] = useState<number | "new" | null>(null);
+	const [deletingIdentity, setDeletingIdentity] = useState<Identity | null>(null);
+
+	const outboundEditing =
+		editingOutbound === "new" ? undefined : outbound?.find((c) => c.id === editingOutbound);
+
+	async function handleTestOutbound(id: number) {
+		setTestResult(null);
+		try {
+			const r = await api.connectors.outbound.test(id);
+			setTestResult({ id, ok: r.ok, msg: r.ok ? "OK" : (r.error ?? "Test failed") });
+		} catch (err) {
+			setTestResult({ id, ok: false, msg: String(err) });
 		}
 	}
 
@@ -842,92 +1101,62 @@ export function ConnectorsTab() {
 		}
 	}
 
-	const inboundEditing =
-		editingInbound === "new" ? undefined : inbound?.find((c) => c.id === editingInbound);
-	const outboundEditing =
-		editingOutbound === "new" ? undefined : outbound?.find((c) => c.id === editingOutbound);
-
 	return (
-		<div className="space-y-8 p-4 sm:p-6">
-			{/* Add Email wizard */}
-			<div className="flex items-center justify-between">
+		<div className="space-y-4 p-4 sm:p-6">
+			<div className="flex items-center justify-between mb-1">
 				<div>
-					<h3 className="font-semibold text-gray-900 dark:text-gray-100">Email Identities</h3>
+					<h3 className="font-semibold text-gray-900 dark:text-gray-100">Outbound Connectors</h3>
 					<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-						Set up a new email identity with inbound and outbound connectors in one flow
+						Send email via SMTP or AWS SES. Each connector can have one or more sending identities.
 					</p>
 				</div>
-				<button
-					type="button"
-					onClick={() => setShowWizard(true)}
-					className="px-3 py-1.5 text-sm bg-stork-600 hover:bg-stork-700 text-white rounded transition-colors"
-				>
-					+ Add Email Identity
-				</button>
+				{editingOutbound === null && (
+					<button
+						type="button"
+						onClick={() => setEditingOutbound("new")}
+						className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+					>
+						Add Outbound
+					</button>
+				)}
 			</div>
 
-			{showWizard && (
-				<AccountSetupWizard
-					existingInbound={inbound ?? []}
-					existingOutbound={outbound ?? []}
-					onDone={() => {
-						setShowWizard(false);
-						refetchInbound();
-						refetchOutbound();
-						refetchIdentities();
-					}}
-					onCancel={() => setShowWizard(false)}
-				/>
+			{editingOutbound !== null && (
+				<div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+					<h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">
+						{editingOutbound === "new" ? "New Outbound Connector" : "Edit Outbound Connector"}
+					</h4>
+					<OutboundConnectorForm
+						initial={outboundEditing}
+						onSave={() => {
+							setEditingOutbound(null);
+							refetchOutbound();
+						}}
+						onCancel={() => setEditingOutbound(null)}
+					/>
+				</div>
 			)}
 
-			{/* Inbound Connectors */}
-			<section>
-				<div className="flex items-center justify-between mb-3">
-					<div>
-						<h3 className="font-semibold text-gray-900 dark:text-gray-100">Inbound Connectors</h3>
-						<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-							Receive email via IMAP polling or Cloudflare Email webhook
-						</p>
-					</div>
-					{editingInbound === null && (
-						<button
-							type="button"
-							onClick={() => setEditingInbound("new")}
-							className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+			{loadingOutbound && <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>}
+
+			{!loadingOutbound && outbound?.length === 0 && (
+				<p className="text-sm text-gray-500 dark:text-gray-400 italic">
+					No outbound connectors configured yet.
+				</p>
+			)}
+
+			<ul className="space-y-3">
+				{outbound?.map((c) => {
+					const connectorIdentities = (identities ?? []).filter(
+						(a) => a.outbound_connector_id === c.id,
+					);
+					const isEditingIdentityHere = editingIdentityFor === c.id && editingIdentityId !== null;
+					return (
+						<li
+							key={c.id}
+							className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden"
 						>
-							Add Inbound
-						</button>
-					)}
-				</div>
-
-				{editingInbound !== null && (
-					<div className="mb-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-						<h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">
-							{editingInbound === "new" ? "New Inbound Connector" : "Edit Inbound Connector"}
-						</h4>
-						<InboundConnectorForm
-							initial={inboundEditing}
-							onSave={() => {
-								setEditingInbound(null);
-								refetchInbound();
-							}}
-							onCancel={() => setEditingInbound(null)}
-						/>
-					</div>
-				)}
-
-				{loadingInbound && <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>}
-
-				{!loadingInbound && inbound?.length === 0 && (
-					<p className="text-sm text-gray-500 dark:text-gray-400 italic">
-						No inbound connectors configured yet.
-					</p>
-				)}
-
-				<ul className="space-y-2">
-					{inbound?.map((c) => (
-						<Fragment key={c.id}>
-							<li className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+							<div className="flex items-center justify-between gap-3 p-3">
 								<div className="min-w-0">
 									<div className="flex items-center gap-2">
 										<span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
@@ -936,11 +1165,11 @@ export function ConnectorsTab() {
 										<ConnectorBadge type={c.type} />
 									</div>
 									<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-										{c.type === "imap"
-											? `${c.imap_user ?? ""}@${c.imap_host ?? ""}:${c.imap_port}`
-											: "Push-based webhook"}
+										{c.type === "smtp"
+											? `${c.smtp_user ?? ""}@${c.smtp_host ?? ""}:${c.smtp_port}`
+											: `SES — ${c.ses_region ?? "region not set"}`}
 									</p>
-									{testResult?.id === c.id && testResult.dir === "in" && (
+									{testResult?.id === c.id && (
 										<p
 											className={`text-xs mt-0.5 ${testResult.ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
 										>
@@ -949,12 +1178,12 @@ export function ConnectorsTab() {
 									)}
 								</div>
 								<div className="flex items-center gap-1.5 shrink-0">
-									{deleting?.id === c.id && deleting.dir === "in" ? (
+									{deleting === c.id ? (
 										<>
 											<span className="text-xs text-red-600 dark:text-red-400">Delete?</span>
 											<button
 												type="button"
-												onClick={() => handleDeleteInbound(c.id)}
+												onClick={() => handleDeleteOutbound(c.id)}
 												className="text-xs text-red-600 dark:text-red-400 hover:underline"
 											>
 												Yes
@@ -971,16 +1200,7 @@ export function ConnectorsTab() {
 										<>
 											<button
 												type="button"
-												onClick={() =>
-													setSyncStatusConnectorId(syncStatusConnectorId === c.id ? null : c.id)
-												}
-												className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600"
-											>
-												Sync Status
-											</button>
-											<button
-												type="button"
-												onClick={() => handleTestInbound(c.id)}
+												onClick={() => handleTestOutbound(c.id)}
 												className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600"
 											>
 												Test
@@ -988,7 +1208,7 @@ export function ConnectorsTab() {
 											<button
 												type="button"
 												onClick={() => {
-													setEditingInbound(c.id);
+													setEditingOutbound(c.id);
 													setTestResult(null);
 												}}
 												className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
@@ -997,7 +1217,7 @@ export function ConnectorsTab() {
 											</button>
 											<button
 												type="button"
-												onClick={() => setDeleting({ id: c.id, dir: "in" })}
+												onClick={() => setDeleting(c.id)}
 												className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
 											>
 												Delete
@@ -1005,260 +1225,22 @@ export function ConnectorsTab() {
 										</>
 									)}
 								</div>
-							</li>
-							{syncStatusConnectorId === c.id && (
-								<li className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
-									<SyncStatusPanel connectorId={c.id} />
-								</li>
-							)}
-						</Fragment>
-					))}
-				</ul>
-			</section>
+							</div>
 
-			{/* Outbound Connectors */}
-			<section>
-				<div className="flex items-center justify-between mb-3">
-					<div>
-						<h3 className="font-semibold text-gray-900 dark:text-gray-100">Outbound Connectors</h3>
-						<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-							Send email via SMTP or AWS SES
-						</p>
-					</div>
-					{editingOutbound === null && (
-						<button
-							type="button"
-							onClick={() => setEditingOutbound("new")}
-							className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-						>
-							Add Outbound
-						</button>
-					)}
-				</div>
-
-				{editingOutbound !== null && (
-					<div className="mb-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-						<h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">
-							{editingOutbound === "new" ? "New Outbound Connector" : "Edit Outbound Connector"}
-						</h4>
-						<OutboundConnectorForm
-							initial={outboundEditing}
-							onSave={() => {
-								setEditingOutbound(null);
-								refetchOutbound();
-							}}
-							onCancel={() => setEditingOutbound(null)}
-						/>
-					</div>
-				)}
-
-				{loadingOutbound && <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>}
-
-				{!loadingOutbound && outbound?.length === 0 && (
-					<p className="text-sm text-gray-500 dark:text-gray-400 italic">
-						No outbound connectors configured yet.
-					</p>
-				)}
-
-				<ul className="space-y-3">
-					{outbound?.map((c) => {
-						const connectorIdentities = (identities ?? []).filter(
-							(a) => a.outbound_connector_id === c.id,
-						);
-						const isEditingIdentityHere = editingIdentityFor === c.id && editingIdentityId !== null;
-
-						return (
-							<li
-								key={c.id}
-								className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden"
-							>
-								{/* Connector row */}
-								<div className="flex items-center justify-between gap-3 p-3">
-									<div className="min-w-0">
-										<div className="flex items-center gap-2">
-											<span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-												{c.name}
-											</span>
-											<ConnectorBadge type={c.type} />
-										</div>
-										<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-											{c.type === "smtp"
-												? `${c.smtp_user ?? ""}@${c.smtp_host ?? ""}:${c.smtp_port}`
-												: `SES — ${c.ses_region ?? "region not set"}`}
-										</p>
-										{testResult?.id === c.id && testResult.dir === "out" && (
-											<p
-												className={`text-xs mt-0.5 ${testResult.ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
-											>
-												{testResult.msg}
-											</p>
-										)}
-									</div>
-									<div className="flex items-center gap-1.5 shrink-0">
-										{deleting?.id === c.id && deleting.dir === "out" ? (
-											<>
-												<span className="text-xs text-red-600 dark:text-red-400">Delete?</span>
-												<button
-													type="button"
-													onClick={() => handleDeleteOutbound(c.id)}
-													className="text-xs text-red-600 dark:text-red-400 hover:underline"
-												>
-													Yes
-												</button>
-												<button
-													type="button"
-													onClick={() => setDeleting(null)}
-													className="text-xs text-gray-500 hover:underline"
-												>
-													No
-												</button>
-											</>
-										) : (
-											<>
-												<button
-													type="button"
-													onClick={() => handleTestOutbound(c.id)}
-													className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600"
-												>
-													Test
-												</button>
-												<button
-													type="button"
-													onClick={() => {
-														setEditingOutbound(c.id);
-														setTestResult(null);
-													}}
-													className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-												>
-													Edit
-												</button>
-												<button
-													type="button"
-													onClick={() => setDeleting({ id: c.id, dir: "out" })}
-													className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-												>
-													Delete
-												</button>
-											</>
-										)}
-									</div>
-								</div>
-
-								{/* Identities section */}
-								<div className="border-t border-gray-100 dark:border-gray-700/50 px-3 pb-3 pt-2">
-									<p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-										Identities
+							<div className="border-t border-gray-100 dark:border-gray-700/50 px-3 pb-3 pt-2">
+								<p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+									Identities
+								</p>
+								{connectorIdentities.length === 0 && !isEditingIdentityHere && (
+									<p className="text-xs text-gray-400 dark:text-gray-500 italic mb-2">
+										No identities assigned to this connector.
 									</p>
-
-									{connectorIdentities.length === 0 && !isEditingIdentityHere && (
-										<p className="text-xs text-gray-400 dark:text-gray-500 italic mb-2">
-											No identities assigned to this connector.
-										</p>
-									)}
-
-									{connectorIdentities.map((identity) => (
-										<div key={identity.id}>
-											{editingIdentityFor === c.id && editingIdentityId === identity.id ? (
-												<IdentityForm
-													outboundConnectorId={c.id}
-													identityId={identity.id}
-													onSave={() => {
-														setEditingIdentityFor(null);
-														setEditingIdentityId(null);
-														refetchIdentities();
-													}}
-													onCancel={() => {
-														setEditingIdentityFor(null);
-														setEditingIdentityId(null);
-													}}
-												/>
-											) : (
-												<div className="mb-1">
-													<div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/30">
-														<div className="min-w-0">
-															<span className="text-sm text-gray-900 dark:text-gray-100">
-																{identity.name}
-															</span>
-															<span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
-																{identity.email}
-															</span>
-														</div>
-														<div className="flex items-center gap-1.5 shrink-0">
-															<button
-																type="button"
-																onClick={() => {
-																	setEditingIdentityFor(c.id);
-																	setEditingIdentityId(identity.id);
-																}}
-																className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-															>
-																Edit
-															</button>
-															<button
-																type="button"
-																onClick={() => setDeletingIdentity(identity)}
-																className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-															>
-																Delete
-															</button>
-														</div>
-													</div>
-												</div>
-											)}
-										</div>
-									))}
-
-									{isEditingIdentityHere && editingIdentityId === "new" && (
-										<IdentityForm
-											outboundConnectorId={c.id}
-											identityId={null}
-											onSave={() => {
-												setEditingIdentityFor(null);
-												setEditingIdentityId(null);
-												refetchIdentities();
-											}}
-											onCancel={() => {
-												setEditingIdentityFor(null);
-												setEditingIdentityId(null);
-											}}
-										/>
-									)}
-
-									{!isEditingIdentityHere && (
-										<button
-											type="button"
-											onClick={() => {
-												setEditingIdentityFor(c.id);
-												setEditingIdentityId("new");
-											}}
-											className="mt-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-										>
-											+ Add Identity
-										</button>
-									)}
-								</div>
-							</li>
-						);
-					})}
-				</ul>
-
-				{/* Unassigned identities */}
-				{(() => {
-					const unassigned = (identities ?? []).filter((a) => a.outbound_connector_id === null);
-					if (unassigned.length === 0) return null;
-					return (
-						<div className="mt-3 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
-							<p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
-								Unassigned identities: {unassigned.length} email
-								{unassigned.length !== 1 ? "s" : ""} have no outbound connector assigned. Edit them
-								below.
-							</p>
-							{unassigned.map((identity) => (
-								<div key={identity.id}>
-									{editingIdentityFor === -1 && editingIdentityId === identity.id ? (
-										outbound && outbound.length > 0 ? (
+								)}
+								{connectorIdentities.map((identity) => (
+									<div key={identity.id}>
+										{editingIdentityFor === c.id && editingIdentityId === identity.id ? (
 											<IdentityForm
-												outboundConnectorId={outbound[0]?.id ?? 0}
+												outboundConnectorId={c.id}
 												identityId={identity.id}
 												onSave={() => {
 													setEditingIdentityFor(null);
@@ -1271,45 +1253,139 @@ export function ConnectorsTab() {
 												}}
 											/>
 										) : (
-											<p className="text-xs text-gray-500">Add an outbound connector first.</p>
-										)
-									) : (
-										<div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded hover:bg-amber-100 dark:hover:bg-amber-900/30">
-											<div className="min-w-0">
-												<span className="text-sm text-gray-900 dark:text-gray-100">
-													{identity.name}
-												</span>
-												<span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
-													{identity.email}
-												</span>
+											<div className="mb-1">
+												<div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/30">
+													<div className="min-w-0">
+														<span className="text-sm text-gray-900 dark:text-gray-100">
+															{identity.name}
+														</span>
+														<span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
+															{identity.email}
+														</span>
+													</div>
+													<div className="flex items-center gap-1.5 shrink-0">
+														<button
+															type="button"
+															onClick={() => {
+																setEditingIdentityFor(c.id);
+																setEditingIdentityId(identity.id);
+															}}
+															className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+														>
+															Edit
+														</button>
+														<button
+															type="button"
+															onClick={() => setDeletingIdentity(identity)}
+															className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+														>
+															Delete
+														</button>
+													</div>
+												</div>
 											</div>
-											<div className="flex items-center gap-1.5 shrink-0">
-												<button
-													type="button"
-													onClick={() => {
-														setEditingIdentityFor(-1);
-														setEditingIdentityId(identity.id);
-													}}
-													className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-												>
-													Edit
-												</button>
-												<button
-													type="button"
-													onClick={() => setDeletingIdentity(identity)}
-													className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-												>
-													Delete
-												</button>
-											</div>
-										</div>
-									)}
-								</div>
-							))}
-						</div>
+										)}
+									</div>
+								))}
+								{isEditingIdentityHere && editingIdentityId === "new" && (
+									<IdentityForm
+										outboundConnectorId={c.id}
+										identityId={null}
+										onSave={() => {
+											setEditingIdentityFor(null);
+											setEditingIdentityId(null);
+											refetchIdentities();
+										}}
+										onCancel={() => {
+											setEditingIdentityFor(null);
+											setEditingIdentityId(null);
+										}}
+									/>
+								)}
+								{!isEditingIdentityHere && (
+									<button
+										type="button"
+										onClick={() => {
+											setEditingIdentityFor(c.id);
+											setEditingIdentityId("new");
+										}}
+										className="mt-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+									>
+										+ Add Identity
+									</button>
+								)}
+							</div>
+						</li>
 					);
-				})()}
-			</section>
+				})}
+			</ul>
+
+			{/* Unassigned identities */}
+			{(() => {
+				const unassigned = (identities ?? []).filter((a) => a.outbound_connector_id === null);
+				if (unassigned.length === 0) return null;
+				return (
+					<div className="mt-3 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+						<p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+							Unassigned identities: {unassigned.length} email
+							{unassigned.length !== 1 ? "s" : ""} have no outbound connector. Edit them below.
+						</p>
+						{unassigned.map((identity) => (
+							<div key={identity.id}>
+								{editingIdentityFor === -1 && editingIdentityId === identity.id ? (
+									outbound && outbound.length > 0 ? (
+										<IdentityForm
+											outboundConnectorId={outbound[0]?.id ?? 0}
+											identityId={identity.id}
+											onSave={() => {
+												setEditingIdentityFor(null);
+												setEditingIdentityId(null);
+												refetchIdentities();
+											}}
+											onCancel={() => {
+												setEditingIdentityFor(null);
+												setEditingIdentityId(null);
+											}}
+										/>
+									) : (
+										<p className="text-xs text-gray-500">Add an outbound connector first.</p>
+									)
+								) : (
+									<div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded hover:bg-amber-100 dark:hover:bg-amber-900/30">
+										<div className="min-w-0">
+											<span className="text-sm text-gray-900 dark:text-gray-100">
+												{identity.name}
+											</span>
+											<span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
+												{identity.email}
+											</span>
+										</div>
+										<div className="flex items-center gap-1.5 shrink-0">
+											<button
+												type="button"
+												onClick={() => {
+													setEditingIdentityFor(-1);
+													setEditingIdentityId(identity.id);
+												}}
+												className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+											>
+												Edit
+											</button>
+											<button
+												type="button"
+												onClick={() => setDeletingIdentity(identity)}
+												className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+											>
+												Delete
+											</button>
+										</div>
+									</div>
+								)}
+							</div>
+						))}
+					</div>
+				);
+			})()}
 
 			{/* Delete identity confirmation */}
 			{deletingIdentity && (
@@ -1319,8 +1395,8 @@ export function ConnectorsTab() {
 							Delete identity
 						</h4>
 						<p className="text-sm text-gray-600 dark:text-gray-400">
-							Delete &ldquo;{deletingIdentity.name}&rdquo; ({deletingIdentity.email})? This removes
-							all synced messages and cannot be undone.
+							Delete &ldquo;{deletingIdentity.name}&rdquo; ({deletingIdentity.email})? This cannot
+							be undone.
 						</p>
 						<div className="flex gap-2 justify-end">
 							<button

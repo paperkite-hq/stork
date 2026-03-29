@@ -25,7 +25,7 @@ interface SeedMessage {
 const DEMO_IDENTITY = {
 	name: "Alex Demo",
 	email: "alex@example.com",
-	imap_host: "demo.example.com",
+	imap_host: "imap.example.com",
 	imap_port: 993,
 	imap_tls: 1,
 	imap_user: "alex@example.com",
@@ -388,7 +388,7 @@ Amount: $1.48
 Thank you for using Backblaze B2!`,
 		html_body:
 			"<p>Your Backblaze B2 Cloud Storage invoice is ready.</p><table><tr><td>Account</td><td>alex@example.com</td></tr><tr><td>Period</td><td>February 2026</td></tr><tr><td>Storage</td><td>247 GB</td></tr><tr><td>Downloads</td><td>12 GB</td></tr><tr><td>Amount</td><td>$1.48</td></tr></table>",
-		flags: "\\Seen",
+		flags: "",
 		message_id: "<invoice-feb-2026@backblaze.com>",
 		has_attachments: 1,
 	},
@@ -584,7 +584,7 @@ export function seedDemoData(db: Database.Database): void {
 		 VALUES (?, 'imap', ?, ?, ?, ?, ?, 1)`,
 		)
 		.run(
-			`${DEMO_IDENTITY.name} (Inbound)`,
+			"Alex' work IMAP",
 			DEMO_IDENTITY.imap_host,
 			DEMO_IDENTITY.imap_port,
 			DEMO_IDENTITY.imap_tls,
@@ -599,7 +599,7 @@ export function seedDemoData(db: Database.Database): void {
 			`INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
 		 VALUES (?, 'smtp', ?, 587, 1, ?, 'demo-not-real')`,
 		)
-		.run(`${DEMO_IDENTITY.name} (Outbound)`, DEMO_IDENTITY.imap_host, DEMO_IDENTITY.email);
+		.run("Acme Corp SMTP", DEMO_IDENTITY.imap_host, DEMO_IDENTITY.email);
 	const outboundId1 = outbound1Result.lastInsertRowid as number;
 
 	// Insert demo identity (send-only: name + email + outbound connector)
@@ -705,25 +705,26 @@ export function seedDemoData(db: Database.Database): void {
 
 	const inbound2Result = db
 		.prepare(
-			`INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
-		 VALUES (?, 'imap', ?, ?, ?, ?, ?, 1)`,
+			`INSERT INTO inbound_connectors (name, type, cf_r2_account_id, cf_r2_bucket_name, cf_r2_access_key_id, cf_r2_secret_access_key, cf_r2_prefix, cf_r2_poll_interval_ms)
+		 VALUES (?, 'cloudflare-r2', ?, ?, ?, ?, ?, ?)`,
 		)
 		.run(
-			`${DEMO_IDENTITY_2.name} (Inbound)`,
-			DEMO_IDENTITY_2.imap_host,
-			DEMO_IDENTITY_2.imap_port,
-			DEMO_IDENTITY_2.imap_tls,
-			DEMO_IDENTITY_2.imap_user,
-			DEMO_IDENTITY_2.imap_pass,
+			"Alex personal Cloudflare",
+			"demo-cf-account-id",
+			"alex-personal-email",
+			"demo-r2-access-key",
+			"demo-r2-secret-key",
+			"pending/",
+			60000,
 		);
 	const inboundId2 = inbound2Result.lastInsertRowid as number;
 
 	const outbound2Result = db
 		.prepare(
-			`INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
-		 VALUES (?, 'smtp', ?, 587, 1, ?, 'demo-not-real')`,
+			`INSERT INTO outbound_connectors (name, type, ses_region, ses_access_key_id, ses_secret_access_key)
+		 VALUES (?, 'ses', ?, ?, ?)`,
 		)
-		.run(`${DEMO_IDENTITY_2.name} (Outbound)`, DEMO_IDENTITY_2.imap_host, DEMO_IDENTITY_2.email);
+		.run("Alex' personal AWS SES", "us-west-2", "demo-ses-access-key", "demo-ses-secret-key");
 	const outboundId2 = outbound2Result.lastInsertRowid as number;
 
 	db.prepare("INSERT INTO identities (name, email, outbound_connector_id) VALUES (?, ?, ?)").run(
