@@ -342,17 +342,43 @@ describe("Send API", () => {
 
 	// ─── SES send path ────────────────────────────────────────
 	describe("SES send path", () => {
-		test("rejects SES account without ses_region configured", async () => {
-			// Create account with send_connector_type=ses but no ses_region
+		function createSesAccount(
+			name: string,
+			email: string,
+			opts: { ses_region?: string; ses_access_key_id?: string; ses_secret_access_key?: string },
+		): number {
+			// Create outbound connector (SES type, intentionally missing ses_region to test error)
 			db.prepare(`
-				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
-					send_connector_type)
-				VALUES ('SES Account', 'ses@example.com', 'imap.example.com', 'user', 'pass',
-					'ses')
-			`).run();
-			const accountId = Number(
+				INSERT INTO outbound_connectors (name, type, ses_region, ses_access_key_id, ses_secret_access_key)
+				VALUES (?, 'ses', ?, ?, ?)
+			`).run(
+				`${name} (Outbound)`,
+				opts.ses_region ?? null,
+				opts.ses_access_key_id ?? null,
+				opts.ses_secret_access_key ?? null,
+			);
+			const outboundId = Number(
 				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 			);
+
+			// Create inbound connector (IMAP, minimal config)
+			db.prepare(`
+				INSERT INTO inbound_connectors (name, type, imap_host, imap_user, imap_pass)
+				VALUES (?, 'imap', 'imap.example.com', 'user', 'pass')
+			`).run(`${name} (Inbound)`);
+			const inboundId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+
+			db.prepare(`
+				INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id)
+				VALUES (?, ?, ?, ?)
+			`).run(name, email, inboundId, outboundId);
+			return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
+		}
+
+		test("rejects SES account without ses_region configured", async () => {
+			const accountId = createSesAccount("SES Account", "ses@example.com", {});
 
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",
@@ -371,15 +397,11 @@ describe("Send API", () => {
 		test("sends via SES when ses_region is configured", async () => {
 			// Create account with SES config — the actual send will fail (no real AWS)
 			// but it exercises the SES connector creation branch
-			db.prepare(`
-				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
-					send_connector_type, ses_region, ses_access_key_id, ses_secret_access_key)
-				VALUES ('SES Account', 'ses@example.com', 'imap.example.com', 'user', 'pass',
-					'ses', 'us-east-1', 'AKIATEST', 'secret123')
-			`).run();
-			const accountId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			const accountId = createSesAccount("SES Account", "ses@example.com", {
+				ses_region: "us-east-1",
+				ses_access_key_id: "AKIATEST",
+				ses_secret_access_key: "secret123",
+			});
 
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",
@@ -398,15 +420,9 @@ describe("Send API", () => {
 		});
 
 		test("sends via SES with default credential chain (no explicit keys)", async () => {
-			db.prepare(`
-				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
-					send_connector_type, ses_region)
-				VALUES ('SES Default Creds', 'ses2@example.com', 'imap.example.com', 'user', 'pass',
-					'ses', 'eu-west-1')
-			`).run();
-			const accountId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			const accountId = createSesAccount("SES Default Creds", "ses2@example.com", {
+				ses_region: "eu-west-1",
+			});
 
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",

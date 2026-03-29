@@ -15,7 +15,7 @@ export function createTestDb(): Database.Database {
 	return db;
 }
 
-/** Inserts a test account and returns its ID */
+/** Inserts a test account (with inbound + outbound connectors) and returns the account ID */
 export function createTestAccount(
 	db: Database.Database,
 	overrides: Partial<{
@@ -31,22 +31,45 @@ export function createTestAccount(
 		smtpPass: string;
 	}> = {},
 ): number {
+	const name = overrides.name ?? "Test Account";
+
+	// Create inbound connector
 	db.prepare(`
-		INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass,
-			smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
-		VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, 0, ?, ?)
+		INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+		VALUES (?, 'imap', ?, ?, 1, ?, ?)
 	`).run(
-		overrides.name ?? "Test Account",
-		overrides.email ?? "test@example.com",
+		`${name} (Inbound)`,
 		overrides.imapHost ?? "127.0.0.1",
 		overrides.imapPort ?? 993,
 		overrides.imapUser ?? "testuser",
 		overrides.imapPass ?? "testpass",
+	);
+	const inboundId = Number(
+		(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+	);
+
+	// Create outbound connector
+	db.prepare(`
+		INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
+		VALUES (?, 'smtp', ?, ?, 0, ?, ?)
+	`).run(
+		`${name} (Outbound)`,
 		overrides.smtpHost ?? null,
 		overrides.smtpPort ?? null,
 		overrides.smtpUser ?? null,
 		overrides.smtpPass ?? null,
 	);
+	const outboundId = Number(
+		(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+	);
+
+	// Create account referencing both connectors
+	db.prepare(`
+		INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id,
+			ingest_connector_type, send_connector_type)
+		VALUES (?, ?, ?, ?, 'imap', 'smtp')
+	`).run(name, overrides.email ?? "test@example.com", inboundId, outboundId);
+
 	return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
 }
 

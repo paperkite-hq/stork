@@ -54,7 +54,11 @@ export interface Account {
 	id: number;
 	name: string;
 	email: string;
-	imap_host: string;
+	ingest_connector_type: IngestConnectorType;
+	send_connector_type: SendConnectorType;
+	inbound_connector_id: number | null;
+	outbound_connector_id: number | null;
+	imap_host: string | null;
 	smtp_host: string | null;
 	default_view?: string;
 	sync_delete_from_server: number;
@@ -62,15 +66,93 @@ export interface Account {
 }
 
 export interface AccountDetail extends Account {
-	imap_port: number;
-	imap_tls: number;
-	imap_user: string;
+	inbound_connector_name: string | null;
+	outbound_connector_name: string | null;
+	imap_port: number | null;
+	imap_tls: number | null;
+	imap_user: string | null;
+	cf_email_webhook_secret: string | null;
 	smtp_port: number | null;
 	smtp_tls: number | null;
 	smtp_user: string | null;
-	sync_delete_from_server: number;
+	ses_region: string | null;
+	ses_access_key_id: string | null;
 	updated_at: string;
-	// default_view is inherited from Account
+}
+
+export interface InboundConnector {
+	id: number;
+	name: string;
+	type: IngestConnectorType;
+	imap_host: string | null;
+	imap_port: number;
+	imap_tls: number;
+	imap_user: string | null;
+	cf_email_webhook_secret: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface OutboundConnector {
+	id: number;
+	name: string;
+	type: SendConnectorType;
+	smtp_host: string | null;
+	smtp_port: number;
+	smtp_tls: number;
+	smtp_user: string | null;
+	ses_region: string | null;
+	ses_access_key_id: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface CreateInboundConnectorRequest {
+	name: string;
+	type: IngestConnectorType;
+	imap_host?: string;
+	imap_port?: number;
+	imap_tls?: number;
+	imap_user?: string;
+	imap_pass?: string;
+	cf_email_webhook_secret?: string;
+}
+
+export interface UpdateInboundConnectorRequest {
+	name?: string;
+	type?: IngestConnectorType;
+	imap_host?: string;
+	imap_port?: number;
+	imap_tls?: number;
+	imap_user?: string;
+	imap_pass?: string;
+	cf_email_webhook_secret?: string;
+}
+
+export interface CreateOutboundConnectorRequest {
+	name: string;
+	type: SendConnectorType;
+	smtp_host?: string;
+	smtp_port?: number;
+	smtp_tls?: number;
+	smtp_user?: string;
+	smtp_pass?: string;
+	ses_region?: string;
+	ses_access_key_id?: string;
+	ses_secret_access_key?: string;
+}
+
+export interface UpdateOutboundConnectorRequest {
+	name?: string;
+	type?: SendConnectorType;
+	smtp_host?: string;
+	smtp_port?: number;
+	smtp_tls?: number;
+	smtp_user?: string;
+	smtp_pass?: string;
+	ses_region?: string;
+	ses_access_key_id?: string;
+	ses_secret_access_key?: string;
 }
 
 export interface SyncStatus {
@@ -216,6 +298,11 @@ export type SendConnectorType = "smtp" | "ses";
 export interface CreateAccountRequest {
 	name: string;
 	email: string;
+	/** Reference an existing inbound connector by ID. If omitted, inline IMAP/CF fields are used. */
+	inbound_connector_id?: number;
+	/** Reference an existing outbound connector by ID. If omitted, inline SMTP/SES fields are used. */
+	outbound_connector_id?: number;
+	// Inline connector fields (backward-compat — auto-creates connector rows on the server)
 	ingest_connector_type?: IngestConnectorType;
 	send_connector_type?: SendConnectorType;
 	imap_host?: string;
@@ -239,22 +326,10 @@ export interface CreateAccountRequest {
 export interface UpdateAccountRequest {
 	name?: string;
 	email?: string;
-	ingest_connector_type?: IngestConnectorType;
-	send_connector_type?: SendConnectorType;
-	imap_host?: string;
-	imap_port?: number;
-	imap_tls?: number;
-	imap_user?: string;
-	imap_pass?: string;
-	smtp_host?: string;
-	smtp_port?: number;
-	smtp_tls?: number;
-	smtp_user?: string;
-	smtp_pass?: string;
-	cf_email_webhook_secret?: string;
-	ses_region?: string;
-	ses_access_key_id?: string;
-	ses_secret_access_key?: string;
+	/** Re-assign to a different inbound connector */
+	inbound_connector_id?: number;
+	/** Re-assign to a different outbound connector */
+	outbound_connector_id?: number;
 	sync_delete_from_server?: number;
 	default_view?: string;
 }
@@ -332,6 +407,50 @@ export const api = {
 				method: "POST",
 				body: JSON.stringify(data),
 			}),
+	},
+	connectors: {
+		inbound: {
+			list: () => fetchJSON<InboundConnector[]>("/connectors/inbound"),
+			get: (id: number) => fetchJSON<InboundConnector>(`/connectors/inbound/${id}`),
+			create: (data: CreateInboundConnectorRequest) =>
+				fetchJSON<{ id: number }>("/connectors/inbound", {
+					method: "POST",
+					body: JSON.stringify(data),
+				}),
+			update: (id: number, data: UpdateInboundConnectorRequest) =>
+				fetchJSON<{ ok: boolean }>(`/connectors/inbound/${id}`, {
+					method: "PUT",
+					body: JSON.stringify(data),
+				}),
+			delete: (id: number) =>
+				fetchJSON<{ ok: boolean }>(`/connectors/inbound/${id}`, { method: "DELETE" }),
+			test: (id: number) =>
+				fetchJSON<{ ok: boolean; error?: string; details?: Record<string, unknown> }>(
+					`/connectors/inbound/${id}/test`,
+					{ method: "POST", body: JSON.stringify({}) },
+				),
+		},
+		outbound: {
+			list: () => fetchJSON<OutboundConnector[]>("/connectors/outbound"),
+			get: (id: number) => fetchJSON<OutboundConnector>(`/connectors/outbound/${id}`),
+			create: (data: CreateOutboundConnectorRequest) =>
+				fetchJSON<{ id: number }>("/connectors/outbound", {
+					method: "POST",
+					body: JSON.stringify(data),
+				}),
+			update: (id: number, data: UpdateOutboundConnectorRequest) =>
+				fetchJSON<{ ok: boolean }>(`/connectors/outbound/${id}`, {
+					method: "PUT",
+					body: JSON.stringify(data),
+				}),
+			delete: (id: number) =>
+				fetchJSON<{ ok: boolean }>(`/connectors/outbound/${id}`, { method: "DELETE" }),
+			test: (id: number) =>
+				fetchJSON<{ ok: boolean; error?: string }>(`/connectors/outbound/${id}/test`, {
+					method: "POST",
+					body: JSON.stringify({}),
+				}),
+		},
 	},
 	folders: {
 		list: (accountId: number) => fetchJSON<Folder[]>(`/accounts/${accountId}/folders`),
