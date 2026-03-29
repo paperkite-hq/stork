@@ -23,7 +23,7 @@ interface SeedMessage {
 }
 
 const DEMO_IDENTITY = {
-	name: "Alex Demo",
+	name: "Alex Johnson",
 	email: "alex@example.com",
 	imap_host: "imap.example.com",
 	imap_port: 993,
@@ -92,7 +92,7 @@ Jordan`,
 	{
 		subject: "Re: Q2 Infrastructure Migration Plan",
 		from_address: "alex@example.com",
-		from_name: "Alex Demo",
+		from_name: "Alex Johnson",
 		to_addresses: "jordan@acme-corp.com",
 		date: "2026-03-22T10:30:00Z",
 		text_body: `Jordan,
@@ -247,7 +247,7 @@ Thank you for shopping with TechGear!`,
 		date: "2026-03-18T15:30:00Z",
 		text_body: `Booking Confirmed!
 
-Passenger: Alex Demo
+Passenger: Alex Johnson
 Flight: PA 207
 Route: Seattle-Tacoma (SEA) → Tokyo Narita (NRT)
 Date: April 12, 2026
@@ -263,7 +263,7 @@ Check in opens 24 hours before departure.
 Safe travels!
 Pacific Airways`,
 		html_body:
-			"<h2>Booking Confirmed!</h2><table><tr><td>Passenger</td><td>Alex Demo</td></tr><tr><td>Flight</td><td>PA 207</td></tr><tr><td>Route</td><td>Seattle-Tacoma (SEA) → Tokyo Narita (NRT)</td></tr><tr><td>Date</td><td>April 12, 2026</td></tr><tr><td>Depart</td><td>11:40 AM PDT</td></tr><tr><td>Arrive</td><td>April 13, 3:15 PM JST</td></tr><tr><td>Seat</td><td>24A (Window)</td></tr></table><p>Confirmation Code: <strong>XKPF92</strong></p>",
+			"<h2>Booking Confirmed!</h2><table><tr><td>Passenger</td><td>Alex Johnson</td></tr><tr><td>Flight</td><td>PA 207</td></tr><tr><td>Route</td><td>Seattle-Tacoma (SEA) → Tokyo Narita (NRT)</td></tr><tr><td>Date</td><td>April 12, 2026</td></tr><tr><td>Depart</td><td>11:40 AM PDT</td></tr><tr><td>Arrive</td><td>April 13, 3:15 PM JST</td></tr><tr><td>Seat</td><td>24A (Window)</td></tr></table><p>Confirmation Code: <strong>XKPF92</strong></p>",
 		flags: "\\Seen,\\Flagged",
 		message_id: "<flight-pa207@airline.example>",
 		has_attachments: 1,
@@ -298,7 +298,7 @@ Happy self-hosting!
 	{
 		subject: "Re: Database backup strategy",
 		from_address: "alex@example.com",
-		from_name: "Alex Demo",
+		from_name: "Alex Johnson",
 		to_addresses: "sam@acme-corp.com",
 		date: "2026-03-17T09:20:00Z",
 		text_body: `Sam,
@@ -450,12 +450,12 @@ If you don't recognize this device, you can remove it from your admin console.
 // ─── Second demo identity (work email) ────────────────────────────────────────
 
 const DEMO_IDENTITY_2 = {
-	name: "Alex Demo",
-	email: "a.demo@acme-corp.com",
+	name: "Alex Johnson",
+	email: "a.johnson@acme-corp.com",
 	imap_host: "mail.acme-corp.com",
 	imap_port: 993,
 	imap_tls: 1,
-	imap_user: "a.demo@acme-corp.com",
+	imap_user: "a.johnson@acme-corp.com",
 	imap_pass: "demo-not-real",
 };
 
@@ -479,7 +479,7 @@ const DEMO_MESSAGES_2: SeedMessage[] = [
 		subject: "Code review: feat/cache-invalidation",
 		from_address: "sam@acme-corp.com",
 		from_name: "Sam Okonkwo",
-		to_addresses: "a.demo@acme-corp.com",
+		to_addresses: "a.johnson@acme-corp.com",
 		date: "2026-03-22T13:00:00Z",
 		text_body: `Hey Alex,
 
@@ -552,8 +552,8 @@ If you need help, reach out in #platform-migration.
 	},
 	{
 		subject: "Re: Code review: feat/cache-invalidation",
-		from_address: "a.demo@acme-corp.com",
-		from_name: "Alex Demo",
+		from_address: "a.johnson@acme-corp.com",
+		from_name: "Alex Johnson",
 		to_addresses: "sam@acme-corp.com",
 		date: "2026-03-22T14:45:00Z",
 		text_body: `Sam,

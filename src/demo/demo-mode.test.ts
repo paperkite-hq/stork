@@ -24,8 +24,8 @@ describe("seedDemoData", () => {
 
 		const identities = db.prepare("SELECT * FROM identities").all() as { name: string }[];
 		expect(identities).toHaveLength(2);
-		expect(identities[0].name).toBe("Alex Demo");
-		expect(identities[1].name).toBe("Alex Demo");
+		expect(identities[0].name).toBe("Alex Johnson");
+		expect(identities[1].name).toBe("Alex Johnson");
 
 		const folders = db.prepare("SELECT * FROM folders").all();
 		expect(folders).toHaveLength(2); // one INBOX per account
