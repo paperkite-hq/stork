@@ -7,6 +7,7 @@ import { isDemoMode } from "../demo/demo-mode.js";
 import type { SyncScheduler } from "../sync/sync-scheduler.js";
 import { accountRoutes } from "./routes/accounts.js";
 import { attachmentRoutes } from "./routes/attachments.js";
+import { connectorRoutes } from "./routes/connectors.js";
 import { draftRoutes } from "./routes/drafts.js";
 import { encryptionRoutes } from "./routes/encryption.js";
 import { inboxRoutes } from "./routes/inbox.js";
@@ -93,6 +94,7 @@ export function createApp(context: ContainerContext): { app: Hono } {
 	}
 
 	api.route("/accounts", accountRoutes(getDb, getScheduler));
+	api.route("/connectors", connectorRoutes(getDb, getScheduler));
 	api.route("/inbox", inboxRoutes(getDb));
 	api.route("/messages", messageRoutes(getDb));
 	api.route("/labels", labelRoutes(getDb));

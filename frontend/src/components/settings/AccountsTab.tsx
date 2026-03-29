@@ -14,7 +14,7 @@ export function AccountsTab({
 	syncStatusAccountId,
 	onShowSync,
 }: {
-	accounts: { id: number; name: string; email: string; imap_host: string }[];
+	accounts: { id: number; name: string; email: string; imap_host: string | null }[];
 	editingAccountId: number | "new" | null;
 	onEdit: (id: number | "new" | null) => void;
 	onRefetch: () => void;
@@ -115,7 +115,7 @@ function AccountCard({
 	showSync,
 	onToggleSync,
 }: {
-	account: { id: number; name: string; email: string; imap_host: string };
+	account: { id: number; name: string; email: string; imap_host: string | null };
 	onEdit: () => void;
 	onDelete: () => void;
 	showSync: boolean;

@@ -222,13 +222,15 @@ export class SyncScheduler {
 	 * Loads all accounts from the database and adds them to the scheduler.
 	 */
 	loadAccountsFromDb(): void {
-		// Only load IMAP accounts for periodic sync — Cloudflare Email accounts
-		// are push-based (webhook) and don't need polling
+		// Only load accounts with IMAP inbound connectors for periodic sync —
+		// Cloudflare Email accounts are push-based (webhook) and don't need polling.
+		// Join with inbound_connectors to get IMAP credentials from the connector table.
 		const accounts = this.db
 			.prepare(
-				`SELECT id, imap_host, imap_port, imap_tls, imap_user, imap_pass
-				FROM accounts
-				WHERE ingest_connector_type = 'imap' OR ingest_connector_type IS NULL`,
+				`SELECT a.id, ic.imap_host, ic.imap_port, ic.imap_tls, ic.imap_user, ic.imap_pass
+				FROM accounts a
+				JOIN inbound_connectors ic ON ic.id = a.inbound_connector_id
+				WHERE ic.type = 'imap'`,
 			)
 			.all() as {
 			id: number;

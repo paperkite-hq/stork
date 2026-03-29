@@ -1,8 +1,9 @@
 import { type ReactNode, useRef, useState } from "react";
 import { api } from "../api";
 import { useAsync, useFocusTrap } from "../hooks";
-import { MailIcon, SettingsIcon, ShieldIcon, XIcon } from "./Icons";
+import { LinkIcon, MailIcon, SettingsIcon, ShieldIcon, XIcon } from "./Icons";
 import { AccountsTab } from "./settings/AccountsTab";
+import { ConnectorsTab } from "./settings/ConnectorsTab";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SecurityTab } from "./settings/SecurityTab";
 
@@ -10,7 +11,7 @@ interface SettingsProps {
 	onClose: () => void;
 }
 
-type SettingsTab = "accounts" | "general" | "security";
+type SettingsTab = "accounts" | "connectors" | "general" | "security";
 
 export function Settings({ onClose }: SettingsProps) {
 	const [tab, setTab] = useState<SettingsTab>("accounts");
@@ -61,6 +62,11 @@ export function Settings({ onClose }: SettingsProps) {
 						label="Accounts"
 					/>
 					<MobileTabButton
+						active={tab === "connectors"}
+						onClick={() => setTab("connectors")}
+						label="Connectors"
+					/>
+					<MobileTabButton
 						active={tab === "general"}
 						onClick={() => setTab("general")}
 						label="General"
@@ -80,6 +86,12 @@ export function Settings({ onClose }: SettingsProps) {
 							onClick={() => setTab("accounts")}
 							label="Accounts"
 							icon={<MailIcon className="w-4 h-4" />}
+						/>
+						<TabButton
+							active={tab === "connectors"}
+							onClick={() => setTab("connectors")}
+							label="Connectors"
+							icon={<LinkIcon className="w-4 h-4" />}
 						/>
 						<TabButton
 							active={tab === "general"}
@@ -107,6 +119,7 @@ export function Settings({ onClose }: SettingsProps) {
 								onShowSync={setSyncStatusAccountId}
 							/>
 						)}
+						{tab === "connectors" && <ConnectorsTab />}
 						{tab === "general" && <GeneralTab />}
 						{tab === "security" && <SecurityTab />}
 					</div>
