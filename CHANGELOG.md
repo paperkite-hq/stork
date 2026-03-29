@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Cloudflare Email webhook endpoint** — `POST /api/webhook/cloudflare-email/:connectorId` receives push-based mail from a Cloudflare Email Worker, validates the bearer secret, parses the RFC 5322 payload, and stores it in the INBOX for all accounts linked to the connector. Deduplication by Message-ID prevents double-delivery from Cloudflare's at-least-once semantics.
+- **Unified-first navigation** — the sidebar account selector dropdown is removed. In multi-account mode, the primary "Inbox", "Unread", and "All Mail" navigation items are now cross-account by default (unified views). A new "Accounts" section at the bottom of the nav lists individual accounts for drilling into a single account's inbox. Single-account mode is unchanged.
 - **Unified label store** — labels are now global across all accounts rather than per-account, so you can apply labels like "Needs reply" consistently across a multi-account setup. Schema migration merges any duplicate label names automatically on upgrade.
 - **Connector-first account model** — accounts are now pure identities (name + email) that reference independently-configured inbound and outbound connectors. IMAP settings and SMTP settings live in the Connectors tab, not in the account form. This lets you mix connectors freely: e.g., receive via Cloudflare Email, send via AWS SES.
 - **Connector mode rename** — "Vault mode" is now "Connector mode" throughout the UI and docs. The name better reflects that this is a property of the inbound connector, not the account.

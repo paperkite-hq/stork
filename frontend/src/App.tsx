@@ -95,10 +95,15 @@ export function App() {
 		[effectiveAccountId],
 	);
 
-	// Resolve the default view for the effective account, honouring per-account setting
+	// Resolve the default view. In multi-account mode the primary navigation is
+	// unified (cross-account), so default to UNIFIED_INBOX. In single-account mode
+	// honour the per-account default_view setting.
 	const effectiveAccount = accounts?.find((a) => a.id === effectiveAccountId) ?? null;
 	const defaultLabelId = useMemo(() => {
-		if (!effectiveAccount || !labels || labels.length === 0) return INBOX_LABEL_ID;
+		if (!labels || labels.length === 0) return INBOX_LABEL_ID;
+		// Multi-account: unified inbox is the default starting point
+		if ((accounts?.length ?? 0) > 1 && !selectedAccountId) return UNIFIED_INBOX_LABEL_ID;
+		if (!effectiveAccount) return INBOX_LABEL_ID;
 		const dv = effectiveAccount.default_view ?? "inbox";
 		if (dv === "unread") return UNREAD_LABEL_ID;
 		if (dv === "all") return ALL_MAIL_LABEL_ID;
@@ -107,7 +112,7 @@ export function App() {
 			return Number.isNaN(id) ? INBOX_LABEL_ID : id;
 		}
 		return INBOX_LABEL_ID; // 'inbox' or unknown
-	}, [effectiveAccount, labels]);
+	}, [effectiveAccount, labels, accounts?.length, selectedAccountId]);
 
 	// Auto-select default view (uses per-account setting, falls back to Inbox).
 	// Guard on accounts !== null to avoid a double-fetch: if labels resolve before
