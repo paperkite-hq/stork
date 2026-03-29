@@ -1,8 +1,6 @@
 import { type ReactNode, useRef, useState } from "react";
-import { api } from "../api";
-import { useAsync, useFocusTrap } from "../hooks";
-import { LinkIcon, MailIcon, SettingsIcon, ShieldIcon, XIcon } from "./Icons";
-import { AccountsTab } from "./settings/AccountsTab";
+import { useFocusTrap } from "../hooks";
+import { LinkIcon, SettingsIcon, ShieldIcon, XIcon } from "./Icons";
 import { ConnectorsTab } from "./settings/ConnectorsTab";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SecurityTab } from "./settings/SecurityTab";
@@ -11,14 +9,10 @@ interface SettingsProps {
 	onClose: () => void;
 }
 
-type SettingsTab = "accounts" | "connectors" | "general" | "security";
+type SettingsTab = "connectors" | "general" | "security";
 
 export function Settings({ onClose }: SettingsProps) {
-	const [tab, setTab] = useState<SettingsTab>("accounts");
-	const { data: accounts, refetch: refetchAccounts } = useAsync(() => api.accounts.list(), []);
-
-	const [editingAccountId, setEditingAccountId] = useState<number | "new" | null>(null);
-	const [syncStatusAccountId, setSyncStatusAccountId] = useState<number | null>(null);
+	const [tab, setTab] = useState<SettingsTab>("connectors");
 	const dialogRef = useRef<HTMLDivElement>(null);
 	useFocusTrap(dialogRef);
 
@@ -57,11 +51,6 @@ export function Settings({ onClose }: SettingsProps) {
 				{/* Mobile tab bar — horizontal, shown below md */}
 				<nav className="sm:hidden flex border-b border-gray-200 dark:border-gray-800">
 					<MobileTabButton
-						active={tab === "accounts"}
-						onClick={() => setTab("accounts")}
-						label="Accounts"
-					/>
-					<MobileTabButton
 						active={tab === "connectors"}
 						onClick={() => setTab("connectors")}
 						label="Connectors"
@@ -81,12 +70,6 @@ export function Settings({ onClose }: SettingsProps) {
 				<div className="flex flex-1 min-h-0">
 					{/* Sidebar tabs — hidden on mobile */}
 					<nav className="hidden sm:block w-48 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 p-3 space-y-1">
-						<TabButton
-							active={tab === "accounts"}
-							onClick={() => setTab("accounts")}
-							label="Accounts"
-							icon={<MailIcon className="w-4 h-4" />}
-						/>
 						<TabButton
 							active={tab === "connectors"}
 							onClick={() => setTab("connectors")}
@@ -109,16 +92,6 @@ export function Settings({ onClose }: SettingsProps) {
 
 					{/* Content */}
 					<div className="flex-1 overflow-y-auto p-4 sm:p-6">
-						{tab === "accounts" && (
-							<AccountsTab
-								accounts={accounts ?? []}
-								editingAccountId={editingAccountId}
-								onEdit={setEditingAccountId}
-								onRefetch={refetchAccounts}
-								syncStatusAccountId={syncStatusAccountId}
-								onShowSync={setSyncStatusAccountId}
-							/>
-						)}
 						{tab === "connectors" && <ConnectorsTab />}
 						{tab === "general" && <GeneralTab />}
 						{tab === "security" && <SecurityTab />}
