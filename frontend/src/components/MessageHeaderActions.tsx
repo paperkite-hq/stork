@@ -22,7 +22,6 @@ interface MessageHeaderActionsProps {
 export function MessageHeaderActions({
 	message,
 	folders,
-	accountId,
 	onMessageChanged,
 	onMessageDeleted,
 	onLabelsChanged,
@@ -148,16 +147,13 @@ export function MessageHeaderActions({
 				</div>
 			)}
 			{/* Label picker */}
-			{accountId && (
-				<MessageLabelPicker
-					messageId={message.id}
-					accountId={accountId}
-					onLabelsChanged={() => {
-						onLabelsChanged?.();
-						onMessageChanged?.();
-					}}
-				/>
-			)}
+			<MessageLabelPicker
+				messageId={message.id}
+				onLabelsChanged={() => {
+					onLabelsChanged?.();
+					onMessageChanged?.();
+				}}
+			/>
 			<button
 				type="button"
 				onClick={() => onRequestDelete(message)}

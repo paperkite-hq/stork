@@ -31,7 +31,7 @@ describe("seedDemoData", () => {
 		expect(folders).toHaveLength(2); // one INBOX per account
 
 		const labels = db.prepare("SELECT * FROM labels").all();
-		expect(labels).toHaveLength(12); // 7 for account 1, 5 for account 2
+		expect(labels).toHaveLength(9); // 9 unique global labels (7 + 5 - 3 shared: Inbox, Sent, Archive)
 
 		const messages = db.prepare("SELECT * FROM messages").all();
 		expect(messages).toHaveLength(19); // 15 for account 1, 4 for account 2

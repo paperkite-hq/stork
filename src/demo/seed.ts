@@ -606,11 +606,13 @@ export function seedDemoData(db: Database.Database): void {
 	// Insert labels
 	const labelMap = new Map<string, number>();
 	const insertLabel = db.prepare(
-		"INSERT INTO labels (account_id, name, color, source) VALUES (?, ?, ?, ?)",
+		"INSERT OR IGNORE INTO labels (name, color, source) VALUES (?, ?, ?)",
 	);
+	const lookupLabel = db.prepare("SELECT id FROM labels WHERE name = ?");
 	for (const label of DEMO_LABELS) {
-		const result = insertLabel.run(accountId, label.name, label.color, label.source);
-		labelMap.set(label.name, result.lastInsertRowid as number);
+		insertLabel.run(label.name, label.color, label.source);
+		const row = lookupLabel.get(label.name) as { id: number };
+		labelMap.set(label.name, row.id);
 	}
 
 	// Insert messages
@@ -676,8 +678,7 @@ export function seedDemoData(db: Database.Database): void {
 				WHERE ml.label_id = labels.id
 				AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%')
 			)
-		WHERE account_id = ?
-	`).run(accountId);
+	`).run();
 
 	db.prepare(`
 		UPDATE accounts
@@ -719,8 +720,9 @@ export function seedDemoData(db: Database.Database): void {
 
 	const labelMap2 = new Map<string, number>();
 	for (const label of DEMO_LABELS_2) {
-		const result = insertLabel.run(accountId2, label.name, label.color, label.source);
-		labelMap2.set(label.name, result.lastInsertRowid as number);
+		insertLabel.run(label.name, label.color, label.source);
+		const row = lookupLabel.get(label.name) as { id: number };
+		labelMap2.set(label.name, row.id);
 	}
 
 	const insertAll2 = db.transaction(() => {
@@ -769,8 +771,7 @@ export function seedDemoData(db: Database.Database): void {
 				WHERE ml.label_id = labels.id
 				AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%')
 			)
-		WHERE account_id = ?
-	`).run(accountId2);
+	`).run();
 
 	db.prepare(`
 		UPDATE accounts

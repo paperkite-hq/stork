@@ -25,7 +25,12 @@ export function useAsync<T>(
 
 		setLoading(true);
 		setError(null);
-		fn(controller.signal)
+		const promise = fn(controller.signal);
+		if (!promise || typeof promise.then !== "function") {
+			setLoading(false);
+			return;
+		}
+		promise
 			.then((result) => {
 				if (!controller.signal.aborted) setData(result);
 			})

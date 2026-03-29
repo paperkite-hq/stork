@@ -7,6 +7,32 @@ import { Settings } from "../Settings";
 vi.mock("../../api", () => ({
 	api: {
 		testSmtp: vi.fn().mockResolvedValue({ ok: true }),
+		connectors: {
+			inbound: {
+				list: vi.fn().mockResolvedValue([
+					{
+						id: 1,
+						name: "My IMAP",
+						type: "imap",
+						imap_host: "imap.example.com",
+						imap_user: "work@example.com",
+					},
+				]),
+				get: vi.fn(),
+				create: vi.fn().mockResolvedValue({ id: 1 }),
+				update: vi.fn().mockResolvedValue({ ok: true }),
+				delete: vi.fn().mockResolvedValue({ ok: true }),
+				test: vi.fn().mockResolvedValue({ ok: true, mailboxes: 3 }),
+			},
+			outbound: {
+				list: vi.fn().mockResolvedValue([]),
+				get: vi.fn(),
+				create: vi.fn().mockResolvedValue({ id: 1 }),
+				update: vi.fn().mockResolvedValue({ ok: true }),
+				delete: vi.fn().mockResolvedValue({ ok: true }),
+				test: vi.fn().mockResolvedValue({ ok: true }),
+			},
+		},
 		accounts: {
 			list: vi
 				.fn()
@@ -17,15 +43,10 @@ vi.mock("../../api", () => ({
 				id: 1,
 				name: "Work Email",
 				email: "work@example.com",
-				imap_host: "imap.example.com",
-				imap_port: 993,
-				imap_tls: 1,
-				imap_user: "work@example.com",
-				smtp_host: "smtp.example.com",
-				smtp_port: 587,
-				smtp_tls: 1,
-				smtp_user: "work@example.com",
+				inbound_connector_id: 1,
+				outbound_connector_id: null,
 				sync_delete_from_server: 0,
+				default_view: "inbox",
 			}),
 			create: vi.fn().mockResolvedValue({ id: 2 }),
 			update: vi.fn().mockResolvedValue({ ok: true }),
@@ -265,8 +286,7 @@ describe("Settings", () => {
 		});
 		// Form should be pre-filled with existing account data
 		expect(screen.getByDisplayValue("Work Email")).toBeInTheDocument();
-		// work@example.com appears in multiple fields — use getAllByDisplayValue
-		expect(screen.getAllByDisplayValue("work@example.com").length).toBeGreaterThanOrEqual(1);
+		expect(screen.getByDisplayValue("work@example.com")).toBeInTheDocument();
 	});
 
 	it("submits edit form and refreshes account list", async () => {
@@ -279,6 +299,10 @@ describe("Settings", () => {
 		await waitFor(() => {
 			expect(screen.getByRole("heading", { name: "Edit Account" })).toBeInTheDocument();
 		});
+		// Wait for connectors to load so Save Changes button is enabled
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "Save Changes" })).not.toBeDisabled(),
+		);
 		// Click Save Changes
 		await userEvent.click(screen.getByText("Save Changes"));
 		await waitFor(() => {
@@ -312,12 +336,10 @@ describe("Settings", () => {
 		});
 		// Check all form fields render
 		expect(screen.getByPlaceholderText("Work Email")).toBeInTheDocument();
-		expect(screen.getByPlaceholderText("imap.example.com")).toBeInTheDocument();
-		expect(screen.getByPlaceholderText("smtp.example.com")).toBeInTheDocument();
-		expect(screen.getByText("Incoming Mail (IMAP)")).toBeInTheDocument();
-		expect(screen.getByText("Outgoing Mail (SMTP)")).toBeInTheDocument();
+		expect(screen.getByPlaceholderText("you@example.com")).toBeInTheDocument();
+		expect(screen.getByText("Inbound Connector")).toBeInTheDocument();
+		expect(screen.getByText("Outbound Connector")).toBeInTheDocument();
 		expect(screen.getByText("Sync Preferences")).toBeInTheDocument();
-		expect(screen.getAllByText(/Connector mode/).length).toBeGreaterThanOrEqual(1);
 	});
 
 	it("shows delete confirmation dialog and deletes account", async () => {
@@ -482,20 +504,22 @@ describe("Settings", () => {
 		});
 	});
 
-	it("shows TLS checkboxes in add account form", async () => {
+	it("shows Connector mode checkbox in add account form", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
 			expect(screen.getByText("+ Add Account")).toBeInTheDocument();
 		});
 		await userEvent.click(screen.getByText("+ Add Account"));
-		const tlsCheckboxes = screen.getAllByRole("checkbox");
-		// Should have at least IMAP TLS, SMTP TLS, and Connector mode
-		expect(tlsCheckboxes.length).toBeGreaterThanOrEqual(3);
-		// IMAP TLS should be checked by default
-		const imapTls = tlsCheckboxes.find((cb) =>
-			cb.closest("label")?.textContent?.includes("Use TLS"),
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
 		);
-		expect(imapTls).toBeChecked();
+		const checkboxes = screen.getAllByRole("checkbox");
+		// Should have the Connector mode checkbox
+		const connectorModeCheckbox = checkboxes.find((cb) =>
+			cb.closest("label")?.textContent?.includes("Connector mode"),
+		);
+		expect(connectorModeCheckbox).toBeInTheDocument();
+		expect(connectorModeCheckbox).not.toBeChecked();
 	});
 
 	it("changes messages per page selection", async () => {
@@ -806,25 +830,14 @@ describe("Settings — Account form submission", () => {
 		await waitFor(() =>
 			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
 		);
-		// Fill all required fields to pass HTML5 validation
+		// Wait for connectors to load (submit button becomes enabled)
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "Add Account" })).not.toBeDisabled(),
+		);
+		// Fill identity fields
 		await userEvent.type(screen.getByPlaceholderText("Work Email"), "Personal");
-		const emailFields = screen.getAllByPlaceholderText("you@example.com");
-		const emailField = emailFields.find((el) => el.getAttribute("type") === "email");
-		if (emailField) await userEvent.type(emailField, "me@test.com");
-		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
-		// Fill IMAP username (required for new account)
-		const userFields = emailFields.filter((el) => el.getAttribute("type") === "text");
-		if (userFields[0]) await userEvent.type(userFields[0], "me@test.com");
-		// Fill IMAP password (required for new account)
-		const passwordFields = screen.getAllByPlaceholderText("");
-		// Find the IMAP password field — it's the one that's required
-		for (const pf of passwordFields) {
-			if (pf.getAttribute("type") === "password" && pf.hasAttribute("required")) {
-				await userEvent.type(pf, "testpass123!");
-				break;
-			}
-		}
-		// Directly submit the form to bypass HTML5 validation
+		await userEvent.type(screen.getByPlaceholderText("you@example.com"), "me@test.com");
+		// Submit the form
 		const form = screen.getByRole("heading", { name: "Add Account" }).closest("form");
 		if (form) fireEvent.submit(form);
 		await waitFor(() => expect(api.accounts.create).toHaveBeenCalled());
@@ -856,6 +869,10 @@ describe("Settings — Account form submission", () => {
 		await waitFor(() =>
 			expect(screen.getByRole("heading", { name: "Edit Account" })).toBeInTheDocument(),
 		);
+		// Wait for connectors to load so Save Changes is enabled
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "Save Changes" })).not.toBeDisabled(),
+		);
 		await userEvent.click(screen.getByText("Save Changes"));
 		await waitFor(() => expect(screen.getByText("Update failed")).toBeInTheDocument());
 	});
@@ -871,326 +888,14 @@ describe("Settings — Account form submission", () => {
 		await waitFor(() =>
 			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
 		);
+		// Wait for connectors to load so the inbound connector is auto-selected
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "Add Account" })).not.toBeDisabled(),
+		);
 		// Submit the form directly to bypass HTML5 validation
 		const form = screen.getByRole("heading", { name: "Add Account" }).closest("form");
 		if (form) fireEvent.submit(form);
 		await waitFor(() => expect(screen.getByText("Missing required fields")).toBeInTheDocument());
-	});
-});
-
-describe("Settings — Connection testing", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		localStorageMock.clear();
-	});
-
-	it("shows Test Connection button disabled when IMAP fields are empty", async () => {
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		const testBtn = screen.getByText("Test IMAP");
-		expect(testBtn).toBeDisabled();
-	});
-
-	it("tests connection successfully and shows mailbox count", async () => {
-		const { api } = await import("../../api");
-		(api.accounts.testConnection as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-			ok: true,
-			mailboxes: 12,
-		});
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		// Fill required IMAP fields to enable the button
-		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
-		const userFields = screen.getAllByPlaceholderText("you@example.com");
-		const imapUserField = userFields.find((el) =>
-			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
-		const passwordFields = screen.getAllByDisplayValue("");
-		const imapPassField = passwordFields.find(
-			(el) =>
-				el.getAttribute("type") === "password" &&
-				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapPassField) await userEvent.type(imapPassField, "password123");
-		const testBtn = screen.getByText("Test IMAP");
-		expect(testBtn).toBeEnabled();
-		await userEvent.click(testBtn);
-		await waitFor(() =>
-			expect(
-				screen.getByText(/IMAP connection successful — 12 mailboxes found/),
-			).toBeInTheDocument(),
-		);
-	});
-
-	it("tests connection and shows failure message", async () => {
-		const { api } = await import("../../api");
-		(api.accounts.testConnection as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-			ok: false,
-			error: "Authentication failed",
-		});
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
-		const userFields = screen.getAllByPlaceholderText("you@example.com");
-		const imapUserField = userFields.find((el) =>
-			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
-		const passwordFields = screen.getAllByDisplayValue("");
-		const imapPassField = passwordFields.find(
-			(el) =>
-				el.getAttribute("type") === "password" &&
-				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapPassField) await userEvent.type(imapPassField, "wrongpass");
-		await userEvent.click(screen.getByText("Test IMAP"));
-		await waitFor(() =>
-			expect(screen.getByText(/IMAP connection failed: Authentication failed/)).toBeInTheDocument(),
-		);
-	});
-
-	it("handles test connection network error", async () => {
-		const { api } = await import("../../api");
-		(api.accounts.testConnection as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-			new Error("Network error"),
-		);
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
-		const userFields = screen.getAllByPlaceholderText("you@example.com");
-		const imapUserField = userFields.find((el) =>
-			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
-		const passwordFields = screen.getAllByDisplayValue("");
-		const imapPassField = passwordFields.find(
-			(el) =>
-				el.getAttribute("type") === "password" &&
-				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapPassField) await userEvent.type(imapPassField, "somepass");
-		await userEvent.click(screen.getByText("Test IMAP"));
-		await waitFor(() =>
-			expect(screen.getByText(/IMAP connection failed: Network error/)).toBeInTheDocument(),
-		);
-	});
-});
-
-describe("Settings — Provider auto-fill in account form", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		localStorageMock.clear();
-	});
-
-	it("auto-fills Gmail IMAP/SMTP settings when entering Gmail email", async () => {
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		// Find the email field and type a Gmail address
-		const emailFields = screen.getAllByPlaceholderText("you@example.com");
-		const emailField = emailFields.find((el) => el.getAttribute("type") === "email");
-		if (emailField) await userEvent.type(emailField, "alice@gmail.com");
-		// IMAP host should auto-fill
-		expect(screen.getByDisplayValue("imap.gmail.com")).toBeInTheDocument();
-		expect(screen.getByDisplayValue("smtp.gmail.com")).toBeInTheDocument();
-	});
-
-	it("auto-fills Outlook IMAP/SMTP settings", async () => {
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		const emailFields = screen.getAllByPlaceholderText("you@example.com");
-		const emailField = emailFields.find((el) => el.getAttribute("type") === "email");
-		if (emailField) await userEvent.type(emailField, "bob@outlook.com");
-		expect(screen.getByDisplayValue("outlook.office365.com")).toBeInTheDocument();
-		expect(screen.getByDisplayValue("smtp.office365.com")).toBeInTheDocument();
-	});
-
-	it("syncs IMAP username with email until manually edited", async () => {
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		const emailFields = screen.getAllByPlaceholderText("you@example.com");
-		const emailField = emailFields.find((el) => el.getAttribute("type") === "email");
-		if (emailField) await userEvent.type(emailField, "me@test.com");
-		// IMAP and SMTP username fields should auto-fill with the email
-		const usernameDisplayValues = screen.getAllByDisplayValue("me@test.com");
-		// Should have email field + imap_user + smtp_user = at least 3
-		expect(usernameDisplayValues.length).toBeGreaterThanOrEqual(3);
-	});
-
-	it("does not auto-fill provider settings when editing existing account", async () => {
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("Edit")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("Edit"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Edit Account" })).toBeInTheDocument(),
-		);
-		// Editing an existing account should not overwrite IMAP host even with Gmail email
-		const emailFields = screen.getAllByDisplayValue("work@example.com");
-		const emailField = emailFields.find((el) => el.getAttribute("type") === "email");
-		if (emailField) {
-			await userEvent.clear(emailField);
-			await userEvent.type(emailField, "user@gmail.com");
-		}
-		// IMAP host should remain the original value, not change to imap.gmail.com
-		expect(screen.getByDisplayValue("imap.example.com")).toBeInTheDocument();
-	});
-
-	it("shows delete account error toast on API failure", async () => {
-		const { api } = await import("../../api");
-		(api.accounts.delete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-			new Error("Cannot delete"),
-		);
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("Delete")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("Delete"));
-		await waitFor(() => expect(screen.getByText("Delete account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("Delete Account"));
-		// The error toast should fire — verify the delete API was called
-		await waitFor(() => expect(api.accounts.delete).toHaveBeenCalledWith(1));
-	});
-});
-
-describe("Settings — SMTP connection testing", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		localStorageMock.clear();
-	});
-
-	it("shows Test SMTP button when smtp_host is filled", async () => {
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		// No Test SMTP button initially since smtp_host is empty
-		expect(screen.queryByText("Test SMTP")).not.toBeInTheDocument();
-		// Fill SMTP host
-		await userEvent.type(screen.getByPlaceholderText("smtp.example.com"), "smtp.test.com");
-		expect(screen.getByText("Test SMTP")).toBeInTheDocument();
-	});
-
-	it("tests SMTP connection successfully", async () => {
-		const { api } = await import("../../api");
-		(api as unknown as { testSmtp: ReturnType<typeof vi.fn> }).testSmtp = vi
-			.fn()
-			.mockResolvedValueOnce({ ok: true });
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		// Fill IMAP fields (required for SMTP test to use as fallback)
-		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
-		const userFields = screen.getAllByPlaceholderText("you@example.com");
-		const imapUserField = userFields.find((el) =>
-			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
-		const passwordFields = screen.getAllByDisplayValue("");
-		const imapPassField = passwordFields.find(
-			(el) =>
-				el.getAttribute("type") === "password" &&
-				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapPassField) await userEvent.type(imapPassField, "pass123");
-		// Fill SMTP host to make button appear
-		await userEvent.type(screen.getByPlaceholderText("smtp.example.com"), "smtp.test.com");
-		await userEvent.click(screen.getByText("Test SMTP"));
-		await waitFor(() =>
-			expect(screen.getByText("SMTP connection successful — ready to send")).toBeInTheDocument(),
-		);
-	});
-
-	it("tests SMTP connection and shows failure message", async () => {
-		const { api } = await import("../../api");
-		(api as unknown as { testSmtp: ReturnType<typeof vi.fn> }).testSmtp = vi
-			.fn()
-			.mockResolvedValueOnce({ ok: false, error: "Auth rejected" });
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
-		const userFields = screen.getAllByPlaceholderText("you@example.com");
-		const imapUserField = userFields.find((el) =>
-			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
-		const passwordFields = screen.getAllByDisplayValue("");
-		const imapPassField = passwordFields.find(
-			(el) =>
-				el.getAttribute("type") === "password" &&
-				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapPassField) await userEvent.type(imapPassField, "pass123");
-		await userEvent.type(screen.getByPlaceholderText("smtp.example.com"), "smtp.test.com");
-		await userEvent.click(screen.getByText("Test SMTP"));
-		await waitFor(() =>
-			expect(screen.getByText(/SMTP connection failed: Auth rejected/)).toBeInTheDocument(),
-		);
-	});
-
-	it("handles SMTP test network error", async () => {
-		const { api } = await import("../../api");
-		(api as unknown as { testSmtp: ReturnType<typeof vi.fn> }).testSmtp = vi
-			.fn()
-			.mockRejectedValueOnce(new Error("Connection refused"));
-		render(<Settings onClose={vi.fn()} />);
-		await waitFor(() => expect(screen.getByText("+ Add Account")).toBeInTheDocument());
-		await userEvent.click(screen.getByText("+ Add Account"));
-		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
-		);
-		await userEvent.type(screen.getByPlaceholderText("imap.example.com"), "imap.test.com");
-		const userFields = screen.getAllByPlaceholderText("you@example.com");
-		const imapUserField = userFields.find((el) =>
-			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapUserField) await userEvent.type(imapUserField, "user@test.com");
-		const passwordFields = screen.getAllByDisplayValue("");
-		const imapPassField = passwordFields.find(
-			(el) =>
-				el.getAttribute("type") === "password" &&
-				el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		);
-		if (imapPassField) await userEvent.type(imapPassField, "pass123");
-		await userEvent.type(screen.getByPlaceholderText("smtp.example.com"), "smtp.test.com");
-		await userEvent.click(screen.getByText("Test SMTP"));
-		await waitFor(() =>
-			expect(screen.getByText(/SMTP connection failed: Connection refused/)).toBeInTheDocument(),
-		);
 	});
 });
 
@@ -1434,33 +1139,6 @@ describe("Settings — AccountForm field interactions", () => {
 		);
 	}
 
-	it("toggles IMAP TLS checkbox", async () => {
-		await openAddAccountForm();
-		// IMAP TLS checkbox is initially checked (default imap_tls=1)
-		const tlsCheckboxes = screen.getAllByRole("checkbox");
-		const imapTlsCheckbox = tlsCheckboxes.find((cb) =>
-			cb.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		) as HTMLInputElement | undefined;
-		if (!imapTlsCheckbox) throw new Error("IMAP TLS checkbox not found");
-		expect(imapTlsCheckbox.checked).toBe(true);
-		await userEvent.click(imapTlsCheckbox);
-		expect(imapTlsCheckbox.checked).toBe(false);
-		await userEvent.click(imapTlsCheckbox);
-		expect(imapTlsCheckbox.checked).toBe(true);
-	});
-
-	it("changes IMAP port field", async () => {
-		await openAddAccountForm();
-		// Find the IMAP port input (a number input in the IMAP fieldset)
-		const numberInputs = screen.getAllByRole("spinbutton");
-		const imapPortInput = numberInputs.find((el) =>
-			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		) as HTMLInputElement | undefined;
-		if (!imapPortInput) throw new Error("IMAP port input not found");
-		fireEvent.change(imapPortInput, { target: { value: "143" } });
-		expect(imapPortInput.value).toBe("143");
-	});
-
 	it("toggles sync deletions checkbox", async () => {
 		await openAddAccountForm();
 		const syncCheckboxes = screen.getAllByRole("checkbox");
@@ -1471,88 +1149,6 @@ describe("Settings — AccountForm field interactions", () => {
 		expect(syncDeleteCheckbox.checked).toBe(false);
 		await userEvent.click(syncDeleteCheckbox);
 		expect(syncDeleteCheckbox.checked).toBe(true);
-	});
-
-	it("changes SMTP port field", async () => {
-		await openAddAccountForm();
-		const numberInputs = screen.getAllByRole("spinbutton");
-		const smtpPortInput = numberInputs.find((el) =>
-			el.closest("fieldset")?.textContent?.includes("Outgoing Mail"),
-		) as HTMLInputElement | undefined;
-		if (!smtpPortInput) throw new Error("SMTP port input not found");
-		fireEvent.change(smtpPortInput, { target: { value: "465" } });
-		expect(smtpPortInput.value).toBe("465");
-	});
-
-	it("IMAP port falls back to 993 on non-numeric input", async () => {
-		await openAddAccountForm();
-		const numberInputs = screen.getAllByRole("spinbutton");
-		const imapPortInput = numberInputs.find((el) =>
-			el.closest("fieldset")?.textContent?.includes("Incoming Mail"),
-		) as HTMLInputElement | undefined;
-		if (!imapPortInput) throw new Error("IMAP port input not found");
-		// Empty string → Number("") = 0 → fallback to 993
-		fireEvent.change(imapPortInput, { target: { value: "" } });
-		expect(imapPortInput.value).toBe("993");
-	});
-
-	it("SMTP port falls back to 587 on non-numeric input", async () => {
-		await openAddAccountForm();
-		const numberInputs = screen.getAllByRole("spinbutton");
-		const smtpPortInput = numberInputs.find((el) =>
-			el.closest("fieldset")?.textContent?.includes("Outgoing Mail"),
-		) as HTMLInputElement | undefined;
-		if (!smtpPortInput) throw new Error("SMTP port input not found");
-		// Empty string → Number("") = 0 → fallback to 587
-		fireEvent.change(smtpPortInput, { target: { value: "" } });
-		expect(smtpPortInput.value).toBe("587");
-	});
-
-	it("SMTP TLS can be re-enabled after being unchecked", async () => {
-		await openAddAccountForm();
-		const tlsCheckboxes = screen.getAllByRole("checkbox");
-		const smtpTlsCheckbox = tlsCheckboxes.find((cb) =>
-			cb.closest("fieldset")?.textContent?.includes("Outgoing Mail"),
-		) as HTMLInputElement | undefined;
-		if (!smtpTlsCheckbox) throw new Error("SMTP TLS checkbox not found");
-		await userEvent.click(smtpTlsCheckbox); // uncheck
-		expect(smtpTlsCheckbox.checked).toBe(false);
-		await userEvent.click(smtpTlsCheckbox); // re-check
-		expect(smtpTlsCheckbox.checked).toBe(true);
-	});
-
-	it("toggles SMTP TLS checkbox", async () => {
-		await openAddAccountForm();
-		const tlsCheckboxes = screen.getAllByRole("checkbox");
-		const smtpTlsCheckbox = tlsCheckboxes.find((cb) =>
-			cb.closest("fieldset")?.textContent?.includes("Outgoing Mail"),
-		) as HTMLInputElement | undefined;
-		if (!smtpTlsCheckbox) throw new Error("SMTP TLS checkbox not found");
-		await userEvent.click(smtpTlsCheckbox);
-		expect(smtpTlsCheckbox.checked).toBe(false);
-	});
-
-	it("updates SMTP username via onChange", async () => {
-		await openAddAccountForm();
-		const usernameInputs = screen.getAllByPlaceholderText("you@example.com");
-		// SMTP Username is the second 'you@example.com' placeholder (IMAP user is first)
-		const smtpUserInput = usernameInputs[usernameInputs.length - 1] as HTMLInputElement;
-		fireEvent.change(smtpUserInput, { target: { value: "smtp-user@test.com" } });
-		expect(smtpUserInput.value).toBe("smtp-user@test.com");
-	});
-
-	it("updates SMTP password via onChange", async () => {
-		await openAddAccountForm();
-		const passwordInputs = screen.getAllByPlaceholderText("");
-		// Find the SMTP password input: type=password AND in the Outgoing Mail fieldset
-		const smtpPassInput = Array.from(passwordInputs).find(
-			(el) =>
-				el.getAttribute("type") === "password" &&
-				el.closest("fieldset")?.textContent?.includes("Outgoing Mail"),
-		) as HTMLInputElement | undefined;
-		if (!smtpPassInput) throw new Error("SMTP password input not found");
-		fireEvent.change(smtpPassInput, { target: { value: "smtp-secret" } });
-		expect(smtpPassInput.value).toBe("smtp-secret");
 	});
 
 	it("switches to General tab via desktop sidebar tab button", async () => {

@@ -513,9 +513,8 @@ export function Sidebar({
 					</p>
 				)}
 				{/* Label management — create button + context menu + edit/delete */}
-				{selectedAccountId && onLabelsChanged && (
+				{onLabelsChanged && (
 					<LabelManager
-						accountId={selectedAccountId}
 						onLabelsChanged={onLabelsChanged}
 						contextMenu={contextMenu}
 						onContextMenuClose={() => setContextMenu(null)}

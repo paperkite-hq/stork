@@ -36,7 +36,6 @@ function makeLabel(overrides: Partial<Label> = {}): Label {
 
 describe("LabelManager", () => {
 	const defaultProps = {
-		accountId: 1,
 		onLabelsChanged: vi.fn(),
 		contextMenu: null,
 		onContextMenuClose: vi.fn(),
@@ -71,7 +70,7 @@ describe("LabelManager", () => {
 		await user.click(screen.getByText("Create label", { selector: "button[type='submit']" }));
 
 		await waitFor(() => {
-			expect(api.labels.create).toHaveBeenCalledWith(1, { name: "Important" });
+			expect(api.labels.create).toHaveBeenCalledWith({ name: "Important" });
 		});
 		expect(defaultProps.onLabelsChanged).toHaveBeenCalled();
 	});
@@ -88,7 +87,7 @@ describe("LabelManager", () => {
 		await user.click(screen.getByText("Create label", { selector: "button[type='submit']" }));
 
 		await waitFor(() => {
-			expect(api.labels.create).toHaveBeenCalledWith(1, { name: "Urgent", color: "#ef4444" });
+			expect(api.labels.create).toHaveBeenCalledWith({ name: "Urgent", color: "#ef4444" });
 		});
 	});
 
@@ -290,7 +289,7 @@ describe("LabelManager", () => {
 		await user.click(screen.getByText("Create label", { selector: "button[type='submit']" }));
 
 		await waitFor(() => {
-			expect(api.labels.create).toHaveBeenCalledWith(1, { name: "No Color" });
+			expect(api.labels.create).toHaveBeenCalledWith({ name: "No Color" });
 		});
 	});
 });
@@ -301,7 +300,7 @@ describe("MessageLabelPicker", () => {
 	});
 
 	it("renders the label toggle button", () => {
-		render(<MessageLabelPicker messageId={1} accountId={1} />);
+		render(<MessageLabelPicker messageId={1} />);
 		expect(screen.getByTitle("Manage labels")).toBeInTheDocument();
 	});
 
@@ -316,7 +315,7 @@ describe("MessageLabelPicker", () => {
 		vi.mocked(api.labels.list).mockResolvedValue(allLabels);
 		vi.mocked(api.messages.labels).mockResolvedValue(msgLabels);
 
-		render(<MessageLabelPicker messageId={10} accountId={1} />);
+		render(<MessageLabelPicker messageId={10} />);
 		await user.click(screen.getByTitle("Manage labels"));
 
 		await waitFor(() => {
@@ -338,7 +337,7 @@ describe("MessageLabelPicker", () => {
 		vi.mocked(api.messages.labels).mockResolvedValue(msgLabels);
 		vi.mocked(api.messages.addLabels).mockResolvedValue({ ok: true });
 
-		render(<MessageLabelPicker messageId={10} accountId={1} onLabelsChanged={onLabelsChanged} />);
+		render(<MessageLabelPicker messageId={10} onLabelsChanged={onLabelsChanged} />);
 		await user.click(screen.getByTitle("Manage labels"));
 
 		await waitFor(() => {
@@ -364,7 +363,7 @@ describe("MessageLabelPicker", () => {
 		vi.mocked(api.messages.labels).mockResolvedValue(msgLabels);
 		vi.mocked(api.messages.removeLabel).mockResolvedValue({ ok: true });
 
-		render(<MessageLabelPicker messageId={10} accountId={1} onLabelsChanged={onLabelsChanged} />);
+		render(<MessageLabelPicker messageId={10} onLabelsChanged={onLabelsChanged} />);
 		await user.click(screen.getByTitle("Manage labels"));
 
 		await waitFor(() => {
@@ -385,7 +384,7 @@ describe("MessageLabelPicker", () => {
 		vi.mocked(api.labels.list).mockRejectedValue(new Error("Network error"));
 		vi.mocked(api.messages.labels).mockRejectedValue(new Error("Network error"));
 
-		render(<MessageLabelPicker messageId={10} accountId={1} />);
+		render(<MessageLabelPicker messageId={10} />);
 		await user.click(screen.getByTitle("Manage labels"));
 
 		await waitFor(() => {
@@ -402,7 +401,7 @@ describe("MessageLabelPicker", () => {
 		vi.mocked(api.messages.labels).mockResolvedValue(msgLabels);
 		vi.mocked(api.messages.addLabels).mockRejectedValue(new Error("Failed"));
 
-		render(<MessageLabelPicker messageId={10} accountId={1} />);
+		render(<MessageLabelPicker messageId={10} />);
 		await user.click(screen.getByTitle("Manage labels"));
 
 		await waitFor(() => {
@@ -421,7 +420,7 @@ describe("MessageLabelPicker", () => {
 		vi.mocked(api.labels.list).mockResolvedValue([]);
 		vi.mocked(api.messages.labels).mockResolvedValue([]);
 
-		render(<MessageLabelPicker messageId={10} accountId={1} />);
+		render(<MessageLabelPicker messageId={10} />);
 		await user.click(screen.getByTitle("Manage labels"));
 
 		await waitFor(() => {
@@ -429,13 +428,15 @@ describe("MessageLabelPicker", () => {
 		});
 	});
 
-	it("does not fetch labels when accountId is null", async () => {
+	it("fetches global labels on open", async () => {
+		vi.mocked(api.labels.list).mockResolvedValue([]);
+		vi.mocked(api.messages.labels).mockResolvedValue([]);
 		const user = userEvent.setup();
-		render(<MessageLabelPicker messageId={10} accountId={null} />);
+		render(<MessageLabelPicker messageId={10} />);
 		await user.click(screen.getByTitle("Manage labels"));
-		// Give time for any async operations
-		await new Promise((r) => setTimeout(r, 50));
-		expect(api.labels.list).not.toHaveBeenCalled();
+		await waitFor(() => {
+			expect(api.labels.list).toHaveBeenCalled();
+		});
 	});
 
 	it("shows loading state while fetching labels", async () => {
@@ -448,7 +449,7 @@ describe("MessageLabelPicker", () => {
 		vi.mocked(api.messages.labels).mockResolvedValue([]);
 
 		const user = userEvent.setup();
-		render(<MessageLabelPicker messageId={10} accountId={1} />);
+		render(<MessageLabelPicker messageId={10} />);
 		await user.click(screen.getByTitle("Manage labels"));
 
 		expect(screen.getByText("Loading…")).toBeInTheDocument();
