@@ -183,6 +183,7 @@ export function createTestContext(db: Database.Database): ContainerContext {
 		dataDir: ":memory:",
 		db,
 		scheduler,
+		r2Poller: null,
 		_vaultKeyInMemory: null,
 	};
 }

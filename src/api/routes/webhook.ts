@@ -1,19 +1,11 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
-import { simpleParser } from "mailparser";
 import type { ContainerContext } from "../../crypto/lifecycle.js";
+import { storeInboundEmail } from "../../storage/email-storage.js";
 
 interface InboundConnectorRow {
 	id: number;
 	cf_email_webhook_secret: string | null;
-}
-
-interface AccountRow {
-	id: number;
-}
-
-interface FolderRow {
-	id: number;
 }
 
 /** Expected payload from a Cloudflare Email Worker */
@@ -93,11 +85,10 @@ export function webhookRoutes(context: ContainerContext): Hono {
 			return c.json({ error: "Missing required field: raw" }, 400);
 		}
 
-		// Parse the raw RFC 5322 message
-		let parsed: Awaited<ReturnType<typeof simpleParser>>;
+		// Parse and store the email
+		let result: { stored: number };
 		try {
-			const rawBuffer = Buffer.from(payload.raw, "base64");
-			parsed = await simpleParser(rawBuffer);
+			result = await storeInboundEmail(db, connectorId, payload);
 		} catch (err) {
 			return c.json(
 				{
@@ -107,159 +98,10 @@ export function webhookRoutes(context: ContainerContext): Hono {
 			);
 		}
 
-		// Find all accounts linked to this connector
-		const accounts = db
-			.prepare("SELECT id FROM accounts WHERE inbound_connector_id = ?")
-			.all(connectorId) as AccountRow[];
-
-		if (accounts.length === 0) {
-			// Connector exists but no accounts reference it — accept and discard
-			return c.json({ ok: true, stored: 0 });
-		}
-
-		// Extract parsed fields
-		const fromAddr = parsed.from?.value?.[0];
-		const toAddrs = parsed.to
-			? (Array.isArray(parsed.to) ? parsed.to : [parsed.to]).flatMap((a) =>
-					a.value.map((v) => v.address).filter(Boolean),
-				)
-			: [];
-		const ccAddrs = parsed.cc
-			? (Array.isArray(parsed.cc) ? parsed.cc : [parsed.cc]).flatMap((a) =>
-					a.value.map((v) => v.address).filter(Boolean),
-				)
-			: [];
-		const refs = parsed.references
-			? Array.isArray(parsed.references)
-				? parsed.references
-				: [parsed.references]
-			: null;
-
-		const checkDuplicate = parsed.messageId
-			? db.prepare("SELECT id FROM messages WHERE account_id = ? AND message_id = ? LIMIT 1")
-			: null;
-
-		const insertMessage = db.prepare(`
-			INSERT INTO messages (
-				account_id, folder_id, uid, message_id, in_reply_to, "references",
-				subject, from_address, from_name, to_addresses, cc_addresses,
-				date, text_body, html_body, flags, size, has_attachments
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
-		`);
-
-		let stored = 0;
-
-		// Prepare account-label auto-labeling statements
-		const ensureAccountLabel = db.prepare(`
-			INSERT INTO labels (name, source, color)
-			VALUES (?, 'account', ?)
-			ON CONFLICT(name) DO UPDATE SET source = 'account'
-		`);
-		const applyAccountLabel = db.prepare(`
-			INSERT OR IGNORE INTO message_labels (message_id, label_id)
-			SELECT ?, l.id FROM labels l WHERE l.name = ? AND l.source = 'account'
-		`);
-		const applyInboxLabel = db.prepare(`
-			INSERT OR IGNORE INTO message_labels (message_id, label_id)
-			SELECT ?, l.id FROM labels l WHERE LOWER(l.name) = 'inbox'
-		`);
-
-		const accountLabelPalette = [
-			"#3b82f6",
-			"#10b981",
-			"#f59e0b",
-			"#8b5cf6",
-			"#ef4444",
-			"#06b6d4",
-			"#ec4899",
-			"#84cc16",
-		];
-
-		for (const account of accounts) {
-			// Deduplicate by message-id to handle at-least-once delivery from Cloudflare
-			if (checkDuplicate) {
-				const existing = checkDuplicate.get(account.id, parsed.messageId) as
-					| { id: number }
-					| undefined;
-				if (existing) continue;
-			}
-
-			const folderId = findOrCreateInbox(db, account.id);
-			const uid = nextInboxUid(db, folderId);
-
-			const result = insertMessage.run(
-				account.id,
-				folderId,
-				uid,
-				parsed.messageId ?? null,
-				parsed.inReplyTo ?? null,
-				refs ? JSON.stringify(refs) : null,
-				parsed.subject ?? null,
-				fromAddr?.address ?? payload.from ?? null,
-				fromAddr?.name ?? null,
-				toAddrs.length > 0 ? JSON.stringify(toAddrs) : null,
-				ccAddrs.length > 0 ? JSON.stringify(ccAddrs) : null,
-				parsed.date ? parsed.date.toISOString() : new Date().toISOString(),
-				parsed.text ?? null,
-				typeof parsed.html === "string" ? parsed.html : null,
-				payload.rawSize ?? 0,
-				(parsed.attachments?.length ?? 0) > 0 ? 1 : 0,
-			);
-			const messageId = Number(result.lastInsertRowid);
-
-			// Auto-label with account name and Inbox
-			const accountName = db.prepare("SELECT name FROM accounts WHERE id = ?").get(account.id) as
-				| { name: string }
-				| undefined;
-			if (accountName) {
-				const color = accountLabelPalette[(account.id - 1) % accountLabelPalette.length];
-				ensureAccountLabel.run(accountName.name, color);
-				applyAccountLabel.run(messageId, accountName.name);
-			}
-			applyInboxLabel.run(messageId);
-
-			stored++;
-			// Update folder unread count
-			db.prepare(
-				"UPDATE folders SET unread_count = unread_count + 1, message_count = message_count + 1 WHERE id = ?",
-			).run(folderId);
-		}
-
-		return c.json({ ok: true, stored });
+		return c.json({ ok: true, stored: result.stored });
 	});
 
 	return api;
-}
-
-/** Find or create the INBOX folder for an account, returning its ID */
-function findOrCreateInbox(db: Database.Database, accountId: number): number {
-	const existing = db
-		.prepare(
-			`SELECT id FROM folders
-			WHERE account_id = ? AND (path = 'INBOX' OR special_use = '\\\\Inbox' OR name = 'Inbox')
-			LIMIT 1`,
-		)
-		.get(accountId) as FolderRow | undefined;
-
-	if (existing) return existing.id;
-
-	const result = db
-		.prepare(
-			`INSERT INTO folders (account_id, path, name, delimiter, flags, special_use, message_count, unread_count)
-			VALUES (?, 'INBOX', 'Inbox', '/', '[]', '\\Inbox', 0, 0)`,
-		)
-		.run(accountId);
-	return Number(result.lastInsertRowid);
-}
-
-/** Get the next available positive UID for a folder */
-function nextInboxUid(db: Database.Database, folderId: number): number {
-	const row = db
-		.prepare(
-			"SELECT COALESCE(MAX(uid), 0) + 1 AS next_uid FROM messages WHERE folder_id = ? AND uid > 0",
-		)
-		.get(folderId) as { next_uid: number };
-	return row.next_uid;
 }
 
 /** Constant-time string comparison to prevent timing attacks */

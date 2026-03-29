@@ -31,6 +31,9 @@ const mockSchedulerStop = vi.fn<() => Promise<void>>().mockResolvedValue(undefin
 const mockSchedulerStart = vi.fn();
 const mockSchedulerLoad = vi.fn();
 const mockDbClose = vi.fn();
+const mockR2PollerStop = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+const mockR2PollerStart = vi.fn();
+const mockR2PollerLoad = vi.fn();
 
 // Callbacks captured when SyncScheduler is constructed; tests invoke them directly.
 let mockCapturedOnSyncComplete:
@@ -80,6 +83,16 @@ vi.mock("../sync/sync-scheduler.js", () => ({
 
 vi.mock("../storage/db.js", () => ({
 	openDatabase: vi.fn(() => ({ close: mockDbClose })),
+}));
+
+vi.mock("../sync/r2-poller.js", () => ({
+	R2Poller: vi.fn(function (this: unknown) {
+		return {
+			start: mockR2PollerStart,
+			stop: mockR2PollerStop,
+			loadConnectorsFromDb: mockR2PollerLoad,
+		};
+	}),
 }));
 
 // ---------------------------------------------------------------------------

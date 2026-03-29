@@ -187,6 +187,86 @@ export default {
 }
 ```
 
+## Cloudflare R2 Queue/Poll (Recommended)
+
+The R2 queue/poll model replaces the direct webhook with a durable queue: the Cloudflare Email Worker writes emails to an R2 bucket, and Stork polls the bucket on a configurable interval.
+
+**Why use this instead of the webhook?**
+
+| Webhook | R2 Queue/Poll |
+|---------|--------------|
+| Emails lost if Stork is down | Emails queue in R2, processed after restart |
+| No retry on write failure | Automatic retry on next poll |
+| Direct coupling: worker ↔ stork | Decoupled: worker ↔ R2 ↔ stork |
+
+Messages are deduplicated by Message-ID, so a crash between write and delete cannot cause duplicates.
+
+### Setup
+
+**1. Create an R2 bucket** in the Cloudflare dashboard. Enable [R2](https://developers.cloudflare.com/r2/) for your account if you haven't already.
+
+**2. Create R2 API credentials**: In the Cloudflare dashboard, go to R2 → Manage R2 API Tokens, create a token with "Object Read & Write" permission scoped to your bucket. Note the **Access Key ID** and **Secret Access Key**.
+
+**3. In Settings → Connectors**, create a new Inbound Connector of type "Cloudflare R2" with:
+
+| Field | Description |
+|-------|-------------|
+| `cf_r2_account_id` | Your Cloudflare account ID |
+| `cf_r2_bucket_name` | R2 bucket name |
+| `cf_r2_access_key_id` | R2 access key ID |
+| `cf_r2_secret_access_key` | R2 secret access key |
+| `cf_r2_prefix` | Object key prefix (default: `pending/`) |
+| `cf_r2_poll_interval_ms` | Poll interval in ms (default: 60000) |
+
+**4. Deploy a Cloudflare Email Worker** that writes emails to R2:
+
+```javascript
+export default {
+  async email(message, env) {
+    // Read the raw email stream
+    const reader = message.raw.getReader();
+    const chunks = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const rawBytes = new Uint8Array(chunks.reduce((a, b) => {
+      const merged = new Uint8Array(a.length + b.length);
+      merged.set(a);
+      merged.set(b, a.length);
+      return merged;
+    }, new Uint8Array(0)));
+    const raw = btoa(String.fromCharCode(...rawBytes));
+
+    // Write to R2 with a unique key under the configured prefix
+    const key = `${env.R2_PREFIX ?? 'pending/'}${Date.now()}-${crypto.randomUUID()}.json`;
+    await env.EMAIL_BUCKET.put(key, JSON.stringify({
+      from: message.from,
+      to: message.to,
+      raw,
+      rawSize: message.rawSize,
+    }), {
+      httpMetadata: { contentType: 'application/json' },
+    });
+  }
+}
+```
+
+Add to your `wrangler.toml`:
+```toml
+[[r2_buckets]]
+binding = "EMAIL_BUCKET"
+bucket_name = "your-bucket-name"
+
+[vars]
+R2_PREFIX = "pending/"
+```
+
+**5. Add an account** referencing this inbound connector.
+
+Stork polls every 60 seconds by default (configurable via `cf_r2_poll_interval_ms`). Successfully processed objects are deleted from R2. If Stork is locked or a write fails, the object stays in R2 and is processed on the next poll.
+
 ## Sync Settings
 
 Sync behavior is configured per-account via the API or Settings UI.
