@@ -24,7 +24,7 @@
 		"better-sqlite3-multiple-ciphers": "^12.8.0",
 		"bip39": "^3.1.0",
 		"hono": "^4.7.0",
-		"imapflow": "^1.0.171",
+		"imapflow": "^1.2.18",
 		"mailparser": "^3.9.4",
 		"nodemailer": "^6.9.16"
 	},
