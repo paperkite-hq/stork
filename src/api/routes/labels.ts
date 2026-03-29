@@ -130,6 +130,32 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 		return c.json({ total: result.total ?? 0, unread: result.unread ?? 0 });
 	});
 
+	// Related labels: labels that co-occur most frequently with messages having the given label.
+	// Useful for suggesting intersection filters (e.g. "you're in Inbox — also filter by Work or Personal?").
+	api.get("/:labelId/related", (c) => {
+		const labelId = parseIntParam(c, "labelId", c.req.param("labelId"));
+		if (labelId instanceof Response) return labelId;
+		const limitParam = c.req.query("limit");
+		const limit = limitParam ? Math.min(Math.max(1, Number(limitParam) || 5), 20) : 5;
+
+		const related = getDb()
+			.prepare(
+				`
+				SELECT l.id, l.name, l.color, l.source, COUNT(*) as co_count
+				FROM labels l
+				JOIN message_labels ml ON ml.label_id = l.id
+				JOIN message_labels ml2 ON ml2.message_id = ml.message_id AND ml2.label_id = ?
+				WHERE l.id != ?
+				GROUP BY l.id, l.name, l.color, l.source
+				ORDER BY co_count DESC
+				LIMIT ?
+			`,
+			)
+			.all(labelId, labelId, limit);
+
+		return c.json(related);
+	});
+
 	api.get("/:labelId/messages", (c) => {
 		const labelId = parseIntParam(c, "labelId", c.req.param("labelId"));
 		if (labelId instanceof Response) return labelId;
