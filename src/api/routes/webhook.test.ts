@@ -2,6 +2,7 @@ import type Database from "better-sqlite3-multiple-ciphers";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../api/server.js";
+import type { ContainerContext } from "../../crypto/lifecycle.js";
 import { createTestContext, createTestDb } from "../../test-helpers/test-db.js";
 
 /**
@@ -257,5 +258,114 @@ describe("Cloudflare Email Webhook", () => {
 		const connectorId = createCloudflareConnector();
 		const res = await webhookPost(connectorId, { from: "a@b.com", to: "c@d.com" });
 		expect(res.status).toBe(400);
+	});
+
+	test("returns 503 when container is locked", async () => {
+		const lockedCtx: ContainerContext = {
+			state: "locked",
+			dataDir: ":memory:",
+			db: null,
+			scheduler: null,
+			_vaultKeyInMemory: null,
+		};
+		const { app: lockedApp } = createApp(lockedCtx);
+		const res = await lockedApp.request("/api/webhook/cloudflare-email/1", {
+			method: "POST",
+			headers: { "Content-Type": "application/json", Authorization: "Bearer secret" },
+			body: JSON.stringify({ from: "a@b.com", to: "c@d.com", raw: "", rawSize: 0 }),
+		});
+		expect(res.status).toBe(503);
+	});
+
+	test("returns 400 for connector not fully configured (null secret)", async () => {
+		db.prepare(
+			`INSERT INTO inbound_connectors (name, type, cf_email_webhook_secret)
+			VALUES ('CF No Secret', 'cloudflare-email', NULL)`,
+		).run();
+		const connectorId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+
+		const res = await webhookPost(connectorId, {
+			from: "a@b.com",
+			to: "c@d.com",
+			raw: buildRawEmail({}),
+			rawSize: 100,
+		});
+		expect(res.status).toBe(400);
+	});
+
+	test("returns 400 for invalid JSON body", async () => {
+		const connectorId = createCloudflareConnector();
+		const res = await app.request(`/api/webhook/cloudflare-email/${connectorId}`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json", Authorization: "Bearer test-secret-abc" },
+			body: "not-json",
+		});
+		expect(res.status).toBe(400);
+	});
+
+	test("stores message with no Message-ID (no dedup check)", async () => {
+		const connectorId = createCloudflareConnector();
+		const outboundId = createOutboundConnector();
+		createAccount("Alice", "alice@example.com", connectorId, outboundId);
+
+		// Build an email that deliberately has no Message-ID header
+		const lines = [
+			"From: sender@example.com",
+			"To: alice@example.com",
+			"Subject: No message ID",
+			"Date: Thu, 01 Jan 2026 12:00:00 +0000",
+			"MIME-Version: 1.0",
+			"Content-Type: text/plain; charset=utf-8",
+			"",
+			"Body without message-id",
+		];
+		const raw = Buffer.from(lines.join("\r\n")).toString("base64");
+
+		const res = await webhookPost(connectorId, {
+			from: "sender@example.com",
+			to: "alice@example.com",
+			raw,
+			rawSize: raw.length,
+		});
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { ok: boolean; stored: number };
+		expect(body.stored).toBe(1);
+	});
+
+	test("stores email with CC addresses", async () => {
+		const connectorId = createCloudflareConnector();
+		const outboundId = createOutboundConnector();
+		createAccount("Alice", "alice@example.com", connectorId, outboundId);
+
+		const lines = [
+			"From: sender@example.com",
+			"To: alice@example.com",
+			"Cc: cc1@example.com, cc2@example.com",
+			"Subject: CC test",
+			"Message-ID: <cc-test@example.com>",
+			"Date: Thu, 01 Jan 2026 12:00:00 +0000",
+			"MIME-Version: 1.0",
+			"Content-Type: text/plain; charset=utf-8",
+			"",
+			"Hello with CC",
+		];
+		const raw = Buffer.from(lines.join("\r\n")).toString("base64");
+
+		const res = await webhookPost(connectorId, {
+			from: "sender@example.com",
+			to: "alice@example.com",
+			raw,
+			rawSize: raw.length,
+		});
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { ok: boolean; stored: number };
+		expect(body.stored).toBe(1);
+
+		const msg = db.prepare("SELECT cc_addresses FROM messages LIMIT 1").get() as
+			| { cc_addresses: string | null }
+			| undefined;
+		expect(msg?.cc_addresses).not.toBeNull();
 	});
 });
