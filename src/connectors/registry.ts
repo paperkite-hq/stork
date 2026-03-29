@@ -4,7 +4,7 @@ import { type SesConfig, SesSendConnector } from "./ses.js";
 import { type SmtpConfig, SmtpSendConnector } from "./smtp.js";
 import type { IngestConnector, SendConnector } from "./types.js";
 
-export type IngestConnectorType = "imap" | "cloudflare-email";
+export type IngestConnectorType = "imap" | "cloudflare-email" | "cloudflare-r2";
 export type SendConnectorType = "smtp" | "ses";
 
 export interface IngestConnectorConfig {
@@ -38,6 +38,10 @@ export function createIngestConnector(config: IngestConnectorConfig): IngestConn
 			}
 			return new CloudflareEmailIngestConnector(config.cloudflareEmail);
 		}
+		case "cloudflare-r2":
+			// cloudflare-r2 is poll-based and managed by R2Poller in the sync layer,
+			// not via the IngestConnector interface. This path should not be reached.
+			throw new Error("cloudflare-r2 connectors are managed by R2Poller, not IngestConnector");
 		default:
 			throw new Error(`Unknown ingest connector type: ${config.type}`);
 	}

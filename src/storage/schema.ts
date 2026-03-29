@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -498,5 +498,25 @@ UPDATE inbound_connectors SET sync_delete_from_server = (
 WHERE EXISTS (
 	SELECT 1 FROM accounts a WHERE a.inbound_connector_id = inbound_connectors.id
 );
+`,
+	// Version 17: Add Cloudflare R2 inbound connector support.
+	//
+	// Replaces the direct webhook push model with a durable queue/poll pattern:
+	//   1. A Cloudflare Email Worker writes each email as a JSON object to an R2 bucket.
+	//   2. Stork polls the bucket on a configurable interval, processes pending objects,
+	//      and deletes them after a successful DB write.
+	//
+	// This decouples email reception from server availability — emails queue in R2 while
+	// stork is down or locked and are processed on the next poll after unlock/restart.
+	//
+	// R2's S3-compatible API is used for listing, downloading, and deleting objects.
+	// Credentials are the R2 Access Key ID / Secret Access Key (not the CF API token).
+	`
+ALTER TABLE inbound_connectors ADD COLUMN cf_r2_account_id TEXT;
+ALTER TABLE inbound_connectors ADD COLUMN cf_r2_bucket_name TEXT;
+ALTER TABLE inbound_connectors ADD COLUMN cf_r2_access_key_id TEXT;
+ALTER TABLE inbound_connectors ADD COLUMN cf_r2_secret_access_key TEXT;
+ALTER TABLE inbound_connectors ADD COLUMN cf_r2_prefix TEXT NOT NULL DEFAULT 'pending/';
+ALTER TABLE inbound_connectors ADD COLUMN cf_r2_poll_interval_ms INTEGER;
 `,
 ];

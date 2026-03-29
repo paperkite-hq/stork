@@ -6,10 +6,12 @@ import {
 	createIngestConnector,
 	createSendConnector,
 } from "../../connectors/registry.js";
+import type { R2Poller } from "../../sync/r2-poller.js";
+import { signR2Request } from "../../sync/r2-sigv4.js";
 import type { SyncScheduler } from "../../sync/sync-scheduler.js";
 import { parseIntParam } from "../validation.js";
 
-const VALID_INGEST_TYPES: IngestConnectorType[] = ["imap", "cloudflare-email"];
+const VALID_INGEST_TYPES: IngestConnectorType[] = ["imap", "cloudflare-email", "cloudflare-r2"];
 const VALID_SEND_TYPES: SendConnectorType[] = ["smtp", "ses"];
 
 export interface InboundConnectorRow {
@@ -22,6 +24,12 @@ export interface InboundConnectorRow {
 	imap_user: string | null;
 	imap_pass: string | null;
 	cf_email_webhook_secret: string | null;
+	cf_r2_account_id: string | null;
+	cf_r2_bucket_name: string | null;
+	cf_r2_access_key_id: string | null;
+	cf_r2_secret_access_key: string | null;
+	cf_r2_prefix: string;
+	cf_r2_poll_interval_ms: number | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -45,6 +53,7 @@ export interface OutboundConnectorRow {
 export function connectorRoutes(
 	getDb: () => Database.Database,
 	getScheduler: () => SyncScheduler,
+	getR2Poller: () => R2Poller | null,
 ): Hono {
 	const api = new Hono();
 
@@ -54,7 +63,10 @@ export function connectorRoutes(
 		const connectors = getDb()
 			.prepare(
 				`SELECT id, name, type, imap_host, imap_port, imap_tls, imap_user,
-					cf_email_webhook_secret, sync_delete_from_server, created_at, updated_at
+					cf_email_webhook_secret, sync_delete_from_server,
+					cf_r2_account_id, cf_r2_bucket_name, cf_r2_access_key_id,
+					cf_r2_prefix, cf_r2_poll_interval_ms,
+					created_at, updated_at
 				FROM inbound_connectors ORDER BY name`,
 			)
 			.all();
@@ -90,13 +102,26 @@ export function connectorRoutes(
 			if (!body.cf_email_webhook_secret) {
 				return c.json({ error: "cf_email_webhook_secret is required" }, 400);
 			}
+		} else if (type === "cloudflare-r2") {
+			const missing = [
+				"cf_r2_account_id",
+				"cf_r2_bucket_name",
+				"cf_r2_access_key_id",
+				"cf_r2_secret_access_key",
+			].filter((f) => !body[f]);
+			if (missing.length > 0) {
+				return c.json({ error: `Missing required R2 fields: ${missing.join(", ")}` }, 400);
+			}
 		}
 
 		const result = db
 			.prepare(
 				`INSERT INTO inbound_connectors
-					(name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass, cf_email_webhook_secret, sync_delete_from_server)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					(name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass,
+					cf_email_webhook_secret, sync_delete_from_server,
+					cf_r2_account_id, cf_r2_bucket_name, cf_r2_access_key_id,
+					cf_r2_secret_access_key, cf_r2_prefix, cf_r2_poll_interval_ms)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.run(
 				body.name,
@@ -108,6 +133,12 @@ export function connectorRoutes(
 				body.imap_pass ?? null,
 				body.cf_email_webhook_secret ?? null,
 				body.sync_delete_from_server ?? 0,
+				body.cf_r2_account_id ?? null,
+				body.cf_r2_bucket_name ?? null,
+				body.cf_r2_access_key_id ?? null,
+				body.cf_r2_secret_access_key ?? null,
+				body.cf_r2_prefix ?? "pending/",
+				body.cf_r2_poll_interval_ms ?? null,
 			);
 
 		return c.json({ id: Number(result.lastInsertRowid) }, 201);
@@ -120,7 +151,10 @@ export function connectorRoutes(
 		const connector = getDb()
 			.prepare(
 				`SELECT id, name, type, imap_host, imap_port, imap_tls, imap_user,
-					cf_email_webhook_secret, sync_delete_from_server, created_at, updated_at
+					cf_email_webhook_secret, sync_delete_from_server,
+					cf_r2_account_id, cf_r2_bucket_name, cf_r2_access_key_id,
+					cf_r2_prefix, cf_r2_poll_interval_ms,
+					created_at, updated_at
 				FROM inbound_connectors WHERE id = ?`,
 			)
 			.get(connectorId);
@@ -158,6 +192,12 @@ export function connectorRoutes(
 			"imap_pass",
 			"cf_email_webhook_secret",
 			"sync_delete_from_server",
+			"cf_r2_account_id",
+			"cf_r2_bucket_name",
+			"cf_r2_access_key_id",
+			"cf_r2_secret_access_key",
+			"cf_r2_prefix",
+			"cf_r2_poll_interval_ms",
 		];
 		const sets: string[] = [];
 		const values: (string | number | null)[] = [];
@@ -175,7 +215,7 @@ export function connectorRoutes(
 			...(values as [string | number | null, ...Array<string | number | null>]),
 		);
 
-		// If this connector's IMAP credentials changed, reload affected accounts in scheduler
+		// Reload affected accounts in scheduler if IMAP credentials changed
 		if (
 			"imap_host" in body ||
 			"imap_port" in body ||
@@ -184,6 +224,21 @@ export function connectorRoutes(
 			"imap_pass" in body
 		) {
 			_reloadConnectorAccounts(db, getScheduler(), connectorId);
+		}
+
+		// Reload R2 poller if R2 credentials changed
+		if (
+			"cf_r2_account_id" in body ||
+			"cf_r2_bucket_name" in body ||
+			"cf_r2_access_key_id" in body ||
+			"cf_r2_secret_access_key" in body ||
+			"cf_r2_prefix" in body ||
+			"cf_r2_poll_interval_ms" in body
+		) {
+			const poller = getR2Poller();
+			if (poller) {
+				_reloadR2Connector(db, poller, connectorId);
+			}
 		}
 
 		return c.json({ ok: true });
@@ -219,7 +274,10 @@ export function connectorRoutes(
 
 		const connector = db
 			.prepare(
-				`SELECT type, imap_host, imap_port, imap_tls, imap_user, imap_pass, cf_email_webhook_secret
+				`SELECT type, imap_host, imap_port, imap_tls, imap_user, imap_pass,
+					cf_email_webhook_secret,
+					cf_r2_account_id, cf_r2_bucket_name, cf_r2_access_key_id,
+					cf_r2_secret_access_key, cf_r2_prefix
 				FROM inbound_connectors WHERE id = ?`,
 			)
 			.get(connectorId) as InboundConnectorRow | undefined;
@@ -255,6 +313,38 @@ export function connectorRoutes(
 				error: connector.cf_email_webhook_secret ? undefined : "Webhook secret not configured",
 				details: { mode: "push-based webhook" },
 			});
+		} else if (connector.type === "cloudflare-r2") {
+			if (
+				!connector.cf_r2_account_id ||
+				!connector.cf_r2_bucket_name ||
+				!connector.cf_r2_access_key_id ||
+				!connector.cf_r2_secret_access_key
+			) {
+				return c.json({ ok: false, error: "R2 connector is not fully configured" });
+			}
+			try {
+				const prefix = connector.cf_r2_prefix ?? "pending/";
+				const url = new URL(
+					`https://${connector.cf_r2_account_id}.r2.cloudflarestorage.com/${connector.cf_r2_bucket_name}`,
+				);
+				url.searchParams.set("list-type", "2");
+				url.searchParams.set("prefix", prefix);
+				url.searchParams.set("max-keys", "1");
+				const headers = signR2Request({
+					method: "GET",
+					url,
+					accessKeyId: connector.cf_r2_access_key_id,
+					secretAccessKey: connector.cf_r2_secret_access_key,
+				});
+				const res = await fetch(url.toString(), { method: "GET", headers });
+				if (!res.ok) {
+					const body = await res.text().catch(() => "");
+					return c.json({ ok: false, error: `R2 returned ${res.status}: ${body}` });
+				}
+				return c.json({ ok: true, details: { mode: "queue/poll", prefix } });
+			} catch (err) {
+				return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+			}
 		}
 		return c.json({ ok: false, error: "Unknown connector type" });
 	});
@@ -482,6 +572,40 @@ export function connectorRoutes(
 	});
 
 	return api;
+}
+
+/** Reload an R2 connector in the poller after its credentials change. */
+function _reloadR2Connector(db: Database.Database, poller: R2Poller, connectorId: number): void {
+	const row = db
+		.prepare(
+			`SELECT id, cf_r2_account_id, cf_r2_bucket_name,
+				cf_r2_access_key_id, cf_r2_secret_access_key,
+				cf_r2_prefix, cf_r2_poll_interval_ms
+			FROM inbound_connectors
+			WHERE id = ? AND type = 'cloudflare-r2'
+				AND cf_r2_account_id IS NOT NULL
+				AND cf_r2_bucket_name IS NOT NULL
+				AND cf_r2_access_key_id IS NOT NULL
+				AND cf_r2_secret_access_key IS NOT NULL`,
+		)
+		.get(connectorId) as
+		| {
+				id: number;
+				cf_r2_account_id: string;
+				cf_r2_bucket_name: string;
+				cf_r2_access_key_id: string;
+				cf_r2_secret_access_key: string;
+				cf_r2_prefix: string;
+				cf_r2_poll_interval_ms: number | null;
+		  }
+		| undefined;
+
+	if (row) {
+		poller.addConnector(row);
+	} else {
+		// Credentials were cleared or connector is incomplete — stop polling it
+		poller.removeConnector(connectorId);
+	}
 }
 
 /** Reload IMAP accounts in the scheduler after an inbound connector's credentials change */

@@ -10,6 +10,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import type { Hono } from "hono";
 import { openDatabase } from "../storage/db.js";
+import { R2Poller } from "../sync/r2-poller.js";
 import { SyncScheduler } from "../sync/sync-scheduler.js";
 import { keysFileExists } from "./keys.js";
 
@@ -23,6 +24,8 @@ export interface ContainerContext {
 	db: Database.Database | null;
 	/** Sync scheduler, null until unlocked */
 	scheduler: SyncScheduler | null;
+	/** R2 queue poller, null until unlocked */
+	r2Poller: R2Poller | null;
 	/** Vault key in memory, zeroed after DB open */
 	_vaultKeyInMemory: Buffer | null;
 }
@@ -45,6 +48,7 @@ export async function bootContainer(
 		dataDir,
 		db: null,
 		scheduler: null,
+		r2Poller: null,
 		_vaultKeyInMemory: null,
 	};
 
@@ -58,6 +62,9 @@ export async function bootContainer(
 		}, 10_000);
 		forceTimer.unref();
 
+		if (context.r2Poller) {
+			await context.r2Poller.stop();
+		}
 		if (context.scheduler) {
 			await context.scheduler.stop();
 		}
@@ -171,7 +178,21 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 	scheduler.loadAccountsFromDb();
 	scheduler.start();
 
+	const r2Poller = new R2Poller(db, {
+		onPollComplete: (connectorId, stored) => {
+			if (stored > 0) {
+				console.log(`${ts()} R2 poll complete for connector ${connectorId}: ${stored} new`);
+			}
+		},
+		onPollError: (connectorId, error) => {
+			console.error(`${ts()} R2 poll failed for connector ${connectorId}: ${error.message}`);
+		},
+	});
+	r2Poller.loadConnectorsFromDb();
+	r2Poller.start();
+
 	context.db = db;
 	context.scheduler = scheduler;
+	context.r2Poller = r2Poller;
 	context.state = "unlocked";
 }

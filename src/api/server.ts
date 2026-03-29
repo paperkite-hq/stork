@@ -97,8 +97,12 @@ export function createApp(context: ContainerContext): { app: Hono } {
 		return context.scheduler;
 	}
 
+	function getR2Poller() {
+		return context.r2Poller;
+	}
+
 	api.route("/accounts", accountRoutes(getDb, getScheduler));
-	api.route("/connectors", connectorRoutes(getDb, getScheduler));
+	api.route("/connectors", connectorRoutes(getDb, getScheduler, getR2Poller));
 	api.route("/inbox", inboxRoutes(getDb));
 	api.route("/messages", messageRoutes(getDb));
 	api.route("/labels", labelRoutes(getDb));
