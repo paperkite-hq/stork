@@ -787,10 +787,24 @@ describe("SyncScheduler abort integration with mock IMAP server", () => {
 		});
 		port = await server.start();
 		db = createTestDb();
+		// Create inbound connector and account so loadAccountsFromDb finds it via JOIN
 		db.prepare(`
-			INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-			VALUES ('Test', 'test@example.com', '127.0.0.1', ?, 0, 'testuser', 'testpass')
+			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+			VALUES ('Test (Inbound)', 'imap', '127.0.0.1', ?, 0, 'testuser', 'testpass')
 		`).run(port);
+		const inboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(`
+			INSERT INTO outbound_connectors (name, type) VALUES ('Test (Outbound)', 'smtp')
+		`).run();
+		const outboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(`
+			INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id)
+			VALUES ('Test', 'test@example.com', ?, ?)
+		`).run(inboundId, outboundId);
 	});
 
 	afterEach(async () => {

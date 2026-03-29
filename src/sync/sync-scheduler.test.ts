@@ -15,9 +15,21 @@ function createTestDb(): Database.Database {
 
 function createAccount(db: Database.Database, name = "Test"): number {
 	db.prepare(`
-		INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-		VALUES (?, 'test@example.com', 'imap.example.com', 993, 1, 'test', 'pass')
-	`).run(name);
+		INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+		VALUES (?, 'imap', 'imap.example.com', 993, 1, 'test', 'pass')
+	`).run(`${name} (Inbound)`);
+	const inboundId = (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
+
+	db.prepare(`
+		INSERT INTO outbound_connectors (name, type)
+		VALUES (?, 'smtp')
+	`).run(`${name} (Outbound)`);
+	const outboundId = (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
+
+	db.prepare(`
+		INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id)
+		VALUES (?, 'test@example.com', ?, ?)
+	`).run(name, inboundId, outboundId);
 	return (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
 }
 

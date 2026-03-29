@@ -8,7 +8,7 @@ interface AccountSendRow {
 	id: number;
 	email: string;
 	name: string;
-	send_connector_type: SendConnectorType;
+	send_type: SendConnectorType | null;
 	smtp_host: string | null;
 	smtp_port: number | null;
 	smtp_tls: number | null;
@@ -63,16 +63,19 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 
 		const account = db
 			.prepare(
-				`SELECT id, email, name, send_connector_type,
-					smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass,
-					ses_region, ses_access_key_id, ses_secret_access_key
-				FROM accounts WHERE id = ?`,
+				`SELECT a.id, a.email, a.name,
+					oc.type AS send_type,
+					oc.smtp_host, oc.smtp_port, oc.smtp_tls, oc.smtp_user, oc.smtp_pass,
+					oc.ses_region, oc.ses_access_key_id, oc.ses_secret_access_key
+				FROM accounts a
+				LEFT JOIN outbound_connectors oc ON oc.id = a.outbound_connector_id
+				WHERE a.id = ?`,
 			)
 			.get(account_id) as AccountSendRow | undefined;
 
 		if (!account) return c.json({ error: "Account not found" }, 404);
 
-		const sendType = account.send_connector_type ?? "smtp";
+		const sendType = account.send_type ?? "smtp";
 		let connector: import("../../connectors/types.js").SendConnector;
 		try {
 			if (sendType === "ses") {

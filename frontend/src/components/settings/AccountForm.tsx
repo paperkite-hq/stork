@@ -70,10 +70,10 @@ export function AccountForm({
 			setForm({
 				name: detail.name,
 				email: detail.email,
-				imap_host: detail.imap_host,
-				imap_port: detail.imap_port,
-				imap_tls: detail.imap_tls,
-				imap_user: detail.imap_user,
+				imap_host: detail.imap_host ?? "",
+				imap_port: detail.imap_port ?? 993,
+				imap_tls: detail.imap_tls ?? 1,
+				imap_user: detail.imap_user ?? "",
 				imap_pass: "", // Never sent back from server
 				smtp_host: detail.smtp_host ?? "",
 				smtp_port: detail.smtp_port ?? 587,
@@ -169,10 +169,13 @@ export function AccountForm({
 			if (accountId === null) {
 				await api.accounts.create({ ...form });
 			} else {
-				// Only send non-empty password fields on update
-				const update: UpdateAccountRequest = { ...form };
-				if (!update.imap_pass) update.imap_pass = undefined;
-				if (!update.smtp_pass) update.smtp_pass = undefined;
+				// UpdateAccountRequest only allows updating name, email, connector IDs, and prefs
+				const update: UpdateAccountRequest = {
+					name: form.name,
+					email: form.email,
+					sync_delete_from_server: form.sync_delete_from_server,
+					default_view: form.default_view,
+				};
 				await api.accounts.update(accountId, update);
 			}
 			onSaved();

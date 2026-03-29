@@ -648,14 +648,26 @@ describe("Accounts API", () => {
 		});
 
 		test("GET /api/accounts/:id/connector-health reports unconfigured IMAP", async () => {
-			// Create account with cloudflare-email type but query its health
-			// The default createTestAccount has imap fields, so insert directly with no IMAP config
+			// Create inbound connector with IMAP type but no credentials
 			db.prepare(`
-				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
-					ingest_connector_type, send_connector_type)
-				VALUES ('No Config', 'noconfig@example.com', '', '', '',
-					'imap', 'smtp')
+				INSERT INTO inbound_connectors (name, type)
+				VALUES ('No Config (Inbound)', 'imap')
 			`).run();
+			const inboundId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			// Create outbound connector with SMTP type but no credentials
+			db.prepare(`
+				INSERT INTO outbound_connectors (name, type)
+				VALUES ('No Config (Outbound)', 'smtp')
+			`).run();
+			const outboundId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			db.prepare(`
+				INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id)
+				VALUES ('No Config', 'noconfig@example.com', ?, ?)
+			`).run(inboundId, outboundId);
 			const accountId = Number(
 				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 			);
@@ -671,17 +683,23 @@ describe("Accounts API", () => {
 		});
 
 		test("GET /api/accounts/:id/connector-health checks cloudflare-email with secret", async () => {
-			db.prepare(`
-				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
-					ingest_connector_type, send_connector_type,
-					cf_email_webhook_secret)
-				VALUES ('CF Account', 'cf@example.com', '', '', '',
-					'cloudflare-email', 'smtp',
-					'my-webhook-secret')
-			`).run();
-			const accountId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			// Create via the API so connector rows are created correctly
+			const { status: createStatus, body: createBody } = await jsonRequest("/api/accounts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "CF Account",
+					email: "cf@example.com",
+					ingest_connector_type: "cloudflare-email",
+					cf_email_webhook_secret: "my-webhook-secret",
+					send_connector_type: "smtp",
+					smtp_host: "smtp.example.com",
+					smtp_user: "user",
+					smtp_pass: "pass",
+				}),
+			});
+			expect(createStatus).toBe(201);
+			const accountId = createBody.id;
 
 			const { status, body } = await jsonRequest(`/api/accounts/${accountId}/connector-health`);
 			expect(status).toBe(200);
@@ -691,12 +709,25 @@ describe("Accounts API", () => {
 		});
 
 		test("GET /api/accounts/:id/connector-health reports cloudflare-email without secret", async () => {
+			// Create inbound connector with cloudflare-email type but no secret
 			db.prepare(`
-				INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass,
-					ingest_connector_type, send_connector_type)
-				VALUES ('CF No Secret', 'cf-nosecret@example.com', '', '', '',
-					'cloudflare-email', 'smtp')
+				INSERT INTO inbound_connectors (name, type)
+				VALUES ('CF No Secret (Inbound)', 'cloudflare-email')
 			`).run();
+			const inboundId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			db.prepare(`
+				INSERT INTO outbound_connectors (name, type, smtp_host, smtp_user, smtp_pass)
+				VALUES ('CF No Secret (Outbound)', 'smtp', 'smtp.example.com', 'user', 'pass')
+			`).run();
+			const outboundId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			db.prepare(`
+				INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id)
+				VALUES ('CF No Secret', 'cf-nosecret@example.com', ?, ?)
+			`).run(inboundId, outboundId);
 			const accountId = Number(
 				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 			);

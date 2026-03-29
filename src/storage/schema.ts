@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 14;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -287,5 +287,133 @@ ALTER TABLE accounts ADD COLUMN cached_unread_count INTEGER DEFAULT NULL;
 	`
 ALTER TABLE messages ADD COLUMN pending_archive INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_messages_pending_archive ON messages(folder_id, pending_archive);
+`,
+	// Version 13: Decouple inbound and outbound connectors from accounts.
+	//
+	// Previously, each account row embedded all connector config (IMAP/CF for
+	// ingest, SMTP/SES for send). This 1:1 coupling prevents sharing a single
+	// SES connector across multiple identities, or mixing Fastmail IMAP with
+	// AWS SES for outbound deliverability.
+	//
+	// The new model:
+	//   - inbound_connectors: one row per ingest config (IMAP creds, CF webhook secret)
+	//   - outbound_connectors: one row per send config (SMTP creds, SES creds)
+	//   - accounts: identity table — holds name + email + references to connectors
+	//
+	// Migration: existing account rows are migrated 1:1 (one connector per account),
+	// preserving all existing behaviour. Connector rows take their name from the
+	// account name. The old inline columns remain on accounts for now (kept for
+	// backward-compat reads) but new code reads from the connector tables.
+	//
+	// _account_id is a temporary migration-aid column — it is set during the INSERT
+	// so we can link accounts back to their new connector rows, then cleared to NULL.
+	// SQLite pre-3.35 cannot DROP COLUMN, so we leave it as a permanently-NULL column.
+	`
+CREATE TABLE IF NOT EXISTS inbound_connectors (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	type TEXT NOT NULL DEFAULT 'imap',
+	imap_host TEXT,
+	imap_port INTEGER DEFAULT 993,
+	imap_tls INTEGER DEFAULT 1,
+	imap_user TEXT,
+	imap_pass TEXT,
+	cf_email_webhook_secret TEXT,
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+	_account_id INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_inbound_connectors_type ON inbound_connectors(type);
+
+CREATE TABLE IF NOT EXISTS outbound_connectors (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	type TEXT NOT NULL DEFAULT 'smtp',
+	smtp_host TEXT,
+	smtp_port INTEGER DEFAULT 587,
+	smtp_tls INTEGER DEFAULT 1,
+	smtp_user TEXT,
+	smtp_pass TEXT,
+	ses_region TEXT,
+	ses_access_key_id TEXT,
+	ses_secret_access_key TEXT,
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+	_account_id INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbound_connectors_type ON outbound_connectors(type);
+
+ALTER TABLE accounts ADD COLUMN inbound_connector_id INTEGER REFERENCES inbound_connectors(id);
+ALTER TABLE accounts ADD COLUMN outbound_connector_id INTEGER REFERENCES outbound_connectors(id);
+
+INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass, cf_email_webhook_secret, _account_id)
+SELECT name || ' (Inbound)', ingest_connector_type, imap_host, imap_port, imap_tls, imap_user, imap_pass, cf_email_webhook_secret, id
+FROM accounts;
+
+INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, ses_region, ses_access_key_id, ses_secret_access_key, _account_id)
+SELECT name || ' (Outbound)', send_connector_type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass, ses_region, ses_access_key_id, ses_secret_access_key, id
+FROM accounts;
+
+UPDATE accounts SET
+	inbound_connector_id = (SELECT id FROM inbound_connectors WHERE _account_id = accounts.id),
+	outbound_connector_id = (SELECT id FROM outbound_connectors WHERE _account_id = accounts.id);
+
+UPDATE inbound_connectors SET _account_id = NULL;
+UPDATE outbound_connectors SET _account_id = NULL;
+`,
+	// Version 14: Remove NOT NULL constraints from legacy IMAP columns on accounts.
+	//
+	// The original v1 schema declared imap_host/imap_user/imap_pass as NOT NULL because
+	// every account required IMAP. After v13 (n×m connectors), accounts no longer store
+	// connector config directly — they reference inbound_connectors instead. New accounts
+	// are created without inline IMAP fields, so those NOT NULL constraints must go.
+	//
+	// SQLite cannot DROP NOT NULL via ALTER COLUMN, so we recreate the accounts table.
+	// All FKs in child tables reference accounts by name and will reattach automatically
+	// once the table is renamed back. We disable FK enforcement during the operation to
+	// avoid intermediate-state violations.
+	`
+PRAGMA foreign_keys = OFF;
+BEGIN;
+
+CREATE TABLE accounts_v14 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	email TEXT NOT NULL,
+	imap_host TEXT,
+	imap_port INTEGER NOT NULL DEFAULT 993,
+	imap_tls INTEGER NOT NULL DEFAULT 1,
+	imap_user TEXT,
+	imap_pass TEXT,
+	smtp_host TEXT,
+	smtp_port INTEGER DEFAULT 587,
+	smtp_tls INTEGER DEFAULT 1,
+	smtp_user TEXT,
+	smtp_pass TEXT,
+	sync_delete_from_server INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+	ingest_connector_type TEXT NOT NULL DEFAULT 'imap',
+	send_connector_type TEXT NOT NULL DEFAULT 'smtp',
+	cf_email_webhook_secret TEXT,
+	ses_region TEXT,
+	ses_access_key_id TEXT,
+	ses_secret_access_key TEXT,
+	default_view TEXT NOT NULL DEFAULT 'inbox',
+	cached_message_count INTEGER DEFAULT NULL,
+	cached_unread_count INTEGER DEFAULT NULL,
+	inbound_connector_id INTEGER REFERENCES inbound_connectors(id),
+	outbound_connector_id INTEGER REFERENCES outbound_connectors(id)
+);
+
+INSERT INTO accounts_v14 SELECT * FROM accounts;
+
+DROP TABLE accounts;
+ALTER TABLE accounts_v14 RENAME TO accounts;
+
+COMMIT;
+PRAGMA foreign_keys = ON;
 `,
 ];
