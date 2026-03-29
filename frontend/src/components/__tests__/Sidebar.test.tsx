@@ -118,19 +118,24 @@ describe("Sidebar", () => {
 		expect(screen.getByText("No labels yet")).toBeInTheDocument();
 	});
 
-	it("shows account selector when multiple accounts", () => {
+	it("shows per-account section when multiple accounts", () => {
 		const accounts = [
 			makeAccount({ id: 1, name: "Account 1", email: "a1@test.com" }),
 			makeAccount({ id: 2, name: "Account 2", email: "a2@test.com" }),
 		];
 		render(<Sidebar {...defaultProps} accounts={accounts} />);
-		expect(screen.getByText(/Account 1/)).toBeInTheDocument();
-		expect(screen.getByText(/Account 2/)).toBeInTheDocument();
+		// Both account names should appear in the Accounts section
+		expect(screen.getByText("Account 1")).toBeInTheDocument();
+		expect(screen.getByText("Account 2")).toBeInTheDocument();
+		// No dropdown (combobox) — accounts are listed as buttons
+		expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 	});
 
-	it("hides account selector for single account", () => {
+	it("hides accounts section for single account", () => {
 		render(<Sidebar {...defaultProps} accounts={[makeAccount()]} />);
 		expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+		// "Accounts" heading not shown for single account
+		expect(screen.queryByText("Accounts")).not.toBeInTheDocument();
 	});
 
 	it("toggles dark mode", async () => {
@@ -231,8 +236,9 @@ describe("Sidebar", () => {
 		expect(screen.getByTitle("Toggle dark mode")).toHaveTextContent(/Light/);
 	});
 
-	it("calls onSelectAccount when account selector changes", async () => {
+	it("calls onSelectAccount and onSelectLabel when account button is clicked", async () => {
 		const onSelectAccount = vi.fn();
+		const onSelectLabel = vi.fn();
 		const accounts = [
 			makeAccount({ id: 1, name: "Account 1", email: "a1@test.com" }),
 			makeAccount({ id: 2, name: "Account 2", email: "a2@test.com" }),
@@ -243,11 +249,16 @@ describe("Sidebar", () => {
 				accounts={accounts}
 				selectedAccountId={1}
 				onSelectAccount={onSelectAccount}
+				onSelectLabel={onSelectLabel}
+				labels={[makeLabel({ id: 1, name: "inbox", unread_count: 0 })]}
 			/>,
 		);
-		const select = screen.getByRole("combobox");
-		await userEvent.selectOptions(select, "2");
+		// The "Account 2" button in the Accounts section
+		const account2Button = screen.getByRole("button", { name: /Account 2/ });
+		await userEvent.click(account2Button);
 		expect(onSelectAccount).toHaveBeenCalledWith(2);
+		// Also selects INBOX_LABEL_ID
+		expect(onSelectLabel).toHaveBeenCalledWith(INBOX_LABEL_ID);
 	});
 
 	it("toggles sync detail panel when sync indicator is clicked", async () => {
