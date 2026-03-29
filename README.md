@@ -169,6 +169,7 @@ The UI walks you through this choice when you connect your first account, and su
 - **[API Reference](docs/api.md)** — REST API documentation
 - **[Architecture](docs/architecture.md)** — system design and codebase walkthrough
 - **[Design Decisions](docs/design-decisions.md)** — labels over folders, and why
+- **[Upgrading](docs/upgrading.md)** — migrations, backups, and version upgrades
 - **[FAQ](docs/faq.md)** — common questions about sync, search, and data safety
 - **[Contributing](CONTRIBUTING.md)** — development setup, running tests
 
