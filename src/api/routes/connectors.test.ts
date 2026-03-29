@@ -436,10 +436,7 @@ describe("Connectors API", () => {
 				cf_r2_secret_access_key: "SECRET",
 			});
 
-			const { status, body } = await post(
-				`/api/connectors/inbound/${created.id}/test`,
-				{},
-			);
+			const { status, body } = await post(`/api/connectors/inbound/${created.id}/test`, {});
 			expect(status).toBe(200);
 			expect(body.ok).toBe(true);
 			expect(body.details?.mode).toBe("queue/poll");
@@ -466,10 +463,7 @@ describe("Connectors API", () => {
 				cf_r2_secret_access_key: "BADSECRET",
 			});
 
-			const { status, body } = await post(
-				`/api/connectors/inbound/${created.id}/test`,
-				{},
-			);
+			const { status, body } = await post(`/api/connectors/inbound/${created.id}/test`, {});
 			expect(status).toBe(200);
 			expect(body.ok).toBe(false);
 			expect(body.error).toMatch(/403/);
