@@ -28,6 +28,10 @@ Stork has two sync philosophies, selectable per-account in Settings:
 
 A UID (Unique Identifier) is a stable number that an IMAP server assigns to each message in a mailbox. Unlike sequence numbers (which shift when messages are deleted), UIDs never change or get reused within a mailbox — IMAP servers guarantee this monotonically increasing property. Stork uses UIDs to track sync position: it remembers the highest UID it has seen and, on the next sync, only fetches messages with higher UIDs. This makes incremental sync efficient and correct even after messages are deleted from the server.
 
+## Will my data survive an upgrade?
+
+**Yes.** Schema migrations run automatically when the container starts — no manual steps needed. Pull the new image, restart, and your encrypted database carries forward. See the [Upgrading guide](./upgrading.md) for backup recommendations and details on how migrations work.
+
 ## Will full-text search scale to a large mailbox?
 
 Yes. Stork uses SQLite's [FTS5](https://www.sqlite.org/fts5.html) extension, which is designed for exactly this. FTS5 maintains an inverted index that handles millions of rows efficiently — 10+ years of email (hundreds of thousands of messages) is well within its comfort zone. Combined with WAL mode (enabled by default), searches stay fast even while new messages are being synced in the background.
