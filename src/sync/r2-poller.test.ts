@@ -15,9 +15,7 @@ function buildRawEmail(
 		noTo?: boolean;
 	} = {},
 ): string {
-	const lines: string[] = [
-		`From: ${opts.from ?? "sender@example.com"}`,
-	];
+	const lines: string[] = [`From: ${opts.from ?? "sender@example.com"}`];
 	if (!opts.noTo) {
 		lines.push("To: recipient@example.com");
 	}
