@@ -13,7 +13,7 @@ function createTestDb(): Database.Database {
 	return db;
 }
 
-function createAccount(db: Database.Database, name = "Test"): number {
+function createIdentity(db: Database.Database, name = "Test"): number {
 	db.prepare(`
 		INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
 		VALUES (?, 'imap', 'imap.example.com', 993, 1, 'test', 'pass')
@@ -27,7 +27,7 @@ function createAccount(db: Database.Database, name = "Test"): number {
 	const outboundId = (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
 
 	db.prepare(`
-		INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id)
+		INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
 		VALUES (?, 'test@example.com', ?, ?)
 	`).run(name, inboundId, outboundId);
 	return (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
@@ -46,11 +46,11 @@ describe("SyncScheduler", () => {
 		db.close();
 	});
 
-	test("adds and removes accounts", () => {
+	test("adds and removes identities", () => {
 		scheduler = new SyncScheduler(db);
 
-		scheduler.addAccount({
-			accountId: 1,
+		scheduler.addIdentity({
+			identityId: 1,
 			imapConfig: {
 				host: "imap.example.com",
 				port: 993,
@@ -61,19 +61,19 @@ describe("SyncScheduler", () => {
 
 		const status = scheduler.getStatus();
 		expect(status.has(1)).toBe(true);
-		const accountStatus = status.get(1);
-		expect(accountStatus?.running).toBe(false);
-		expect(accountStatus?.lastSync).toBeNull();
+		const identityStatus = status.get(1);
+		expect(identityStatus?.running).toBe(false);
+		expect(identityStatus?.lastSync).toBeNull();
 
-		scheduler.removeAccount(1);
+		scheduler.removeIdentity(1);
 		expect(scheduler.getStatus().has(1)).toBe(false);
 	});
 
-	test("throws on duplicate account registration", () => {
+	test("throws on duplicate identity registration", () => {
 		scheduler = new SyncScheduler(db);
 
 		const config = {
-			accountId: 1,
+			identityId: 1,
 			imapConfig: {
 				host: "imap.example.com",
 				port: 993,
@@ -82,11 +82,11 @@ describe("SyncScheduler", () => {
 			},
 		};
 
-		scheduler.addAccount(config);
-		expect(() => scheduler.addAccount(config)).toThrow("already scheduled");
+		scheduler.addIdentity(config);
+		expect(() => scheduler.addIdentity(config)).toThrow("already scheduled");
 	});
 
-	test("syncNow throws for unregistered account", async () => {
+	test("syncNow throws for unregistered identity", async () => {
 		scheduler = new SyncScheduler(db);
 
 		try {
@@ -97,23 +97,23 @@ describe("SyncScheduler", () => {
 		}
 	});
 
-	test("loads accounts from database", () => {
-		const accountId = createAccount(db, "Account 1");
-		createAccount(db, "Account 2");
+	test("loads identities from database", () => {
+		const identityId = createIdentity(db, "Identity 1");
+		createIdentity(db, "Identity 2");
 
 		scheduler = new SyncScheduler(db);
-		scheduler.loadAccountsFromDb();
+		scheduler.loadIdentitiesFromDb();
 
 		const status = scheduler.getStatus();
 		expect(status.size).toBe(2);
 	});
 
-	test("loadAccountsFromDb skips already-registered accounts", () => {
-		const accountId = createAccount(db);
+	test("loadIdentitiesFromDb skips already-registered identities", () => {
+		const identityId = createIdentity(db);
 
 		scheduler = new SyncScheduler(db);
-		scheduler.addAccount({
-			accountId,
+		scheduler.addIdentity({
+			identityId,
 			imapConfig: {
 				host: "custom.example.com",
 				port: 993,
@@ -123,15 +123,15 @@ describe("SyncScheduler", () => {
 		});
 
 		// Should not throw
-		scheduler.loadAccountsFromDb();
+		scheduler.loadIdentitiesFromDb();
 		expect(scheduler.getStatus().size).toBe(1);
 	});
 
 	test("status tracks consecutive errors", () => {
 		scheduler = new SyncScheduler(db);
 
-		scheduler.addAccount({
-			accountId: 1,
+		scheduler.addIdentity({
+			identityId: 1,
 			imapConfig: {
 				host: "imap.example.com",
 				port: 993,
@@ -140,16 +140,16 @@ describe("SyncScheduler", () => {
 			},
 		});
 
-		const accountStatus = scheduler.getStatus().get(1);
-		expect(accountStatus?.consecutiveErrors).toBe(0);
-		expect(accountStatus?.lastError).toBeNull();
+		const identityStatus = scheduler.getStatus().get(1);
+		expect(identityStatus?.consecutiveErrors).toBe(0);
+		expect(identityStatus?.lastError).toBeNull();
 	});
 
 	test("status includes progress field as null when not running", () => {
 		scheduler = new SyncScheduler(db);
 
-		scheduler.addAccount({
-			accountId: 1,
+		scheduler.addIdentity({
+			identityId: 1,
 			imapConfig: {
 				host: "imap.example.com",
 				port: 993,
@@ -158,8 +158,8 @@ describe("SyncScheduler", () => {
 			},
 		});
 
-		const accountStatus = scheduler.getStatus().get(1);
-		expect(accountStatus?.progress).toBeNull();
+		const identityStatus = scheduler.getStatus().get(1);
+		expect(identityStatus?.progress).toBeNull();
 	});
 
 	test("stop is idempotent", async () => {
@@ -178,8 +178,8 @@ describe("SyncScheduler", () => {
 
 	test("stop completes within timeout even with no running syncs", async () => {
 		scheduler = new SyncScheduler(db);
-		scheduler.addAccount({
-			accountId: 1,
+		scheduler.addIdentity({
+			identityId: 1,
 			imapConfig: {
 				host: "imap.example.com",
 				port: 993,
@@ -198,8 +198,8 @@ describe("SyncScheduler", () => {
 
 	test("stop clears abort controllers and sync promises", async () => {
 		scheduler = new SyncScheduler(db);
-		scheduler.addAccount({
-			accountId: 1,
+		scheduler.addIdentity({
+			identityId: 1,
 			imapConfig: {
 				host: "imap.example.com",
 				port: 993,

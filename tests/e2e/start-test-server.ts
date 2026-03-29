@@ -6,10 +6,10 @@ import { serve } from "@hono/node-server";
 import { createApp } from "../../src/api/server.js";
 import {
 	addMessageLabel,
-	createTestAccount,
 	createTestContext,
 	createTestDb,
 	createTestFolder,
+	createTestIdentity,
 	createTestLabel,
 	createTestMessage,
 } from "../../src/test-helpers/test-db.js";
@@ -18,7 +18,7 @@ const PORT = 13200;
 const db = createTestDb();
 
 // Seed test data
-const accountId = createTestAccount(db, {
+const identityId = createTestIdentity(db, {
 	name: "E2E Test Account",
 	email: "e2e@test.local",
 	imapHost: "127.0.0.1",
@@ -27,35 +27,35 @@ const accountId = createTestAccount(db, {
 	smtpPort: 9587,
 });
 
-const inboxId = createTestFolder(db, accountId, "INBOX", {
+const inboxId = createTestFolder(db, identityId, "INBOX", {
 	name: "INBOX",
 	specialUse: "\\Inbox",
 });
-const sentId = createTestFolder(db, accountId, "Sent", {
+const sentId = createTestFolder(db, identityId, "Sent", {
 	name: "Sent",
 	specialUse: "\\Sent",
 });
-const draftsId = createTestFolder(db, accountId, "Drafts", {
+const draftsId = createTestFolder(db, identityId, "Drafts", {
 	name: "Drafts",
 	specialUse: "\\Drafts",
 });
-const trashId = createTestFolder(db, accountId, "Trash", {
+const trashId = createTestFolder(db, identityId, "Trash", {
 	name: "Trash",
 	specialUse: "\\Trash",
 });
 
 // Create IMAP-sourced labels (mirrors the folders — populated by IMAP sync in production)
-const inboxLabelId = createTestLabel(db, accountId, "INBOX", { source: "imap" });
-const sentLabelId = createTestLabel(db, accountId, "Sent", { source: "imap" });
-const draftsLabelId = createTestLabel(db, accountId, "Drafts", { source: "imap" });
-createTestLabel(db, accountId, "Trash", { source: "imap" });
+const inboxLabelId = createTestLabel(db, "INBOX", { source: "imap" });
+const sentLabelId = createTestLabel(db, "Sent", { source: "imap" });
+const draftsLabelId = createTestLabel(db, "Drafts", { source: "imap" });
+createTestLabel(db, "Trash", { source: "imap" });
 
 // Create inbox messages with varied content
 const now = new Date();
 const inboxMessageIds: number[] = [];
 for (let i = 1; i <= 10; i++) {
 	const date = new Date(now.getTime() - i * 3600_000);
-	const msgId = createTestMessage(db, accountId, inboxId, i, {
+	const msgId = createTestMessage(db, identityId, inboxId, i, {
 		subject: `E2E Test Email #${i}`,
 		fromAddress: `sender${i}@example.com`,
 		fromName: `Sender ${i}`,
@@ -69,7 +69,7 @@ for (let i = 1; i <= 10; i++) {
 }
 
 // Create a starred message
-const starredMsgId = createTestMessage(db, accountId, inboxId, 11, {
+const starredMsgId = createTestMessage(db, identityId, inboxId, 11, {
 	subject: "Important Starred Email",
 	fromAddress: "vip@example.com",
 	fromName: "VIP Sender",
@@ -85,7 +85,7 @@ const threadMsgId1 = "<thread-1@test.local>";
 const threadMsgId2 = "<thread-2@test.local>";
 const threadMsgId3 = "<thread-3@test.local>";
 
-const thread1Id = createTestMessage(db, accountId, inboxId, 12, {
+const thread1Id = createTestMessage(db, identityId, inboxId, 12, {
 	messageId: threadMsgId1,
 	subject: "Thread: Project Discussion",
 	fromAddress: "alice@example.com",
@@ -97,7 +97,7 @@ const thread1Id = createTestMessage(db, accountId, inboxId, 12, {
 });
 inboxMessageIds.push(thread1Id);
 
-const thread2Id = createTestMessage(db, accountId, inboxId, 13, {
+const thread2Id = createTestMessage(db, identityId, inboxId, 13, {
 	messageId: threadMsgId2,
 	subject: "Re: Thread: Project Discussion",
 	fromAddress: "e2e@test.local",
@@ -111,7 +111,7 @@ const thread2Id = createTestMessage(db, accountId, inboxId, 13, {
 });
 inboxMessageIds.push(thread2Id);
 
-const thread3Id = createTestMessage(db, accountId, inboxId, 14, {
+const thread3Id = createTestMessage(db, identityId, inboxId, 14, {
 	messageId: threadMsgId3,
 	subject: "Re: Thread: Project Discussion",
 	fromAddress: "alice@example.com",
@@ -126,7 +126,7 @@ const thread3Id = createTestMessage(db, accountId, inboxId, 14, {
 inboxMessageIds.push(thread3Id);
 
 // Create sent messages
-const sentMsgId = createTestMessage(db, accountId, sentId, 1, {
+const sentMsgId = createTestMessage(db, identityId, sentId, 1, {
 	subject: "Outgoing Test",
 	fromAddress: "e2e@test.local",
 	fromName: "E2E Test Account",
@@ -137,7 +137,7 @@ const sentMsgId = createTestMessage(db, accountId, sentId, 1, {
 });
 
 // Create a message with attachment metadata
-const attachMsgId = createTestMessage(db, accountId, inboxId, 15, {
+const attachMsgId = createTestMessage(db, identityId, inboxId, 15, {
 	subject: "Email with Attachment",
 	fromAddress: "files@example.com",
 	fromName: "File Sender",
@@ -186,18 +186,7 @@ db.prepare(`
 		)
 `).run();
 
-// Refresh cached account counts so count endpoints return correct values.
-db.prepare(`
-	UPDATE accounts
-	SET
-		cached_message_count = (SELECT COUNT(*) FROM messages WHERE account_id = ?),
-		cached_unread_count = (
-			SELECT COUNT(*) FROM messages
-			WHERE account_id = ?
-			AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')
-		)
-	WHERE id = ?
-`).run(accountId, accountId, accountId);
+// No cached counts on identities table — count endpoints use live queries.
 
 const context = createTestContext(db);
 const { app } = createApp(context);

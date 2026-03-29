@@ -3,10 +3,10 @@ import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../api/server.js";
 import {
-	createTestAccount,
 	createTestContext,
 	createTestDb,
 	createTestFolder,
+	createTestIdentity,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
 
@@ -42,9 +42,9 @@ describe("Attachments API", () => {
 	// ─── Attachment listing and download ────────────────────
 	describe("Listing and download", () => {
 		test("GET /api/messages/:id/attachments returns attachments", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1, { hasAttachments: 1 });
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1, { hasAttachments: 1 });
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data)
@@ -59,9 +59,9 @@ describe("Attachments API", () => {
 		});
 
 		test("GET /api/attachments/:id downloads binary", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data)
@@ -89,9 +89,9 @@ describe("Attachments API", () => {
 	// ─── Content-ID (cid:) endpoint ────────────────────────
 	describe("By Content-ID", () => {
 		test("GET /api/attachments/by-cid/:messageId/:contentId returns inline image", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data, content_id)
@@ -112,9 +112,9 @@ describe("Attachments API", () => {
 		});
 
 		test("null content_type falls back to application/octet-stream", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data, content_id)
@@ -127,9 +127,9 @@ describe("Attachments API", () => {
 		});
 
 		test("null data returns empty response", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data, content_id)
@@ -144,9 +144,9 @@ describe("Attachments API", () => {
 	// ─── Null data in download endpoint ─────────────────────
 	describe("Null data handling", () => {
 		test("GET /api/attachments/:id returns response for null data", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data)
@@ -166,9 +166,9 @@ describe("Attachments API", () => {
 	// ─── Content-Disposition security ───────────────────────
 	describe("Filename sanitization", () => {
 		test("sanitizes path separators in attachment filename", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data)
@@ -187,9 +187,9 @@ describe("Attachments API", () => {
 		});
 
 		test("sanitizes backslash in attachment filename", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data)
@@ -206,9 +206,9 @@ describe("Attachments API", () => {
 		});
 
 		test("sanitizes quotes in attachment filename", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data)
@@ -225,9 +225,9 @@ describe("Attachments API", () => {
 		});
 
 		test("null filename falls back to 'attachment'", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data)
@@ -244,9 +244,9 @@ describe("Attachments API", () => {
 		});
 
 		test("null content_type falls back to application/octet-stream", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data)
@@ -262,9 +262,9 @@ describe("Attachments API", () => {
 		});
 
 		test("RFC 5987: includes filename* for non-ASCII filenames", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 			const unicodeName = "дайджест.pdf"; // Russian
 
 			db.prepare(
@@ -286,9 +286,9 @@ describe("Attachments API", () => {
 		});
 
 		test("ASCII-only filename does not include filename*", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			const msgId = createTestMessage(db, accountId, folderId, 1);
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			const msgId = createTestMessage(db, identityId, folderId, 1);
 
 			db.prepare(`
 				INSERT INTO attachments (message_id, filename, content_type, size, data)

@@ -4,10 +4,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { createApp } from "../../api/server.js";
 import { MockSmtpServer } from "../../test-helpers/mock-smtp-server.js";
 import {
-	createTestAccount,
 	createTestContext,
 	createTestDb,
 	createTestFolder,
+	createTestIdentity,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
 
@@ -46,8 +46,8 @@ describe("Send API", () => {
 		db.close();
 	});
 
-	function createSmtpAccount(): number {
-		return createTestAccount(db, {
+	function createSmtpIdentity(): number {
+		return createTestIdentity(db, {
 			smtpHost: "127.0.0.1",
 			smtpPort: smtpPort,
 			smtpUser: "sender",
@@ -64,12 +64,12 @@ describe("Send API", () => {
 	// ─── Send endpoint ─────────────────────────────────────────
 	describe("POST /api/send", () => {
 		test("sends a basic email", async () => {
-			const accountId = createSmtpAccount();
+			const identityId = createSmtpIdentity();
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["recipient@example.com"],
 					subject: "Test subject",
 					text_body: "Hello from the test!",
@@ -88,12 +88,12 @@ describe("Send API", () => {
 		});
 
 		test("saves sent message to database", async () => {
-			const accountId = createSmtpAccount();
+			const identityId = createSmtpIdentity();
 			const { body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["alice@example.com"],
 					cc: ["bob@example.com"],
 					subject: "Saved message test",
@@ -115,12 +115,12 @@ describe("Send API", () => {
 		});
 
 		test("creates Sent folder if none exists", async () => {
-			const accountId = createSmtpAccount();
+			const identityId = createSmtpIdentity();
 			await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["test@example.com"],
 					subject: "Folder test",
 					text_body: "Test",
@@ -128,20 +128,20 @@ describe("Send API", () => {
 			});
 
 			const folder = db
-				.prepare("SELECT * FROM folders WHERE account_id = ? AND path = 'Sent'")
-				.get(accountId) as Record<string, unknown>;
+				.prepare("SELECT * FROM folders WHERE identity_id = ? AND path = 'Sent'")
+				.get(identityId) as Record<string, unknown>;
 
 			expect(folder).toBeTruthy();
 			expect(folder.special_use).toBe("\\Sent");
 		});
 
 		test("sends reply with threading headers", async () => {
-			const accountId = createSmtpAccount();
+			const identityId = createSmtpIdentity();
 			const { body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["reply-to@example.com"],
 					subject: "Re: Original topic",
 					text_body: "This is my reply.",
@@ -165,7 +165,7 @@ describe("Send API", () => {
 			expect(stored.references).toBe('["<original@example.com>"]');
 		});
 
-		test("rejects missing account_id", async () => {
+		test("rejects missing identity_id", async () => {
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -175,16 +175,16 @@ describe("Send API", () => {
 				}),
 			});
 			expect(status).toBe(400);
-			expect(body.error).toContain("account_id");
+			expect(body.error).toContain("identity_id");
 		});
 
 		test("rejects empty to array", async () => {
-			const accountId = createSmtpAccount();
+			const identityId = createSmtpIdentity();
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: [],
 					subject: "No recipients",
 				}),
@@ -194,12 +194,12 @@ describe("Send API", () => {
 		});
 
 		test("rejects account without SMTP config", async () => {
-			const accountId = createTestAccount(db); // No SMTP config
+			const identityId = createTestIdentity(db); // No SMTP config
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["test@example.com"],
 					subject: "No SMTP",
 					text_body: "Test",
@@ -214,7 +214,7 @@ describe("Send API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: 99999,
+					identity_id: 99999,
 					to: ["test@example.com"],
 					subject: "Bad account",
 					text_body: "Test",
@@ -224,12 +224,12 @@ describe("Send API", () => {
 		});
 
 		test("rejects request with no content (no subject, text, or html)", async () => {
-			const accountId = createSmtpAccount();
+			const identityId = createSmtpIdentity();
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["test@example.com"],
 				}),
 			});
@@ -238,12 +238,12 @@ describe("Send API", () => {
 		});
 
 		test("sends with BCC recipients", async () => {
-			const accountId = createSmtpAccount();
+			const identityId = createSmtpIdentity();
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["alice@example.com"],
 					bcc: ["secret@example.com"],
 					subject: "BCC test",
@@ -261,12 +261,12 @@ describe("Send API", () => {
 		});
 
 		test("uses existing Sent folder with special_use flag", async () => {
-			const accountId = createSmtpAccount();
+			const identityId = createSmtpIdentity();
 			// Pre-create a Sent folder with special_use
 			db.prepare(`
-				INSERT INTO folders (account_id, path, name, delimiter, flags, special_use, message_count, unread_count)
+				INSERT INTO folders (identity_id, path, name, delimiter, flags, special_use, message_count, unread_count)
 				VALUES (?, '[Gmail]/Sent Mail', 'Sent Mail', '/', '[]', '\\\\Sent', 0, 0)
-			`).run(accountId);
+			`).run(identityId);
 
 			const existingFolderId = Number(
 				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
@@ -276,7 +276,7 @@ describe("Send API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["test@example.com"],
 					subject: "Reuse folder test",
 					text_body: "Body",
@@ -291,12 +291,12 @@ describe("Send API", () => {
 		});
 
 		test("sends with html_body only (no text_body)", async () => {
-			const accountId = createSmtpAccount();
+			const identityId = createSmtpIdentity();
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["test@example.com"],
 					subject: "HTML only",
 					html_body: "<p>Rich content</p>",
@@ -307,13 +307,13 @@ describe("Send API", () => {
 		});
 
 		test("sends with attachments", async () => {
-			const accountId = createSmtpAccount();
+			const identityId = createSmtpIdentity();
 			const content = Buffer.from("Hello, attachment!").toString("base64");
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["test@example.com"],
 					subject: "Attachment test",
 					text_body: "See attached",
@@ -342,7 +342,7 @@ describe("Send API", () => {
 
 	// ─── SES send path ────────────────────────────────────────
 	describe("SES send path", () => {
-		function createSesAccount(
+		function createSesIdentity(
 			name: string,
 			email: string,
 			opts: { ses_region?: string; ses_access_key_id?: string; ses_secret_access_key?: string },
@@ -371,20 +371,20 @@ describe("Send API", () => {
 			);
 
 			db.prepare(`
-				INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id)
+				INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
 				VALUES (?, ?, ?, ?)
 			`).run(name, email, inboundId, outboundId);
 			return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
 		}
 
 		test("rejects SES account without ses_region configured", async () => {
-			const accountId = createSesAccount("SES Account", "ses@example.com", {});
+			const identityId = createSesIdentity("SES Account", "ses@example.com", {});
 
 			const { status, body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["test@example.com"],
 					subject: "SES test",
 					text_body: "Test",
@@ -397,7 +397,7 @@ describe("Send API", () => {
 		test("sends via SES when ses_region is configured", async () => {
 			// Create account with SES config — the actual send will fail (no real AWS)
 			// but it exercises the SES connector creation branch
-			const accountId = createSesAccount("SES Account", "ses@example.com", {
+			const identityId = createSesIdentity("SES Account", "ses@example.com", {
 				ses_region: "us-east-1",
 				ses_access_key_id: "AKIATEST",
 				ses_secret_access_key: "secret123",
@@ -407,7 +407,7 @@ describe("Send API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["test@example.com"],
 					subject: "SES test",
 					text_body: "Test",
@@ -420,7 +420,7 @@ describe("Send API", () => {
 		});
 
 		test("sends via SES with default credential chain (no explicit keys)", async () => {
-			const accountId = createSesAccount("SES Default Creds", "ses2@example.com", {
+			const identityId = createSesIdentity("SES Default Creds", "ses2@example.com", {
 				ses_region: "eu-west-1",
 			});
 
@@ -428,7 +428,7 @@ describe("Send API", () => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					account_id: accountId,
+					identity_id: identityId,
 					to: ["test@example.com"],
 					subject: "SES default creds test",
 					text_body: "Test",

@@ -22,10 +22,10 @@ describe("seedDemoData", () => {
 
 		seedDemoData(db);
 
-		const accounts = db.prepare("SELECT * FROM accounts").all() as { name: string }[];
-		expect(accounts).toHaveLength(2);
-		expect(accounts[0].name).toBe("Alex Demo");
-		expect(accounts[1].name).toBe("Alex (Work)");
+		const identities = db.prepare("SELECT * FROM identities").all() as { name: string }[];
+		expect(identities).toHaveLength(2);
+		expect(identities[0].name).toBe("Alex Demo");
+		expect(identities[1].name).toBe("Alex (Work)");
 
 		const folders = db.prepare("SELECT * FROM folders").all();
 		expect(folders).toHaveLength(2); // one INBOX per account
@@ -150,13 +150,13 @@ describe("demo API read-only middleware", () => {
 		expect(demoBody).toEqual({ demo: true });
 
 		// GET data route should work
-		const accountsRes = await app.request("/api/accounts");
-		expect(accountsRes.status).toBe(200);
-		const accounts = await accountsRes.json();
-		expect(Array.isArray(accounts)).toBe(true);
+		const identitiesRes = await app.request("/api/identities");
+		expect(identitiesRes.status).toBe(200);
+		const identities = await identitiesRes.json();
+		expect(Array.isArray(identities)).toBe(true);
 
 		// POST should be blocked with 403
-		const postRes = await app.request("/api/accounts", {
+		const postRes = await app.request("/api/identities", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ name: "test" }),

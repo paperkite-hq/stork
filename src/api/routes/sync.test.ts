@@ -2,7 +2,7 @@ import type Database from "better-sqlite3-multiple-ciphers";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../api/server.js";
-import { createTestAccount, createTestContext, createTestDb } from "../../test-helpers/test-db.js";
+import { createTestContext, createTestDb, createTestIdentity } from "../../test-helpers/test-db.js";
 
 describe("Sync API", () => {
 	let db: Database.Database;
@@ -37,9 +37,9 @@ describe("Sync API", () => {
 		});
 	});
 
-	describe("POST /api/accounts/:id/sync", () => {
-		test("returns 500 when account not registered with scheduler", async () => {
-			const { status, body } = await jsonRequest("/api/accounts/99999/sync", {
+	describe("POST /api/identities/:id/sync", () => {
+		test("returns 500 when identity not registered with scheduler", async () => {
+			const { status, body } = await jsonRequest("/api/identities/99999/sync", {
 				method: "POST",
 			});
 			expect(status).toBe(500);
@@ -49,7 +49,7 @@ describe("Sync API", () => {
 
 	describe("GET /api/sync/errors", () => {
 		function insertSyncError(
-			accountId: number,
+			identityId: number,
 			opts: Partial<{
 				folderPath: string;
 				uid: number;
@@ -60,10 +60,10 @@ describe("Sync API", () => {
 			}> = {},
 		) {
 			db.prepare(`
-				INSERT INTO sync_errors (account_id, folder_path, uid, error_type, message, retriable, resolved)
+				INSERT INTO sync_errors (identity_id, folder_path, uid, error_type, message, retriable, resolved)
 				VALUES (?, ?, ?, ?, ?, ?, ?)
 			`).run(
-				accountId,
+				identityId,
 				opts.folderPath ?? "INBOX",
 				opts.uid ?? null,
 				opts.errorType ?? "parse",
@@ -80,31 +80,31 @@ describe("Sync API", () => {
 		});
 
 		test("returns sync errors", async () => {
-			const accountId = createTestAccount(db);
-			insertSyncError(accountId, { message: "MIME parse failed" });
+			const identityId = createTestIdentity(db);
+			insertSyncError(identityId, { message: "MIME parse failed" });
 
 			const { status, body } = await jsonRequest("/api/sync/errors");
 			expect(status).toBe(200);
 			expect(body).toHaveLength(1);
 			expect(body[0].message).toBe("MIME parse failed");
-			expect(body[0].account_id).toBe(accountId);
+			expect(body[0].identity_id).toBe(identityId);
 		});
 
-		test("filters by account_id", async () => {
-			const account1 = createTestAccount(db);
-			const account2 = createTestAccount(db, { email: "other@example.com" });
-			insertSyncError(account1, { message: "error 1" });
-			insertSyncError(account2, { message: "error 2" });
+		test("filters by identity_id", async () => {
+			const identity1 = createTestIdentity(db);
+			const identity2 = createTestIdentity(db, { email: "other@example.com" });
+			insertSyncError(identity1, { message: "error 1" });
+			insertSyncError(identity2, { message: "error 2" });
 
-			const { body } = await jsonRequest(`/api/sync/errors?account_id=${account1}`);
+			const { body } = await jsonRequest(`/api/sync/errors?identity_id=${identity1}`);
 			expect(body).toHaveLength(1);
 			expect(body[0].message).toBe("error 1");
 		});
 
 		test("filters by resolved status", async () => {
-			const accountId = createTestAccount(db);
-			insertSyncError(accountId, { message: "unresolved", resolved: 0 });
-			insertSyncError(accountId, { message: "resolved", resolved: 1 });
+			const identityId = createTestIdentity(db);
+			insertSyncError(identityId, { message: "unresolved", resolved: 0 });
+			insertSyncError(identityId, { message: "resolved", resolved: 1 });
 
 			const { body: unresolved } = await jsonRequest("/api/sync/errors?resolved=0");
 			expect(unresolved).toHaveLength(1);
@@ -116,9 +116,9 @@ describe("Sync API", () => {
 		});
 
 		test("respects limit parameter", async () => {
-			const accountId = createTestAccount(db);
+			const identityId = createTestIdentity(db);
 			for (let i = 0; i < 5; i++) {
-				insertSyncError(accountId, { message: `error ${i}` });
+				insertSyncError(identityId, { message: `error ${i}` });
 			}
 
 			const { body } = await jsonRequest("/api/sync/errors?limit=2");
@@ -131,14 +131,14 @@ describe("Sync API", () => {
 			expect(status).toBe(200);
 		});
 
-		test("combines account_id and resolved filters", async () => {
-			const account1 = createTestAccount(db);
-			const account2 = createTestAccount(db, { email: "other@example.com" });
-			insertSyncError(account1, { message: "a1-unresolved", resolved: 0 });
-			insertSyncError(account1, { message: "a1-resolved", resolved: 1 });
-			insertSyncError(account2, { message: "a2-unresolved", resolved: 0 });
+		test("combines identity_id and resolved filters", async () => {
+			const identity1 = createTestIdentity(db);
+			const identity2 = createTestIdentity(db, { email: "other@example.com" });
+			insertSyncError(identity1, { message: "a1-unresolved", resolved: 0 });
+			insertSyncError(identity1, { message: "a1-resolved", resolved: 1 });
+			insertSyncError(identity2, { message: "a2-unresolved", resolved: 0 });
 
-			const { body } = await jsonRequest(`/api/sync/errors?account_id=${account1}&resolved=0`);
+			const { body } = await jsonRequest(`/api/sync/errors?identity_id=${identity1}&resolved=0`);
 			expect(body).toHaveLength(1);
 			expect(body[0].message).toBe("a1-unresolved");
 		});

@@ -5,11 +5,11 @@ import { cors } from "hono/cors";
 import type { ContainerContext } from "../crypto/lifecycle.js";
 import { isDemoMode } from "../demo/demo-mode.js";
 import type { SyncScheduler } from "../sync/sync-scheduler.js";
-import { accountRoutes } from "./routes/accounts.js";
 import { attachmentRoutes } from "./routes/attachments.js";
 import { connectorRoutes } from "./routes/connectors.js";
 import { draftRoutes } from "./routes/drafts.js";
 import { encryptionRoutes } from "./routes/encryption.js";
+import { identityRoutes } from "./routes/identities.js";
 import { inboxRoutes } from "./routes/inbox.js";
 import { labelRoutes } from "./routes/labels.js";
 import { messageRoutes } from "./routes/messages.js";
@@ -101,7 +101,7 @@ export function createApp(context: ContainerContext): { app: Hono } {
 		return context.r2Poller;
 	}
 
-	api.route("/accounts", accountRoutes(getDb, getScheduler));
+	api.route("/identities", identityRoutes(getDb, getScheduler));
 	api.route("/connectors", connectorRoutes(getDb, getScheduler, getR2Poller));
 	api.route("/inbox", inboxRoutes(getDb));
 	api.route("/messages", messageRoutes(getDb));

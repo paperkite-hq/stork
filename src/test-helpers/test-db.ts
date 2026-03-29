@@ -15,8 +15,8 @@ export function createTestDb(): Database.Database {
 	return db;
 }
 
-/** Inserts a test account (with inbound + outbound connectors) and returns the account ID */
-export function createTestAccount(
+/** Inserts a test identity (with inbound + outbound connectors) and returns the identity ID */
+export function createTestIdentity(
 	db: Database.Database,
 	overrides: Partial<{
 		name: string;
@@ -31,7 +31,7 @@ export function createTestAccount(
 		smtpPass: string;
 	}> = {},
 ): number {
-	const name = overrides.name ?? "Test Account";
+	const name = overrides.name ?? "Test Identity";
 
 	// Create inbound connector
 	db.prepare(`
@@ -63,11 +63,10 @@ export function createTestAccount(
 		(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 	);
 
-	// Create account referencing both connectors
+	// Create identity referencing both connectors
 	db.prepare(`
-		INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id,
-			ingest_connector_type, send_connector_type)
-		VALUES (?, ?, ?, ?, 'imap', 'smtp')
+		INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+		VALUES (?, ?, ?, ?)
 	`).run(name, overrides.email ?? "test@example.com", inboundId, outboundId);
 
 	return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
@@ -76,7 +75,7 @@ export function createTestAccount(
 /** Inserts a test folder and returns its ID */
 export function createTestFolder(
 	db: Database.Database,
-	accountId: number,
+	identityId: number,
 	path: string,
 	overrides: Partial<{
 		name: string;
@@ -85,10 +84,10 @@ export function createTestFolder(
 	}> = {},
 ): number {
 	db.prepare(`
-		INSERT INTO folders (account_id, path, name, delimiter, flags, special_use, uid_validity)
+		INSERT INTO folders (identity_id, path, name, delimiter, flags, special_use, uid_validity)
 		VALUES (?, ?, ?, '/', '[]', ?, ?)
 	`).run(
-		accountId,
+		identityId,
 		path,
 		overrides.name ?? path.split("/").pop(),
 		overrides.specialUse ?? null,
@@ -97,11 +96,9 @@ export function createTestFolder(
 	return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
 }
 
-/** Inserts a test label and returns its ID.
- * accountId is accepted for backward-compat but ignored — labels are now global. */
+/** Inserts a test label and returns its ID. */
 export function createTestLabel(
 	db: Database.Database,
-	_accountId: number,
 	name: string,
 	overrides: Partial<{
 		color: string;
@@ -127,7 +124,7 @@ export function addMessageLabel(db: Database.Database, messageId: number, labelI
 /** Inserts a test message and returns its ID */
 export function createTestMessage(
 	db: Database.Database,
-	accountId: number,
+	identityId: number,
 	folderId: number,
 	uid: number,
 	overrides: Partial<{
@@ -147,13 +144,13 @@ export function createTestMessage(
 ): number {
 	db.prepare(`
 		INSERT INTO messages (
-			account_id, folder_id, uid, message_id, subject,
+			identity_id, folder_id, uid, message_id, subject,
 			from_address, from_name, to_addresses, date,
 			text_body, html_body, flags, size, has_attachments,
 			in_reply_to, "references"
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1000, ?, ?, ?)
 	`).run(
-		accountId,
+		identityId,
 		folderId,
 		uid,
 		overrides.messageId ?? `<msg-${uid}@test.local>`,

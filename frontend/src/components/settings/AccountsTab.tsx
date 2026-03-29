@@ -7,18 +7,18 @@ import { SyncStatusPanel } from "./SyncStatusPanel";
 import { TrustedSendersPanel } from "./TrustedSendersPanel";
 
 export function AccountsTab({
-	accounts,
-	editingAccountId,
+	identities,
+	editingIdentityId,
 	onEdit,
 	onRefetch,
-	syncStatusAccountId,
+	syncStatusIdentityId,
 	onShowSync,
 }: {
-	accounts: { id: number; name: string; email: string; imap_host: string | null }[];
-	editingAccountId: number | "new" | null;
+	identities: { id: number; name: string; email: string }[];
+	editingIdentityId: number | "new" | null;
 	onEdit: (id: number | "new" | null) => void;
 	onRefetch: () => void;
-	syncStatusAccountId: number | null;
+	syncStatusIdentityId: number | null;
 	onShowSync: (id: number | null) => void;
 }) {
 	const [deleteTarget, setDeleteTarget] = useState<{
@@ -30,28 +30,28 @@ export function AccountsTab({
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center justify-between">
-				<h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Email Accounts</h3>
+				<h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Email Identities</h3>
 				<button
 					type="button"
 					onClick={() => onEdit("new")}
 					className="px-3 py-1.5 bg-stork-600 hover:bg-stork-700 text-white rounded-md text-sm font-medium transition-colors"
 				>
-					+ Add Account
+					+ Add Email Identity
 				</button>
 			</div>
 
-			{/* Account list */}
-			{accounts.length === 0 && editingAccountId !== "new" && (
+			{/* Identity list */}
+			{identities.length === 0 && editingIdentityId !== "new" && (
 				<p className="text-sm text-gray-500 dark:text-gray-400 py-8 text-center">
-					No accounts configured. Add one to get started.
+					No email identities configured. Add one to get started.
 				</p>
 			)}
 
-			{accounts.map((account) => (
-				<div key={account.id}>
-					{editingAccountId === account.id ? (
+			{identities.map((identity) => (
+				<div key={identity.id}>
+					{editingIdentityId === identity.id ? (
 						<AccountForm
-							accountId={account.id}
+							identityId={identity.id}
 							onCancel={() => onEdit(null)}
 							onSaved={() => {
 								onEdit(null);
@@ -59,22 +59,22 @@ export function AccountsTab({
 							}}
 						/>
 					) : (
-						<AccountCard
-							account={account}
-							onEdit={() => onEdit(account.id)}
-							onDelete={() => setDeleteTarget(account)}
-							showSync={syncStatusAccountId === account.id}
+						<IdentityCard
+							identity={identity}
+							onEdit={() => onEdit(identity.id)}
+							onDelete={() => setDeleteTarget(identity)}
+							showSync={syncStatusIdentityId === identity.id}
 							onToggleSync={() =>
-								onShowSync(syncStatusAccountId === account.id ? null : account.id)
+								onShowSync(syncStatusIdentityId === identity.id ? null : identity.id)
 							}
 						/>
 					)}
 				</div>
 			))}
 
-			{editingAccountId === "new" && (
+			{editingIdentityId === "new" && (
 				<AccountForm
-					accountId={null}
+					identityId={null}
 					onCancel={() => onEdit(null)}
 					onSaved={() => {
 						onEdit(null);
@@ -85,19 +85,19 @@ export function AccountsTab({
 
 			{deleteTarget && (
 				<ConfirmDialog
-					title="Delete account"
+					title="Delete email identity"
 					message={`Delete "${deleteTarget.name}" (${deleteTarget.email})? This removes all synced messages and cannot be undone.`}
-					confirmLabel="Delete Account"
+					confirmLabel="Delete"
 					variant="danger"
 					onConfirm={() => {
-						api.accounts
+						api.identities
 							.delete(deleteTarget.id)
 							.then(() => {
-								toast("Account deleted", "success");
+								toast("Email identity deleted", "success");
 								onRefetch();
 							})
 							.catch(() => {
-								toast("Failed to delete account", "error");
+								toast("Failed to delete email identity", "error");
 							});
 						setDeleteTarget(null);
 					}}
@@ -108,14 +108,14 @@ export function AccountsTab({
 	);
 }
 
-function AccountCard({
-	account,
+function IdentityCard({
+	identity,
 	onEdit,
 	onDelete,
 	showSync,
 	onToggleSync,
 }: {
-	account: { id: number; name: string; email: string; imap_host: string | null };
+	identity: { id: number; name: string; email: string };
 	onEdit: () => void;
 	onDelete: () => void;
 	showSync: boolean;
@@ -127,10 +127,8 @@ function AccountCard({
 		<div className="border border-gray-200 dark:border-gray-700 rounded-lg">
 			<div className="flex items-center justify-between px-4 py-3">
 				<div>
-					<p className="text-sm font-medium text-gray-900 dark:text-gray-100">{account.name}</p>
-					<p className="text-xs text-gray-500 dark:text-gray-400">
-						{account.email} &middot; {account.imap_host}
-					</p>
+					<p className="text-sm font-medium text-gray-900 dark:text-gray-100">{identity.name}</p>
+					<p className="text-xs text-gray-500 dark:text-gray-400">{identity.email}</p>
 				</div>
 				<div className="flex items-center gap-2">
 					<button
@@ -165,10 +163,8 @@ function AccountCard({
 					</button>
 				</div>
 			</div>
-			{showSync && <SyncStatusPanel accountId={account.id} />}
-			{showTrustedSenders && (
-				<TrustedSendersPanel accountId={account.id} onClose={() => setShowTrustedSenders(false)} />
-			)}
+			{showSync && <SyncStatusPanel identityId={identity.id} />}
+			{showTrustedSenders && <TrustedSendersPanel onClose={() => setShowTrustedSenders(false)} />}
 		</div>
 	);
 }

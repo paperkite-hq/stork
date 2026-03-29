@@ -5,7 +5,7 @@ import { Welcome } from "../Welcome";
 
 vi.mock("../../api", () => ({
 	api: {
-		accounts: {
+		identities: {
 			create: vi.fn().mockResolvedValue({ id: 1 }),
 		},
 	},
@@ -13,7 +13,7 @@ vi.mock("../../api", () => ({
 
 describe("Welcome", () => {
 	const defaultProps = {
-		onAccountCreated: vi.fn(),
+		onIdentityCreated: vi.fn(),
 		dark: false,
 		onToggleDark: vi.fn(),
 	};
@@ -28,9 +28,9 @@ describe("Welcome", () => {
 		expect(screen.getByText(/self-hosted email client/)).toBeInTheDocument();
 	});
 
-	it("shows Add Your Email Account button on intro", () => {
+	it("shows Add Your Email button on intro", () => {
 		render(<Welcome {...defaultProps} />);
-		expect(screen.getByText("Add Your Email Account")).toBeInTheDocument();
+		expect(screen.getByText("Add Your Email")).toBeInTheDocument();
 	});
 
 	it("shows dark mode toggle", () => {
@@ -55,55 +55,55 @@ describe("Welcome", () => {
 		expect(onToggleDark).toHaveBeenCalledOnce();
 	});
 
-	it("navigates to form when Add Your Email Account is clicked", async () => {
+	it("navigates to form when Add Your Email is clicked", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		expect(screen.getByText("Connect Your Email")).toBeInTheDocument();
 	});
 
 	it("shows form fields on form step", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		expect(screen.getByText("Email Address")).toBeInTheDocument();
 		expect(screen.getByText("Incoming Mail (IMAP)")).toBeInTheDocument();
 	});
 
 	it("shows back button on form step", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		expect(screen.getByText("Back")).toBeInTheDocument();
 	});
 
 	it("goes back to intro when Back is clicked", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText("Back"));
 		expect(screen.getByText("Welcome to Stork")).toBeInTheDocument();
 	});
 
 	it("shows SMTP section toggle", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		expect(screen.getByText(/Outgoing Mail \(SMTP\)/)).toBeInTheDocument();
 	});
 
 	it("expands SMTP section when clicked", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		expect(screen.getByText("SMTP Server")).toBeInTheDocument();
 	});
 
 	it("shows privacy note on form", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		expect(screen.getByText(/stored locally/)).toBeInTheDocument();
 	});
 
-	it("shows Connect Account submit button", async () => {
+	it("shows Connect Email submit button", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
-		expect(screen.getByText("Connect Account")).toBeInTheDocument();
+		await userEvent.click(screen.getByText("Add Your Email"));
+		expect(screen.getByText("Connect Email")).toBeInTheDocument();
 	});
 
 	describe("auto-fill for known providers", () => {
@@ -117,14 +117,14 @@ describe("Welcome", () => {
 
 		it("auto-fills Gmail IMAP server when gmail.com email is entered", async () => {
 			render(<Welcome {...defaultProps} />);
-			await userEvent.click(screen.getByText("Add Your Email Account"));
+			await userEvent.click(screen.getByText("Add Your Email"));
 			await userEvent.type(getEmailInput(), "user@gmail.com");
 			expect(getServerInput().value).toBe("imap.gmail.com");
 		});
 
 		it("auto-fills IMAP username from email address", async () => {
 			render(<Welcome {...defaultProps} />);
-			await userEvent.click(screen.getByText("Add Your Email Account"));
+			await userEvent.click(screen.getByText("Add Your Email"));
 			await userEvent.type(getEmailInput(), "user@fastmail.com");
 			const usernameInputs = screen.getAllByPlaceholderText("you@example.com");
 			const imap = usernameInputs.find(
@@ -135,28 +135,28 @@ describe("Welcome", () => {
 
 		it("auto-fills Fastmail IMAP server", async () => {
 			render(<Welcome {...defaultProps} />);
-			await userEvent.click(screen.getByText("Add Your Email Account"));
+			await userEvent.click(screen.getByText("Add Your Email"));
 			await userEvent.type(getEmailInput(), "user@fastmail.com");
 			expect(getServerInput().value).toBe("imap.fastmail.com");
 		});
 
 		it("auto-fills Outlook server for hotmail.com", async () => {
 			render(<Welcome {...defaultProps} />);
-			await userEvent.click(screen.getByText("Add Your Email Account"));
+			await userEvent.click(screen.getByText("Add Your Email"));
 			await userEvent.type(getEmailInput(), "user@hotmail.com");
 			expect(getServerInput().value).toBe("outlook.office365.com");
 		});
 
 		it("does not auto-fill for unknown domain", async () => {
 			render(<Welcome {...defaultProps} />);
-			await userEvent.click(screen.getByText("Add Your Email Account"));
+			await userEvent.click(screen.getByText("Add Your Email"));
 			await userEvent.type(getEmailInput(), "user@unknown-corp.com");
 			expect(getServerInput().value).toBe("");
 		});
 
 		it("auto-suggests display name from email local part", async () => {
 			render(<Welcome {...defaultProps} />);
-			await userEvent.click(screen.getByText("Add Your Email Account"));
+			await userEvent.click(screen.getByText("Add Your Email"));
 			await userEvent.type(getEmailInput(), "john.doe@example.com");
 			const nameField = screen.getByPlaceholderText("Your Name") as HTMLInputElement;
 			expect(nameField.value).toBe("John Doe");
@@ -165,10 +165,10 @@ describe("Welcome", () => {
 
 	// --- Additional coverage tests ---
 
-	it("submits form and calls onAccountCreated", async () => {
-		const onAccountCreated = vi.fn();
-		render(<Welcome {...defaultProps} onAccountCreated={onAccountCreated} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+	it("submits form and calls onIdentityCreated", async () => {
+		const onIdentityCreated = vi.fn();
+		render(<Welcome {...defaultProps} onIdentityCreated={onIdentityCreated} />);
+		await userEvent.click(screen.getByText("Add Your Email"));
 
 		// Fill form
 		const emailInput = screen
@@ -186,14 +186,14 @@ describe("Welcome", () => {
 		await userEvent.type(passwordField, "secret123");
 
 		// Submit
-		await userEvent.click(screen.getByText("Connect Account"));
+		await userEvent.click(screen.getByText("Connect Email"));
 
 		const { api } = await import("../../api");
 		await waitFor(() => {
-			expect(api.accounts.create).toHaveBeenCalled();
+			expect(api.identities.create).toHaveBeenCalled();
 		});
 		await waitFor(() => {
-			expect(onAccountCreated).toHaveBeenCalled();
+			expect(onIdentityCreated).toHaveBeenCalled();
 		});
 	});
 
@@ -201,14 +201,14 @@ describe("Welcome", () => {
 		const { api } = await import("../../api");
 		// Make create hang
 		let resolveCreate: (v: unknown) => void = () => {};
-		(api.accounts.create as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+		(api.identities.create as ReturnType<typeof vi.fn>).mockReturnValueOnce(
 			new Promise((r) => {
 				resolveCreate = r;
 			}),
 		);
 
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 
 		const emailInput = screen
 			.getAllByPlaceholderText("you@example.com")
@@ -219,7 +219,7 @@ describe("Welcome", () => {
 			.find((el) => (el as HTMLInputElement).type === "password") as HTMLInputElement;
 		await userEvent.type(passwordField, "secret");
 
-		await userEvent.click(screen.getByText("Connect Account"));
+		await userEvent.click(screen.getByText("Connect Email"));
 		expect(screen.getByText("Connecting...")).toBeInTheDocument();
 
 		// Resolve
@@ -228,12 +228,12 @@ describe("Welcome", () => {
 
 	it("shows error message when submission fails", async () => {
 		const { api } = await import("../../api");
-		(api.accounts.create as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+		(api.identities.create as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
 			new Error("Authentication failed"),
 		);
 
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 
 		const emailInput = screen
 			.getAllByPlaceholderText("you@example.com")
@@ -244,7 +244,7 @@ describe("Welcome", () => {
 			.find((el) => (el as HTMLInputElement).type === "password") as HTMLInputElement;
 		await userEvent.type(passwordField, "wrong");
 
-		await userEvent.click(screen.getByText("Connect Account"));
+		await userEvent.click(screen.getByText("Connect Email"));
 		await waitFor(() => {
 			expect(screen.getByText("Authentication failed")).toBeInTheDocument();
 		});
@@ -252,7 +252,7 @@ describe("Welcome", () => {
 
 	it("auto-fills SMTP fields for known providers", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 
 		const emailInput = screen
@@ -266,7 +266,7 @@ describe("Welcome", () => {
 
 	it("syncs SMTP username from email", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 
 		const emailInput = screen
@@ -287,7 +287,7 @@ describe("Welcome", () => {
 
 	it("TLS checkbox toggles IMAP TLS setting", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const tlsCheckbox = screen.getByLabelText(/Use TLS \(recommended\)/);
 		expect(tlsCheckbox).toBeChecked(); // default is 1
 		await userEvent.click(tlsCheckbox);
@@ -296,7 +296,7 @@ describe("Welcome", () => {
 
 	it("IMAP TLS checkbox can be re-enabled after being unchecked", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const tlsCheckbox = screen.getByLabelText(/Use TLS \(recommended\)/);
 		await userEvent.click(tlsCheckbox); // uncheck
 		expect(tlsCheckbox).not.toBeChecked();
@@ -306,7 +306,7 @@ describe("Welcome", () => {
 
 	it("auto-fills known providers: icloud.com", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const emailInput = screen
 			.getAllByPlaceholderText("you@example.com")
 			.find((el) => (el as HTMLInputElement).type === "email") as HTMLInputElement;
@@ -317,7 +317,7 @@ describe("Welcome", () => {
 
 	it("auto-fills known providers: zoho.com", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const emailInput = screen
 			.getAllByPlaceholderText("you@example.com")
 			.find((el) => (el as HTMLInputElement).type === "email") as HTMLInputElement;
@@ -328,7 +328,7 @@ describe("Welcome", () => {
 
 	it("does not overwrite manually-edited IMAP host", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const serverInput = screen.getByPlaceholderText("imap.example.com") as HTMLInputElement;
 		// Manually type a server first
 		await userEvent.type(serverInput, "custom.server.com");
@@ -342,7 +342,7 @@ describe("Welcome", () => {
 
 	it("SMTP TLS checkbox toggles", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		const smtpTls = screen.getAllByRole("checkbox").find((cb) => {
 			const label = cb.closest("label");
@@ -357,7 +357,7 @@ describe("Welcome", () => {
 
 	it("SMTP TLS checkbox can be re-enabled after being unchecked", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		const smtpTls = screen.getAllByRole("checkbox").find((cb) => {
 			const label = cb.closest("label");
@@ -373,7 +373,7 @@ describe("Welcome", () => {
 
 	it("Display Name field is editable", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const nameInput = screen.getByPlaceholderText("Your Name") as HTMLInputElement;
 		await userEvent.clear(nameInput);
 		await userEvent.type(nameInput, "My Custom Name");
@@ -382,14 +382,14 @@ describe("Welcome", () => {
 
 	it("port field has correct default value", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const portInput = screen.getByDisplayValue("993") as HTMLInputElement;
 		expect(portInput.type).toBe("number");
 	});
 
 	it("SMTP fields exist when expanded", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		expect(screen.getByDisplayValue("587")).toBeInTheDocument();
 		// Should have at least 2 password fields (IMAP + SMTP)
@@ -401,7 +401,7 @@ describe("Welcome", () => {
 
 	it("collapses SMTP section when clicked again", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		expect(screen.getByText("SMTP Server")).toBeInTheDocument();
 		await userEvent.click(screen.getByText(/Hide/));
@@ -410,7 +410,7 @@ describe("Welcome", () => {
 
 	it("SMTP port field is editable", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		const smtpPort = screen.getByDisplayValue("587") as HTMLInputElement;
 		expect(smtpPort.type).toBe("number");
@@ -418,7 +418,7 @@ describe("Welcome", () => {
 
 	it("SMTP port onChange falls back to 587 for non-numeric input", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		const smtpPort = screen.getByDisplayValue("587") as HTMLInputElement;
 		// Empty string → Number("") = 0 → falls back to 587
@@ -428,14 +428,14 @@ describe("Welcome", () => {
 
 	it("IMAP port field is editable", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const imapPort = screen.getByDisplayValue("993") as HTMLInputElement;
 		expect(imapPort.type).toBe("number");
 	});
 
 	it("IMAP port onChange updates form value", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const imapPort = screen.getByDisplayValue("993") as HTMLInputElement;
 		fireEvent.change(imapPort, { target: { value: "143" } });
 		expect(imapPort.value).toBe("143");
@@ -443,7 +443,7 @@ describe("Welcome", () => {
 
 	it("IMAP port onChange falls back to 993 for non-numeric input", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const imapPort = screen.getByDisplayValue("993") as HTMLInputElement;
 		// Empty string → Number("") = 0 → falls back to 993
 		fireEvent.change(imapPort, { target: { value: "" } });
@@ -452,7 +452,7 @@ describe("Welcome", () => {
 
 	it("does not overwrite manually edited IMAP username", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 
 		// First type email to auto-fill username
 		const emailInput = screen
@@ -476,7 +476,7 @@ describe("Welcome", () => {
 
 	it("SMTP password field editable when expanded", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		const passwordFields = screen
 			.getAllByDisplayValue("")
@@ -489,7 +489,7 @@ describe("Welcome", () => {
 
 	it("does not auto-suggest name if name already set", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const nameField = screen.getByPlaceholderText("Your Name") as HTMLInputElement;
 		await userEvent.type(nameField, "Custom Name");
 
@@ -502,7 +502,7 @@ describe("Welcome", () => {
 
 	it("auto-fills ProtonMail Bridge settings for pm.me", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const emailInput = screen
 			.getAllByPlaceholderText("you@example.com")
 			.find((el) => (el as HTMLInputElement).type === "email") as HTMLInputElement;
@@ -513,7 +513,7 @@ describe("Welcome", () => {
 
 	it("IMAP server field is manually editable", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		const serverInput = screen.getByPlaceholderText("imap.example.com") as HTMLInputElement;
 		await userEvent.type(serverInput, "my.custom.server.com");
 		expect(serverInput.value).toBe("my.custom.server.com");
@@ -521,7 +521,7 @@ describe("Welcome", () => {
 
 	it("SMTP server field is editable when SMTP section is expanded", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		const smtpServerInput = screen.getByPlaceholderText("smtp.example.com") as HTMLInputElement;
 		await userEvent.type(smtpServerInput, "smtp.custom.com");
@@ -530,7 +530,7 @@ describe("Welcome", () => {
 
 	it("SMTP username field is manually editable", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		// SMTP username is the second 'you@example.com' placeholder field
 		const usernameInputs = screen.getAllByPlaceholderText("you@example.com");
@@ -542,7 +542,7 @@ describe("Welcome", () => {
 
 	it("SMTP port field has correct initial value and type", async () => {
 		render(<Welcome {...defaultProps} />);
-		await userEvent.click(screen.getByText("Add Your Email Account"));
+		await userEvent.click(screen.getByText("Add Your Email"));
 		await userEvent.click(screen.getByText(/Outgoing Mail \(SMTP\)/));
 		const smtpPort = screen.getByDisplayValue("587") as HTMLInputElement;
 		expect(smtpPort.type).toBe("number");

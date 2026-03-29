@@ -81,7 +81,7 @@ For security, bind to `127.0.0.1` so Stork is not accessible from the network:
 
 Set `STORK_DEMO_MODE=1` to run Stork as a read-only demo with pre-seeded sample data. In demo mode:
 
-- The container starts pre-unlocked with 15 sample emails, 7 labels, and 1 demo account
+- The container starts pre-unlocked with 15 sample emails, 7 labels, and 1 demo identity
 - All write operations (create, update, delete) return `403 Forbidden`
 - No IMAP sync runs (no real mail server connection)
 - The database is unencrypted (no setup/unlock flow)
@@ -114,7 +114,7 @@ Stork uses SQLite via `better-sqlite3-multiple-ciphers` for encrypted local stor
 |--------|-------|---------|
 | `key` | (vault key) | AES-256 encryption key derived from user password — applied before any other operations |
 | `journal_mode` | WAL | Allows concurrent reads during writes (sync + API reads) |
-| `foreign_keys` | ON | Enforces cascading deletes (delete account → delete folders → delete messages) |
+| `foreign_keys` | ON | Enforces cascading deletes (delete identity → delete folders → delete messages) |
 | `busy_timeout` | 5000 | Waits up to 5 seconds for a lock before returning SQLITE_BUSY |
 
 ### Encryption
@@ -151,7 +151,7 @@ Content-Type: application/json
 **Setup:**
 1. In Settings → Connectors, create a new Inbound Connector of type "Cloudflare Email" and generate a random webhook secret.
 2. Deploy a Cloudflare Email Worker that reads the raw email stream, base64-encodes it, and POSTs to `https://your-stork-instance/api/webhook/cloudflare-email/<connectorId>` with `Authorization: Bearer <your-secret>`.
-3. Add an account referencing this inbound connector.
+3. Add an identity referencing this inbound connector.
 
 Messages are deduplicated by Message-ID, so Cloudflare's at-least-once delivery doesn't create duplicates. The endpoint returns `503` if Stork is locked, `401` for a wrong secret, and `200 {"ok":true,"stored":N}` on success.
 
@@ -203,7 +203,7 @@ Messages are deduplicated by Message-ID, so a crash between write and delete can
 
 ### Setup
 
-**1. Create an R2 bucket** in the Cloudflare dashboard. Enable [R2](https://developers.cloudflare.com/r2/) for your account if you haven't already.
+**1. Create an R2 bucket** in the Cloudflare dashboard. Enable [R2](https://developers.cloudflare.com/r2/) for your identity if you haven't already.
 
 **2. Create R2 API credentials**: In the Cloudflare dashboard, go to R2 → Manage R2 API Tokens, create a token with "Object Read & Write" permission scoped to your bucket. Note the **Access Key ID** and **Secret Access Key**.
 
@@ -211,7 +211,7 @@ Messages are deduplicated by Message-ID, so a crash between write and delete can
 
 | Field | Description |
 |-------|-------------|
-| `cf_r2_account_id` | Your Cloudflare account ID |
+| `cf_r2_identity_id` | Your Cloudflare identity ID |
 | `cf_r2_bucket_name` | R2 bucket name |
 | `cf_r2_access_key_id` | R2 access key ID |
 | `cf_r2_secret_access_key` | R2 secret access key |
@@ -263,13 +263,13 @@ bucket_name = "your-bucket-name"
 R2_PREFIX = "pending/"
 ```
 
-**5. Add an account** referencing this inbound connector.
+**5. Add an identity** referencing this inbound connector.
 
 Stork polls every 60 seconds by default (configurable via `cf_r2_poll_interval_ms`). Successfully processed objects are deleted from R2. If Stork is locked or a write fails, the object stays in R2 and is processed on the next poll.
 
 ## Sync Settings
 
-Sync behavior is configured per-account via the API or Settings UI.
+Sync behavior is configured per-identity via the API or Settings UI.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -282,8 +282,8 @@ Internal connection pool settings (not currently user-configurable):
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Max connections per account | 1 | Concurrent IMAP connections per account |
-| Max total connections | 10 | Total IMAP connections across all accounts |
+| Max connections per identity | 1 | Concurrent IMAP connections per identity |
+| Max total connections | 10 | Total IMAP connections across all identities |
 | Idle timeout | 5 minutes | How long an unused connection stays open |
 
 ### Error Backoff

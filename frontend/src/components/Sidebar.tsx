@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import type { Account, GlobalSyncStatus, Label } from "../api";
+import type { GlobalSyncStatus, Identity, Label } from "../api";
 import {
 	ArchiveIcon,
 	ComposeIcon,
@@ -32,11 +32,11 @@ function labelIcon(label: Label): ReactNode {
 	if (name === "junk" || name === "spam") return <SpamIcon className={cls} />;
 	if (name === "archive" || name === "all mail") return <ArchiveIcon className={cls} />;
 	if (name === "starred" || name === "flagged") return <StarIcon className={cls} filled />;
-	// Account labels get a person icon
-	if (label.source === "account") {
+	// Identity labels get a person icon
+	if (label.source === "identity") {
 		return (
 			<svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-				<title>Account</title>
+				<title>Identity</title>
 				<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
 				<circle cx="12" cy="7" r="4" />
 			</svg>
@@ -66,15 +66,15 @@ export const ALL_MAIL_LABEL_ID = -1;
 export const UNREAD_LABEL_ID = -2;
 /** Sentinel label ID for the promoted "Inbox" virtual view */
 export const INBOX_LABEL_ID = -3;
-/** Sentinel label ID for the unified cross-account inbox view */
+/** Sentinel label ID for the unified cross-identity inbox view */
 export const UNIFIED_INBOX_LABEL_ID = -4;
-/** Sentinel label ID for the unified cross-account All Mail view */
+/** Sentinel label ID for the unified cross-identity All Mail view */
 export const UNIFIED_ALL_MAIL_LABEL_ID = -5;
-/** Sentinel label ID for the unified cross-account Unread view */
+/** Sentinel label ID for the unified cross-identity Unread view */
 export const UNIFIED_UNREAD_LABEL_ID = -6;
 
 interface SidebarProps {
-	accounts: Account[];
+	identities: Identity[];
 	labels: Label[];
 	selectedLabelId: number | null;
 	filterLabelIds: number[];
@@ -117,16 +117,16 @@ function SyncProgressDetail({ syncStatus }: { syncStatus: GlobalSyncStatus }) {
 		return () => clearInterval(interval);
 	}, []);
 
-	// Aggregate progress across all accounts
-	const accountStatuses = Object.values(syncStatus);
-	const running = accountStatuses.filter((a) => a.running);
+	// Aggregate progress across all identities
+	const identityStatuses = Object.values(syncStatus);
+	const running = identityStatuses.filter((a) => a.running);
 
 	if (running.length === 0) return null;
 
-	// Show progress for first running account (most users have one)
-	const account = running[0];
-	if (!account) return null;
-	const progress = account.progress;
+	// Show progress for first running identity (most users have one)
+	const activeSync = running[0];
+	if (!activeSync) return null;
+	const progress = activeSync.progress;
 
 	const elapsedMs = progress ? now - progress.startedAt : 0;
 	const elapsedStr = formatDuration(elapsedMs);
@@ -191,16 +191,14 @@ function SyncProgressDetail({ syncStatus }: { syncStatus: GlobalSyncStatus }) {
 				<div className="text-stork-600 dark:text-stork-400">Connecting to server…</div>
 			)}
 			{running.length > 1 && (
-				<div className="text-stork-500 dark:text-stork-500">
-					+{running.length - 1} more {running.length - 1 === 1 ? "account" : "accounts"} syncing
-				</div>
+				<div className="text-stork-500 dark:text-stork-500">+{running.length - 1} more syncing</div>
 			)}
 		</div>
 	);
 }
 
 export function Sidebar({
-	accounts,
+	identities,
 	labels,
 	selectedLabelId,
 	filterLabelIds,
@@ -267,8 +265,8 @@ export function Sidebar({
 				</button>
 			</div>
 
-			{/* Mirror mode nag — shown when any account is in mirror mode (not connector mode) */}
-			{accounts.some((a) => a.sync_delete_from_server === 0) && (
+			{/* Mirror mode nag — removed, sync_delete_from_server is on connectors now */}
+			{false /* mirror mode nag removed — sync_delete_from_server is on connectors now */ && (
 				<div className="mx-4 mt-3 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
 					<button type="button" onClick={onSettings} className="text-left w-full">
 						<span className="font-medium">Mirror mode active.</span> Actions in Stork don't sync
@@ -356,14 +354,14 @@ export function Sidebar({
 			{/* Navigation — promoted views + label list */}
 			<nav className="flex-1 overflow-y-auto px-2 py-3">
 				{/* Promoted views: Inbox, Unread, All Mail
-				     In multi-account mode these are unified (cross-account) views.
-				     In single-account mode they filter to that account. */}
+				     In multi-identity mode these are unified (cross-identity) views.
+				     In single-identity mode they filter to that identity. */}
 				{labels.length > 0 && (
 					<>
 						<button
 							type="button"
 							onClick={() =>
-								onSelectLabel(accounts.length > 1 ? UNIFIED_INBOX_LABEL_ID : INBOX_LABEL_ID)
+								onSelectLabel(identities.length > 1 ? UNIFIED_INBOX_LABEL_ID : INBOX_LABEL_ID)
 							}
 							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
 								selectedLabelId === INBOX_LABEL_ID || selectedLabelId === UNIFIED_INBOX_LABEL_ID
@@ -373,7 +371,7 @@ export function Sidebar({
 						>
 							<InboxIcon className="w-4 h-4 flex-shrink-0" />
 							<span className="truncate">Inbox</span>
-							{accounts.length > 1 ? (
+							{identities.length > 1 ? (
 								unifiedInboxCount && unifiedInboxCount.unread > 0 ? (
 									<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
 										{unifiedInboxCount.unread}
@@ -388,7 +386,7 @@ export function Sidebar({
 						<button
 							type="button"
 							onClick={() =>
-								onSelectLabel(accounts.length > 1 ? UNIFIED_UNREAD_LABEL_ID : UNREAD_LABEL_ID)
+								onSelectLabel(identities.length > 1 ? UNIFIED_UNREAD_LABEL_ID : UNREAD_LABEL_ID)
 							}
 							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
 								selectedLabelId === UNREAD_LABEL_ID || selectedLabelId === UNIFIED_UNREAD_LABEL_ID
@@ -398,7 +396,7 @@ export function Sidebar({
 						>
 							<UnreadIcon className="w-4 h-4 flex-shrink-0" />
 							<span className="truncate">Unread</span>
-							{accounts.length > 1 ? (
+							{identities.length > 1 ? (
 								unifiedUnreadCount && unifiedUnreadCount.total > 0 ? (
 									<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
 										{unifiedUnreadCount.total}
@@ -413,7 +411,7 @@ export function Sidebar({
 						<button
 							type="button"
 							onClick={() =>
-								onSelectLabel(accounts.length > 1 ? UNIFIED_ALL_MAIL_LABEL_ID : ALL_MAIL_LABEL_ID)
+								onSelectLabel(identities.length > 1 ? UNIFIED_ALL_MAIL_LABEL_ID : ALL_MAIL_LABEL_ID)
 							}
 							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
 								selectedLabelId === ALL_MAIL_LABEL_ID ||
@@ -424,7 +422,7 @@ export function Sidebar({
 						>
 							<MailAllIcon className="w-4 h-4 flex-shrink-0" />
 							<span className="truncate">All Mail</span>
-							{accounts.length > 1 ? (
+							{identities.length > 1 ? (
 								unifiedAllMailCount && unifiedAllMailCount.unread > 0 ? (
 									<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
 										{unifiedAllMailCount.unread}
@@ -483,7 +481,7 @@ export function Sidebar({
 					</div>
 				)}
 
-				{/* All labels — Inbox excluded (promoted above). Account labels appear inline with person icon. */}
+				{/* All labels — Inbox excluded (promoted above). Identity labels appear inline with person icon. */}
 				{labels
 					.filter((l) => l.name.toLowerCase() !== "inbox")
 					.map((label) => {

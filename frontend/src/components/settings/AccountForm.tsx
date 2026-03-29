@@ -1,29 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-	type AccountDetail,
+	type IdentityDetail,
 	type InboundConnector,
 	type OutboundConnector,
-	type UpdateAccountRequest,
+	type UpdateIdentityRequest,
 	api,
 } from "../../api";
 import { useAsync } from "../../hooks";
 import { FormField } from "./FormField";
 
-interface AccountFormData {
+interface IdentityFormData {
 	name: string;
 	email: string;
 	inbound_connector_id: number | null;
 	outbound_connector_id: number | null;
-	sync_delete_from_server: number;
 	default_view: string;
 }
 
-const emptyForm: AccountFormData = {
+const emptyForm: IdentityFormData = {
 	name: "",
 	email: "",
 	inbound_connector_id: null,
 	outbound_connector_id: null,
-	sync_delete_from_server: 0,
 	default_view: "inbox",
 };
 
@@ -44,53 +42,52 @@ function connectorLabel(c: InboundConnector | OutboundConnector): string {
 }
 
 export function AccountForm({
-	accountId,
+	identityId,
 	onCancel,
 	onSaved,
 }: {
-	accountId: number | null;
+	identityId: number | null;
 	onCancel: () => void;
 	onSaved: () => void;
 }) {
-	const [form, setForm] = useState<AccountFormData>(emptyForm);
+	const [form, setForm] = useState<IdentityFormData>(emptyForm);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [loaded, setLoaded] = useState(accountId === null);
+	const [loaded, setLoaded] = useState(identityId === null);
 
 	const { data: inboundConnectors } = useAsync(() => api.connectors.inbound.list(), []);
 	const { data: outboundConnectors } = useAsync(() => api.connectors.outbound.list(), []);
 
-	const loadAccount = useCallback(async () => {
-		if (accountId === null) return;
+	const loadIdentity = useCallback(async () => {
+		if (identityId === null) return;
 		try {
-			const detail: AccountDetail = await api.accounts.get(accountId);
+			const detail: IdentityDetail = await api.identities.get(identityId);
 			setForm({
 				name: detail.name,
 				email: detail.email,
 				inbound_connector_id: detail.inbound_connector_id ?? null,
 				outbound_connector_id: detail.outbound_connector_id ?? null,
-				sync_delete_from_server: detail.sync_delete_from_server,
 				default_view: detail.default_view ?? "inbox",
 			});
 			setLoaded(true);
 		} catch (e) {
 			setError((e as Error).message);
 		}
-	}, [accountId]);
+	}, [identityId]);
 
 	useEffect(() => {
-		loadAccount();
-	}, [loadAccount]);
+		loadIdentity();
+	}, [loadIdentity]);
 
-	// Auto-select first inbound connector when creating a new account
+	// Auto-select first inbound connector when creating a new identity
 	useEffect(() => {
-		if (accountId !== null) return;
+		if (identityId !== null) return;
 		if (form.inbound_connector_id !== null) return;
 		const first = inboundConnectors?.[0];
 		if (first) {
 			setForm((f) => ({ ...f, inbound_connector_id: first.id }));
 		}
-	}, [inboundConnectors, accountId, form.inbound_connector_id]);
+	}, [inboundConnectors, identityId, form.inbound_connector_id]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -102,27 +99,25 @@ export function AccountForm({
 		setError(null);
 
 		try {
-			if (accountId === null) {
-				await api.accounts.create({
+			if (identityId === null) {
+				await api.identities.create({
 					name: form.name,
 					email: form.email,
-					inbound_connector_id: form.inbound_connector_id,
+					inbound_connector_id: form.inbound_connector_id ?? undefined,
 					...(form.outbound_connector_id
 						? { outbound_connector_id: form.outbound_connector_id }
 						: {}),
-					sync_delete_from_server: form.sync_delete_from_server,
 					default_view: form.default_view,
 				});
 			} else {
-				const update: UpdateAccountRequest = {
+				const update: UpdateIdentityRequest = {
 					name: form.name,
 					email: form.email,
-					inbound_connector_id: form.inbound_connector_id,
+					inbound_connector_id: form.inbound_connector_id ?? undefined,
 					outbound_connector_id: form.outbound_connector_id ?? undefined,
-					sync_delete_from_server: form.sync_delete_from_server,
 					default_view: form.default_view,
 				};
-				await api.accounts.update(accountId, update);
+				await api.identities.update(identityId, update);
 			}
 			onSaved();
 		} catch (e) {
@@ -149,7 +144,7 @@ export function AccountForm({
 			className="border border-stork-200 dark:border-stork-800 rounded-lg p-4 space-y-4 bg-gray-50 dark:bg-gray-800/50"
 		>
 			<h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-				{accountId === null ? "Add Account" : "Edit Account"}
+				{identityId === null ? "Add Email Identity" : "Edit Email Identity"}
 			</h4>
 
 			{error && (
@@ -158,8 +153,8 @@ export function AccountForm({
 				</div>
 			)}
 
-			{/* Philosophy intro — shown only when adding a new account */}
-			{accountId === null && (
+			{/* Philosophy intro — shown only when adding a new identity */}
+			{identityId === null && (
 				<div className="rounded-lg border-2 border-stork-300 dark:border-stork-700 bg-stork-50 dark:bg-stork-950 px-4 py-3 space-y-2">
 					<p className="text-sm font-bold text-stork-800 dark:text-stork-200">
 						⚡ Two minutes to understand how Stork thinks about email
@@ -310,7 +305,7 @@ export function AccountForm({
 					disabled={loading || !hasInbound}
 					className="px-4 py-1.5 bg-stork-600 hover:bg-stork-700 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"
 				>
-					{loading ? "Saving..." : accountId === null ? "Add Account" : "Save Changes"}
+					{loading ? "Saving..." : identityId === null ? "Add Email Identity" : "Save Changes"}
 				</button>
 			</div>
 		</form>

@@ -4,7 +4,7 @@ import { parseIntParam } from "../validation.js";
 
 interface DraftRow {
 	id: number;
-	account_id: number;
+	identity_id: number;
 	to_addresses: string | null;
 	cc_addresses: string | null;
 	bcc_addresses: string | null;
@@ -22,23 +22,23 @@ interface DraftRow {
 export function draftRoutes(getDb: () => Database.Database): Hono {
 	const api = new Hono();
 
-	/** GET /drafts?account_id=N — list drafts for an account */
+	/** GET /drafts?identity_id=N — list drafts for an identity */
 	api.get("/", (c) => {
-		const rawAccountId = c.req.query("account_id");
-		if (!rawAccountId) return c.json({ error: "account_id query parameter is required" }, 400);
-		const accountId = Number(rawAccountId);
-		if (!Number.isFinite(accountId) || accountId < 1) {
-			return c.json({ error: "Invalid account_id: must be a positive integer" }, 400);
+		const rawIdentityId = c.req.query("identity_id");
+		if (!rawIdentityId) return c.json({ error: "identity_id query parameter is required" }, 400);
+		const identityId = Number(rawIdentityId);
+		if (!Number.isFinite(identityId) || identityId < 1) {
+			return c.json({ error: "Invalid identity_id: must be a positive integer" }, 400);
 		}
 
 		const drafts = getDb()
 			.prepare(
-				`SELECT id, account_id, to_addresses, cc_addresses, bcc_addresses,
+				`SELECT id, identity_id, to_addresses, cc_addresses, bcc_addresses,
 					subject, SUBSTR(text_body, 1, 200) as preview,
 					compose_mode, original_message_id, created_at, updated_at
-				 FROM drafts WHERE account_id = ? ORDER BY updated_at DESC`,
+				 FROM drafts WHERE identity_id = ? ORDER BY updated_at DESC`,
 			)
-			.all(accountId);
+			.all(identityId);
 		return c.json(drafts);
 	});
 
@@ -57,17 +57,17 @@ export function draftRoutes(getDb: () => Database.Database): Hono {
 	api.post("/", async (c) => {
 		const db = getDb();
 		const body = await c.req.json();
-		if (!body.account_id) return c.json({ error: "account_id is required" }, 400);
+		if (!body.identity_id) return c.json({ error: "identity_id is required" }, 400);
 
 		const result = db
 			.prepare(`
-				INSERT INTO drafts (account_id, to_addresses, cc_addresses, bcc_addresses,
+				INSERT INTO drafts (identity_id, to_addresses, cc_addresses, bcc_addresses,
 					subject, text_body, html_body, in_reply_to, "references",
 					original_message_id, compose_mode)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`)
 			.run(
-				body.account_id,
+				body.identity_id,
 				body.to_addresses ?? null,
 				body.cc_addresses ?? null,
 				body.bcc_addresses ?? null,

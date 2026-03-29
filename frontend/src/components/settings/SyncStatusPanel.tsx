@@ -3,10 +3,10 @@ import { api } from "../../api";
 import { useAsync } from "../../hooks";
 import { formatRelative } from "./FormField";
 
-export function SyncStatusPanel({ accountId }: { accountId: number }) {
+export function SyncStatusPanel({ identityId }: { identityId: number }) {
 	const { data: syncStatus, loading } = useAsync(
-		() => api.accounts.syncStatus(accountId),
-		[accountId],
+		() => api.identities.syncStatus(identityId),
+		[identityId],
 	);
 
 	if (loading) {

@@ -65,16 +65,15 @@ describe("Cloudflare Email Webhook", () => {
 		return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
 	}
 
-	function createAccount(
+	function createIdentity(
 		name: string,
 		email: string,
 		inboundConnectorId: number,
 		outboundConnectorId: number,
 	) {
 		db.prepare(
-			`INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id,
-				ingest_connector_type, send_connector_type)
-			VALUES (?, ?, ?, ?, 'cloudflare-email', 'smtp')`,
+			`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+			VALUES (?, ?, ?, ?)`,
 		).run(name, email, inboundConnectorId, outboundConnectorId);
 		return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
 	}
@@ -141,10 +140,10 @@ describe("Cloudflare Email Webhook", () => {
 		expect(res.status).toBe(401);
 	});
 
-	test("stores message for linked account", async () => {
+	test("stores message for linked identity", async () => {
 		const connectorId = createCloudflareConnector();
 		const outboundId = createOutboundConnector();
-		const accountId = createAccount("Alice", "alice@example.com", connectorId, outboundId);
+		const identityId = createIdentity("Alice", "alice@example.com", connectorId, outboundId);
 
 		const raw = buildRawEmail({
 			from: "sender@example.com",
@@ -167,27 +166,29 @@ describe("Cloudflare Email Webhook", () => {
 
 		// Verify message was stored
 		const msg = db
-			.prepare("SELECT subject, from_address, account_id FROM messages WHERE account_id = ?")
-			.get(accountId) as { subject: string; from_address: string; account_id: number } | undefined;
+			.prepare("SELECT subject, from_address, identity_id FROM messages WHERE identity_id = ?")
+			.get(identityId) as
+			| { subject: string; from_address: string; identity_id: number }
+			| undefined;
 		expect(msg).toBeDefined();
 		expect(msg?.subject).toBe("Hello Alice");
 		expect(msg?.from_address).toBe("sender@example.com");
 
 		// Verify INBOX folder was created
 		const folder = db
-			.prepare("SELECT path, unread_count, message_count FROM folders WHERE account_id = ?")
-			.get(accountId) as { path: string; unread_count: number; message_count: number } | undefined;
+			.prepare("SELECT path, unread_count, message_count FROM folders WHERE identity_id = ?")
+			.get(identityId) as { path: string; unread_count: number; message_count: number } | undefined;
 		expect(folder).toBeDefined();
 		expect(folder?.path).toBe("INBOX");
 		expect(folder?.unread_count).toBe(1);
 		expect(folder?.message_count).toBe(1);
 	});
 
-	test("stores message for multiple accounts sharing the same connector", async () => {
+	test("stores message for multiple identities sharing the same connector", async () => {
 		const connectorId = createCloudflareConnector();
 		const outboundId = createOutboundConnector();
-		const account1 = createAccount("Alice", "alice@example.com", connectorId, outboundId);
-		const account2 = createAccount("Bob", "bob@example.com", connectorId, outboundId);
+		const identity1 = createIdentity("Alice", "alice@example.com", connectorId, outboundId);
+		const identity2 = createIdentity("Bob", "bob@example.com", connectorId, outboundId);
 
 		const raw = buildRawEmail({ subject: "Shared connector test" });
 		const res = await webhookPost(connectorId, {
@@ -201,17 +202,17 @@ describe("Cloudflare Email Webhook", () => {
 		expect(body.stored).toBe(2);
 
 		const msgs = db
-			.prepare("SELECT account_id FROM messages WHERE subject = 'Shared connector test'")
-			.all() as { account_id: number }[];
-		const accountIds = msgs.map((m) => m.account_id);
-		expect(accountIds).toContain(account1);
-		expect(accountIds).toContain(account2);
+			.prepare("SELECT identity_id FROM messages WHERE subject = 'Shared connector test'")
+			.all() as { identity_id: number }[];
+		const identityIds = msgs.map((m) => m.identity_id);
+		expect(identityIds).toContain(identity1);
+		expect(identityIds).toContain(identity2);
 	});
 
 	test("deduplicates by message-id (INSERT OR IGNORE)", async () => {
 		const connectorId = createCloudflareConnector();
 		const outboundId = createOutboundConnector();
-		createAccount("Alice", "alice@example.com", connectorId, outboundId);
+		createIdentity("Alice", "alice@example.com", connectorId, outboundId);
 
 		const raw = buildRawEmail({ messageId: "<dedup-test@example.com>" });
 		const payload = { from: "a@b.com", to: "c@d.com", raw, rawSize: raw.length };
@@ -232,9 +233,9 @@ describe("Cloudflare Email Webhook", () => {
 		expect(count).toBe(1);
 	});
 
-	test("returns ok with stored=0 when no accounts reference the connector", async () => {
+	test("returns ok with stored=0 when no identities reference the connector", async () => {
 		const connectorId = createCloudflareConnector();
-		// No account linked to this connector
+		// No identity linked to this connector
 
 		const raw = buildRawEmail({});
 		const res = await webhookPost(connectorId, {
@@ -308,7 +309,7 @@ describe("Cloudflare Email Webhook", () => {
 	test("stores message with no Message-ID (no dedup check)", async () => {
 		const connectorId = createCloudflareConnector();
 		const outboundId = createOutboundConnector();
-		createAccount("Alice", "alice@example.com", connectorId, outboundId);
+		createIdentity("Alice", "alice@example.com", connectorId, outboundId);
 
 		// Build an email that deliberately has no Message-ID header
 		const lines = [
@@ -337,7 +338,7 @@ describe("Cloudflare Email Webhook", () => {
 	test("stores email with CC addresses", async () => {
 		const connectorId = createCloudflareConnector();
 		const outboundId = createOutboundConnector();
-		createAccount("Alice", "alice@example.com", connectorId, outboundId);
+		createIdentity("Alice", "alice@example.com", connectorId, outboundId);
 
 		const lines = [
 			"From: sender@example.com",

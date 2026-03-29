@@ -57,7 +57,7 @@ export function App() {
 	}, []);
 
 	// Data state
-	const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+	const [selectedIdentityId, setSelectedIdentityId] = useState<number | null>(null);
 	const [selectedLabelId, setSelectedLabelId] = useState<number | null>(null);
 	const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
 	const [filterLabelIds, setFilterLabelIds] = useState<number[]>([]);
@@ -74,38 +74,38 @@ export function App() {
 	const [messageListIndex, setMessageListIndex] = useState(0);
 	const [sidebarOpen, setSidebarOpen] = useState(false);
 
-	// Fetch accounts — only when container is unlocked
+	// Fetch identities — only when container is unlocked
 	const {
-		data: accounts,
-		error: accountsError,
-		refetch: refetchAccounts,
+		data: identities,
+		error: identitiesError,
+		refetch: refetchIdentities,
 	} = useAsync(
-		() => (containerState === "unlocked" ? api.accounts.list() : Promise.resolve(null)),
+		() => (containerState === "unlocked" ? api.identities.list() : Promise.resolve(null)),
 		[containerState],
 	);
 
-	// Auto-select first account
-	const effectiveAccountId = selectedAccountId ?? accounts?.[0]?.id ?? null;
+	// Auto-select first identity
+	const effectiveIdentityId = selectedIdentityId ?? identities?.[0]?.id ?? null;
 
-	// Labels are global — not per-account
+	// Labels are global — not per-identity
 	const { data: labels, refetch: refetchLabels } = useAsync(() => api.labels.list(), []);
 
 	// Also fetch folders (still needed for move-to-folder in MessageDetail)
 	const { data: folders } = useAsync(
-		() => (effectiveAccountId ? api.folders.list(effectiveAccountId) : Promise.resolve([])),
-		[effectiveAccountId],
+		() => (effectiveIdentityId ? api.folders.list(effectiveIdentityId) : Promise.resolve([])),
+		[effectiveIdentityId],
 	);
 
-	// Resolve the default view. In multi-account mode the primary navigation is
-	// unified (cross-account), so default to UNIFIED_INBOX. In single-account mode
-	// honour the per-account default_view setting.
-	const effectiveAccount = accounts?.find((a) => a.id === effectiveAccountId) ?? null;
+	// Resolve the default view. In multi-identity mode the primary navigation is
+	// unified (cross-identity), so default to UNIFIED_INBOX. In single-identity mode
+	// honour the per-identity default_view setting.
+	const effectiveIdentity = identities?.find((a) => a.id === effectiveIdentityId) ?? null;
 	const defaultLabelId = useMemo(() => {
 		if (!labels || labels.length === 0) return INBOX_LABEL_ID;
-		// Multi-account: unified inbox is the default starting point
-		if ((accounts?.length ?? 0) > 1 && !selectedAccountId) return UNIFIED_INBOX_LABEL_ID;
-		if (!effectiveAccount) return INBOX_LABEL_ID;
-		const dv = effectiveAccount.default_view ?? "inbox";
+		// Multi-identity: unified inbox is the default starting point
+		if ((identities?.length ?? 0) > 1 && !selectedIdentityId) return UNIFIED_INBOX_LABEL_ID;
+		if (!effectiveIdentity) return INBOX_LABEL_ID;
+		const dv = effectiveIdentity.default_view ?? "inbox";
 		if (dv === "unread") return UNREAD_LABEL_ID;
 		if (dv === "all") return ALL_MAIL_LABEL_ID;
 		if (dv.startsWith("label:")) {
@@ -113,15 +113,15 @@ export function App() {
 			return Number.isNaN(id) ? INBOX_LABEL_ID : id;
 		}
 		return INBOX_LABEL_ID; // 'inbox' or unknown
-	}, [effectiveAccount, labels, accounts?.length, selectedAccountId]);
+	}, [effectiveIdentity, labels, identities?.length, selectedIdentityId]);
 
-	// Auto-select default view (uses per-account setting, falls back to Inbox).
-	// Guard on accounts !== null to avoid a double-fetch: if labels resolve before
-	// accounts, effectiveLabelId would become non-null with effectiveAccountId=null,
-	// then when accounts load effectiveAccountId changes → getFetchFn changes → second
-	// message fetch with the same args. Waiting for accounts ensures one fetch.
+	// Auto-select default view (uses per-identity setting, falls back to Inbox).
+	// Guard on identities !== null to avoid a double-fetch: if labels resolve before
+	// identities, effectiveLabelId would become non-null with effectiveIdentityId=null,
+	// then when identities load effectiveIdentityId changes → getFetchFn changes → second
+	// message fetch with the same args. Waiting for identities ensures one fetch.
 	const effectiveLabelId =
-		selectedLabelId ?? (labels && labels.length > 0 && accounts !== null ? defaultLabelId : null);
+		selectedLabelId ?? (labels && labels.length > 0 && identities !== null ? defaultLabelId : null);
 
 	const isAllMail = effectiveLabelId === ALL_MAIL_LABEL_ID;
 	const isUnread = effectiveLabelId === UNREAD_LABEL_ID;
@@ -152,30 +152,31 @@ export function App() {
 
 	// Fetch "All Mail" count for the sidebar badge
 	const { data: allMailCount, refetch: refetchAllMailCount } = useAsync(
-		() => (effectiveAccountId ? api.allMessages.count(effectiveAccountId) : Promise.resolve(null)),
-		[effectiveAccountId],
+		() =>
+			effectiveIdentityId ? api.allMessages.count(effectiveIdentityId) : Promise.resolve(null),
+		[effectiveIdentityId],
 	);
 
 	// Fetch "Unread" count for the sidebar badge
 	const { data: unreadCount, refetch: refetchUnreadCount } = useAsync(
 		() =>
-			effectiveAccountId ? api.unreadMessages.count(effectiveAccountId) : Promise.resolve(null),
-		[effectiveAccountId],
+			effectiveIdentityId ? api.unreadMessages.count(effectiveIdentityId) : Promise.resolve(null),
+		[effectiveIdentityId],
 	);
 
-	// Fetch unified inbox count for the "All Inboxes" sidebar badge (only with multiple accounts)
-	const hasMultipleAccounts = (accounts?.length ?? 0) > 1;
+	// Fetch unified inbox count for the "All Inboxes" sidebar badge (only with multiple identities)
+	const hasMultipleIdentities = (identities?.length ?? 0) > 1;
 	const { data: unifiedInboxCount, refetch: refetchUnifiedInboxCount } = useAsync(
-		() => (hasMultipleAccounts ? api.inbox.unified.count() : Promise.resolve(null)),
-		[hasMultipleAccounts],
+		() => (hasMultipleIdentities ? api.inbox.unified.count() : Promise.resolve(null)),
+		[hasMultipleIdentities],
 	);
 	const { data: unifiedAllMailCount, refetch: refetchUnifiedAllMailCount } = useAsync(
-		() => (hasMultipleAccounts ? api.inbox.allMessages.count() : Promise.resolve(null)),
-		[hasMultipleAccounts],
+		() => (hasMultipleIdentities ? api.inbox.allMessages.count() : Promise.resolve(null)),
+		[hasMultipleIdentities],
 	);
 	const { data: unifiedUnreadCount, refetch: refetchUnifiedUnreadCount } = useAsync(
-		() => (hasMultipleAccounts ? api.inbox.unreadMessages.count() : Promise.resolve(null)),
-		[hasMultipleAccounts],
+		() => (hasMultipleIdentities ? api.inbox.unreadMessages.count() : Promise.resolve(null)),
+		[hasMultipleIdentities],
 	);
 
 	// Message list fetching + pagination (extracted to hook)
@@ -190,7 +191,7 @@ export function App() {
 		handleLoadMore,
 	} = useMessagePagination({
 		effectiveLabelId: isInbox ? inboxLabelId : effectiveLabelId,
-		effectiveAccountId,
+		effectiveIdentityId,
 		isAllMail,
 		isUnread,
 		isUnifiedInbox,
@@ -345,12 +346,12 @@ export function App() {
 
 	// Browser back/forward navigation
 	useHistoryNavigation({
-		accountId: effectiveAccountId,
+		identityId: effectiveIdentityId,
 		labelId: effectiveLabelId,
 		messageId: selectedMessageId,
 		searchActive: openedFromSearch,
 		onNavigate: useCallback((state) => {
-			if (state.accountId !== null) setSelectedAccountId(state.accountId);
+			if (state.identityId !== null) setSelectedIdentityId(state.identityId);
 			setSelectedLabelId(state.labelId);
 			setSelectedMessageId(state.messageId);
 			setMessageListIndex(0);
@@ -363,9 +364,9 @@ export function App() {
 
 	// Manual sync trigger
 	const handleSyncNow = useCallback(async () => {
-		if (!effectiveAccountId) return;
+		if (!effectiveIdentityId) return;
 		try {
-			await api.sync.trigger(effectiveAccountId);
+			await api.sync.trigger(effectiveIdentityId);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Unknown error";
 			// "already syncing" is expected — sync poller will show progress
@@ -373,7 +374,7 @@ export function App() {
 				toast(`Sync failed: ${message}`, "error");
 			}
 		}
-	}, [effectiveAccountId]);
+	}, [effectiveIdentityId]);
 
 	// Inline star toggle from message list — uses parseFlags for consistent flag manipulation
 	const handleToggleStar = useCallback(
@@ -490,7 +491,7 @@ export function App() {
 
 	const handleSend = useCallback(
 		async (data: {
-			accountId?: number;
+			identityId?: number;
 			to: string;
 			cc: string;
 			bcc: string;
@@ -498,8 +499,8 @@ export function App() {
 			body: string;
 			htmlBody?: string;
 		}) => {
-			const sendAccountId = data.accountId ?? selectedAccountId;
-			if (!sendAccountId) throw new Error("No account selected");
+			const sendIdentityId = data.identityId ?? selectedIdentityId;
+			if (!sendIdentityId) throw new Error("No email identity selected");
 
 			const parseAddresses = (raw: string): string[] =>
 				raw
@@ -514,7 +515,7 @@ export function App() {
 					: { inReplyTo: undefined, references: undefined };
 
 			await api.send({
-				account_id: sendAccountId,
+				identity_id: sendIdentityId,
 				to: parseAddresses(data.to),
 				cc: data.cc ? parseAddresses(data.cc) : undefined,
 				bcc: data.bcc ? parseAddresses(data.bcc) : undefined,
@@ -530,7 +531,7 @@ export function App() {
 			refetchMessages();
 			refetchLabels();
 		},
-		[selectedAccountId, composeMode, refetchMessages, refetchLabels],
+		[selectedIdentityId, composeMode, refetchMessages, refetchLabels],
 	);
 
 	// Per-message keyboard action handlers (star, mark read/unread, archive, delete)
@@ -672,7 +673,7 @@ export function App() {
 	// Auto-recover when server comes back after a connection failure.
 	// Polls /api/status and updates containerState so the correct screen renders.
 	useEffect(() => {
-		if (!accountsError) return;
+		if (!identitiesError) return;
 		let active = true;
 		// Sequential scheduling: wait for each probe to complete before
 		// scheduling the next, so slow responses don't stack up.
@@ -684,7 +685,7 @@ export function App() {
 				if (state !== containerState) {
 					setContainerState(state);
 				} else if (state === "unlocked") {
-					refetchAccounts();
+					refetchIdentities();
 				}
 			} catch {
 				// Still unreachable — keep polling
@@ -695,7 +696,7 @@ export function App() {
 		return () => {
 			active = false;
 		};
-	}, [accountsError, containerState, refetchAccounts]);
+	}, [identitiesError, containerState, refetchIdentities]);
 
 	// Container state gates — render before any data UI
 	if (containerState === "loading") {
@@ -726,21 +727,21 @@ export function App() {
 		);
 	}
 
-	if (accountsError) {
+	if (identitiesError) {
 		return (
 			<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
 				<div className="text-center space-y-3">
 					<div className="w-8 h-8 mx-auto border-2 border-stork-600 border-t-transparent rounded-full animate-spin" />
 					<p className="text-gray-600 dark:text-gray-400">Reconnecting to server…</p>
-					<p className="text-sm text-gray-400">{accountsError}</p>
+					<p className="text-sm text-gray-400">{identitiesError}</p>
 				</div>
 			</div>
 		);
 	}
 
-	// First-run: show welcome screen when no accounts exist yet
-	if (Array.isArray(accounts) && accounts.length === 0) {
-		return <Welcome onAccountCreated={refetchAccounts} dark={dark} onToggleDark={toggleDark} />;
+	// First-run: show welcome screen when no identities exist yet
+	if (Array.isArray(identities) && identities.length === 0) {
+		return <Welcome onIdentityCreated={refetchIdentities} dark={dark} onToggleDark={toggleDark} />;
 	}
 
 	return (
@@ -771,7 +772,7 @@ export function App() {
 					}`}
 				>
 					<Sidebar
-						accounts={accounts ?? []}
+						identities={identities ?? []}
 						labels={labels ?? []}
 						selectedLabelId={effectiveLabelId}
 						filterLabelIds={filterLabelIds}
@@ -846,7 +847,7 @@ export function App() {
 									setSelectedMessageId(id);
 									setOpenedFromSearch(true);
 								}}
-								accountId={effectiveAccountId}
+								identityId={effectiveIdentityId}
 								onResultsChange={setSearchResults}
 								onQueryChange={setActiveSearchQuery}
 								initialQuery={initialSearchQuery}
@@ -865,9 +866,9 @@ export function App() {
 								onLoadMore={handleLoadMore}
 								loadingMore={loadingMore}
 								onToggleStar={handleToggleStar}
-								accounts={
+								identities={
 									isUnifiedInbox || isUnifiedAllMail || isUnifiedUnread || filterLabelIds.length > 1
-										? (accounts ?? undefined)
+										? (identities ?? undefined)
 										: undefined
 								}
 								totalCount={
@@ -946,7 +947,7 @@ export function App() {
 								refetchUnreadCount();
 							}}
 							folders={folders ?? []}
-							accountId={effectiveAccountId}
+							identityId={effectiveIdentityId}
 							onLabelsChanged={refetchLabels}
 							searchQuery={openedFromSearch ? activeSearchQuery : undefined}
 						/>
@@ -957,8 +958,8 @@ export function App() {
 				{composeMode && (
 					<ComposeModal
 						mode={composeMode}
-						accounts={accounts ?? []}
-						selectedAccountId={effectiveAccountId}
+						identities={identities ?? []}
+						selectedIdentityId={effectiveIdentityId}
 						onClose={() => setComposeMode(null)}
 						onSend={handleSend}
 					/>

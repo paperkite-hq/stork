@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Account, Message } from "../../api";
+import type { Identity, Message } from "../../api";
 import { ComposeModal } from "../ComposeModal";
 
 function makeMessage(overrides: Partial<Message> = {}): Message {
@@ -30,18 +30,13 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
 	};
 }
 
-function makeAccount(overrides: Partial<Account> = {}): Account {
+function makeIdentity(overrides: Partial<Identity> = {}): Identity {
 	return {
 		id: 1,
 		name: "Test User",
 		email: "test@example.com",
-		ingest_connector_type: "imap",
-		send_connector_type: "smtp",
 		inbound_connector_id: 1,
 		outbound_connector_id: 1,
-		imap_host: "imap.example.com",
-		smtp_host: "smtp.example.com",
-		sync_delete_from_server: 1,
 		created_at: "2026-01-01T00:00:00Z",
 		...overrides,
 	};
@@ -116,13 +111,13 @@ describe("ComposeModal", () => {
 		expect(onClose).toHaveBeenCalledOnce();
 	});
 
-	it("calls onSend with form data including accountId", async () => {
+	it("calls onSend with form data including identityId", async () => {
 		const onSend = vi.fn();
 		render(
 			<ComposeModal
 				mode={{ type: "new" }}
-				accounts={[makeAccount({ id: 7 })]}
-				selectedAccountId={7}
+				identities={[makeIdentity({ id: 7 })]}
+				selectedIdentityId={7}
 				onClose={vi.fn()}
 				onSend={onSend}
 			/>,
@@ -135,7 +130,7 @@ describe("ComposeModal", () => {
 
 		await userEvent.click(screen.getByText("Send"));
 		expect(onSend).toHaveBeenCalledWith({
-			accountId: 7,
+			identityId: 7,
 			to: "bob@test.com",
 			cc: "",
 			bcc: "",
@@ -174,16 +169,16 @@ describe("ComposeModal", () => {
 		expect(subjectInput).toHaveValue("Fwd: Already forwarded");
 	});
 
-	it("shows From selector when multiple accounts provided", () => {
-		const accounts = [
-			makeAccount({ id: 1, email: "alice@example.com", name: "Alice" }),
-			makeAccount({ id: 2, email: "bob@example.com", name: "Bob" }),
+	it("shows From selector when multiple identities provided", () => {
+		const identities = [
+			makeIdentity({ id: 1, email: "alice@example.com", name: "Alice" }),
+			makeIdentity({ id: 2, email: "bob@example.com", name: "Bob" }),
 		];
 		render(
 			<ComposeModal
 				mode={{ type: "new" }}
-				accounts={accounts}
-				selectedAccountId={1}
+				identities={identities}
+				selectedIdentityId={1}
 				onClose={vi.fn()}
 				onSend={vi.fn()}
 			/>,
@@ -191,12 +186,12 @@ describe("ComposeModal", () => {
 		expect(screen.getByLabelText("From")).toBeInTheDocument();
 	});
 
-	it("hides From selector for single account", () => {
+	it("hides From selector for single identity", () => {
 		render(
 			<ComposeModal
 				mode={{ type: "new" }}
-				accounts={[makeAccount({ id: 1 })]}
-				selectedAccountId={1}
+				identities={[makeIdentity({ id: 1 })]}
+				selectedIdentityId={1}
 				onClose={vi.fn()}
 				onSend={vi.fn()}
 			/>,
@@ -403,17 +398,17 @@ describe("ComposeModal", () => {
 		expect(screen.getByPlaceholderText("cc@example.com")).toBeInTheDocument();
 	});
 
-	it("changes from account when selector is used", async () => {
+	it("changes from identity when selector is used", async () => {
 		const onSend = vi.fn();
-		const accounts = [
-			makeAccount({ id: 1, email: "alice@example.com", name: "Alice" }),
-			makeAccount({ id: 2, email: "bob@example.com", name: "Bob" }),
+		const identities = [
+			makeIdentity({ id: 1, email: "alice@example.com", name: "Alice" }),
+			makeIdentity({ id: 2, email: "bob@example.com", name: "Bob" }),
 		];
 		render(
 			<ComposeModal
 				mode={{ type: "new" }}
-				accounts={accounts}
-				selectedAccountId={1}
+				identities={identities}
+				selectedIdentityId={1}
 				onClose={vi.fn()}
 				onSend={onSend}
 			/>,
@@ -423,7 +418,7 @@ describe("ComposeModal", () => {
 		await userEvent.type(screen.getByPlaceholderText("recipient@example.com"), "x@test.com");
 		await userEvent.click(screen.getByText("Send"));
 
-		expect(onSend).toHaveBeenCalledWith(expect.objectContaining({ accountId: 2 }));
+		expect(onSend).toHaveBeenCalledWith(expect.objectContaining({ identityId: 2 }));
 	});
 
 	it("builds reply body with quoted text", () => {
@@ -563,22 +558,17 @@ describe("ComposeModal", () => {
 		render(
 			<ComposeModal
 				mode={{ type: "reply-all", original: msg }}
-				accounts={[
+				identities={[
 					{
 						id: 1,
 						name: "Me",
 						email: "me@myaccount.com",
-						ingest_connector_type: "imap" as const,
-						send_connector_type: "smtp" as const,
 						inbound_connector_id: 1,
 						outbound_connector_id: 1,
-						imap_host: "",
-						smtp_host: null,
-						sync_delete_from_server: 1,
 						created_at: "",
 					},
 				]}
-				selectedAccountId={1}
+				selectedIdentityId={1}
 				onClose={vi.fn()}
 				onSend={vi.fn()}
 			/>,
@@ -761,8 +751,8 @@ describe("ComposeModal", () => {
 		render(
 			<ComposeModal
 				mode={{ type: "reply-all", original: msg }}
-				accounts={[makeAccount({ id: 1, email: "me@test.com" })]}
-				selectedAccountId={1}
+				identities={[makeIdentity({ id: 1, email: "me@test.com" })]}
+				selectedIdentityId={1}
 				onClose={vi.fn()}
 				onSend={vi.fn()}
 			/>,

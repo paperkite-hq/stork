@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccountsTab } from "../settings/AccountsTab";
 
@@ -8,7 +8,7 @@ vi.mock("../Toast", () => ({
 
 vi.mock("../../api", () => ({
 	api: {
-		accounts: {
+		identities: {
 			delete: vi.fn(),
 			get: vi.fn(),
 			syncStatus: vi.fn().mockResolvedValue([]),
@@ -26,7 +26,7 @@ vi.mock("../../api", () => ({
 import { api } from "../../api";
 import { toast } from "../Toast";
 const mockApi = api as unknown as {
-	accounts: {
+	identities: {
 		delete: ReturnType<typeof vi.fn>;
 		get: ReturnType<typeof vi.fn>;
 		syncStatus: ReturnType<typeof vi.fn>;
@@ -39,9 +39,9 @@ const mockApi = api as unknown as {
 };
 const mockToast = toast as ReturnType<typeof vi.fn>;
 
-const mockAccounts = [
-	{ id: 1, name: "Work", email: "work@example.com", imap_host: "imap.example.com" },
-	{ id: 2, name: "Personal", email: "me@example.com", imap_host: null },
+const mockIdentities = [
+	{ id: 1, name: "Work", email: "work@example.com" },
+	{ id: 2, name: "Personal", email: "me@example.com" },
 ];
 
 describe("AccountsTab", () => {
@@ -51,31 +51,31 @@ describe("AccountsTab", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockApi.accounts.syncStatus.mockResolvedValue([]);
+		mockApi.identities.syncStatus.mockResolvedValue([]);
 	});
 
-	it("shows empty state when no accounts and not adding", () => {
+	it("shows empty state when no identities and not adding", () => {
 		render(
 			<AccountsTab
-				accounts={[]}
-				editingAccountId={null}
+				identities={[]}
+				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={null}
+				syncStatusIdentityId={null}
 				onShowSync={onShowSync}
 			/>,
 		);
-		expect(screen.getByText(/No accounts configured/i)).toBeInTheDocument();
+		expect(screen.getByText(/No email identities configured/i)).toBeInTheDocument();
 	});
 
-	it("renders account list", () => {
+	it("renders identity list", () => {
 		render(
 			<AccountsTab
-				accounts={mockAccounts}
-				editingAccountId={null}
+				identities={mockIdentities}
+				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={null}
+				syncStatusIdentityId={null}
 				onShowSync={onShowSync}
 			/>,
 		);
@@ -83,39 +83,39 @@ describe("AccountsTab", () => {
 		expect(screen.getByText("Personal")).toBeInTheDocument();
 	});
 
-	it("calls onEdit('new') when Add Account button clicked", () => {
+	it("calls onEdit('new') when Add Identity button clicked", () => {
 		render(
 			<AccountsTab
-				accounts={[]}
-				editingAccountId={null}
+				identities={[]}
+				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={null}
+				syncStatusIdentityId={null}
 				onShowSync={onShowSync}
 			/>,
 		);
-		fireEvent.click(screen.getByText("+ Add Account"));
+		fireEvent.click(screen.getByText("+ Add Email Identity"));
 		expect(onEdit).toHaveBeenCalledWith("new");
 	});
 
-	it("renders AccountForm when editingAccountId is 'new'", async () => {
+	it("renders IdentityForm when editingIdentityId is 'new'", async () => {
 		render(
 			<AccountsTab
-				accounts={[]}
-				editingAccountId="new"
+				identities={[]}
+				editingIdentityId="new"
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={null}
+				syncStatusIdentityId={null}
 				onShowSync={onShowSync}
 			/>,
 		);
 		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: /Add Account/i })).toBeInTheDocument(),
+			expect(screen.getByRole("heading", { name: /Add Email Identity/i })).toBeInTheDocument(),
 		);
 	});
 
-	it("renders AccountForm inline when editing an existing account", async () => {
-		mockApi.accounts.get.mockResolvedValue({
+	it("renders IdentityForm inline when editing an existing identity", async () => {
+		mockApi.identities.get.mockResolvedValue({
 			id: 1,
 			name: "Work",
 			email: "work@example.com",
@@ -126,70 +126,73 @@ describe("AccountsTab", () => {
 		});
 		render(
 			<AccountsTab
-				accounts={mockAccounts}
-				editingAccountId={1}
+				identities={mockIdentities}
+				editingIdentityId={1}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={null}
+				syncStatusIdentityId={null}
 				onShowSync={onShowSync}
 			/>,
 		);
-		// Other account should still show as card
+		// Other identity should still show as card
 		expect(screen.getByText("Personal")).toBeInTheDocument();
-		// The editing account renders as form (edit heading loaded async)
+		// The editing identity renders as form (edit heading loaded async)
 		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: /Edit Account/i })).toBeInTheDocument(),
+			expect(screen.getByRole("heading", { name: /Edit Email Identity/i })).toBeInTheDocument(),
 		);
 	});
 
-	it("shows delete confirm dialog and calls api.accounts.delete on confirm", async () => {
-		mockApi.accounts.delete.mockResolvedValue({ ok: true });
+	it("shows delete confirm dialog and calls api.identities.delete on confirm", async () => {
+		mockApi.identities.delete.mockResolvedValue({ ok: true });
 		render(
 			<AccountsTab
-				accounts={mockAccounts}
-				editingAccountId={null}
+				identities={mockIdentities}
+				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={null}
+				syncStatusIdentityId={null}
 				onShowSync={onShowSync}
 			/>,
 		);
 		const [firstDelete] = screen.getAllByText("Delete");
 		if (firstDelete) fireEvent.click(firstDelete);
-		// Confirm button uses confirmLabel prop
-		const confirmButton = screen.getByRole("button", { name: "Delete Account" });
+		// Confirm button uses confirmLabel prop — scope to dialog to avoid ambiguity
+		const dialog = screen.getByRole("dialog");
+		const confirmButton = within(dialog).getByRole("button", { name: "Delete" });
 		expect(confirmButton).toBeInTheDocument();
 		fireEvent.click(confirmButton);
-		await waitFor(() => expect(mockApi.accounts.delete).toHaveBeenCalledWith(1));
+		await waitFor(() => expect(mockApi.identities.delete).toHaveBeenCalledWith(1));
 		await waitFor(() => expect(onRefetch).toHaveBeenCalled());
 	});
 
 	it("cancels delete confirm dialog", () => {
 		render(
 			<AccountsTab
-				accounts={mockAccounts}
-				editingAccountId={null}
+				identities={mockIdentities}
+				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={null}
+				syncStatusIdentityId={null}
 				onShowSync={onShowSync}
 			/>,
 		);
 		const [firstDelete] = screen.getAllByText("Delete");
 		if (firstDelete) fireEvent.click(firstDelete);
-		expect(screen.getByRole("heading", { name: /Delete account/i })).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: /Delete email identity/i })).toBeInTheDocument();
 		fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
-		expect(screen.queryByRole("heading", { name: /Delete account/i })).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("heading", { name: /Delete email identity/i }),
+		).not.toBeInTheDocument();
 	});
 
-	it("calls onEdit with account id when Edit button clicked", () => {
+	it("calls onEdit with identity id when Edit button clicked", () => {
 		render(
 			<AccountsTab
-				accounts={mockAccounts}
-				editingAccountId={null}
+				identities={mockIdentities}
+				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={null}
+				syncStatusIdentityId={null}
 				onShowSync={onShowSync}
 			/>,
 		);
@@ -201,11 +204,11 @@ describe("AccountsTab", () => {
 	it("calls onShowSync when Sync Status button clicked", () => {
 		render(
 			<AccountsTab
-				accounts={mockAccounts}
-				editingAccountId={null}
+				identities={mockIdentities}
+				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={null}
+				syncStatusIdentityId={null}
 				onShowSync={onShowSync}
 			/>,
 		);
@@ -214,14 +217,14 @@ describe("AccountsTab", () => {
 		expect(onShowSync).toHaveBeenCalledWith(1);
 	});
 
-	it("calls onShowSync(null) when Sync Status clicked for already-shown account", () => {
+	it("calls onShowSync(null) when Sync Status clicked for already-shown identity", () => {
 		render(
 			<AccountsTab
-				accounts={mockAccounts}
-				editingAccountId={null}
+				identities={mockIdentities}
+				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={1}
+				syncStatusIdentityId={1}
 				onShowSync={onShowSync}
 			/>,
 		);
@@ -233,11 +236,11 @@ describe("AccountsTab", () => {
 	it("toggles trusted senders panel on button click", async () => {
 		render(
 			<AccountsTab
-				accounts={mockAccounts}
-				editingAccountId={null}
+				identities={mockIdentities}
+				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={null}
+				syncStatusIdentityId={null}
 				onShowSync={onShowSync}
 			/>,
 		);
@@ -249,22 +252,23 @@ describe("AccountsTab", () => {
 	});
 
 	it("shows error toast when delete fails", async () => {
-		mockApi.accounts.delete.mockRejectedValue(new Error("Server error"));
+		mockApi.identities.delete.mockRejectedValue(new Error("Server error"));
 		render(
 			<AccountsTab
-				accounts={mockAccounts}
-				editingAccountId={null}
+				identities={mockIdentities}
+				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusAccountId={null}
+				syncStatusIdentityId={null}
 				onShowSync={onShowSync}
 			/>,
 		);
 		const [firstDelete] = screen.getAllByText("Delete");
 		if (firstDelete) fireEvent.click(firstDelete);
-		fireEvent.click(screen.getByRole("button", { name: "Delete Account" }));
+		const dialog = screen.getByRole("dialog");
+		fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
 		await waitFor(() =>
-			expect(mockToast).toHaveBeenCalledWith("Failed to delete account", "error"),
+			expect(mockToast).toHaveBeenCalledWith("Failed to delete email identity", "error"),
 		);
 	});
 });

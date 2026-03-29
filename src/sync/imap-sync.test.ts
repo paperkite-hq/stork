@@ -20,17 +20,24 @@ function createTestDb(): Database.Database {
 
 function createAccount(db: Database.Database): number {
 	db.prepare(`
-		INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-		VALUES ('Test', 'test@example.com', 'imap.example.com', 993, 1, 'test', 'pass')
+		INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+		VALUES ('Test Inbound', 'imap', 'imap.example.com', 993, 1, 'test', 'pass')
 	`).run();
+	const inboundId = (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
+	db.prepare("INSERT INTO outbound_connectors (name, type) VALUES ('Test Outbound', 'smtp')").run();
+	const outboundId = (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
+	db.prepare(`
+		INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+		VALUES ('Test', 'test@example.com', ?, ?)
+	`).run(inboundId, outboundId);
 	return (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
 }
 
-function createFolder(db: Database.Database, accountId: number, path: string): number {
+function createFolder(db: Database.Database, identityId: number, path: string): number {
 	db.prepare(`
-		INSERT INTO folders (account_id, path, name, delimiter, flags)
+		INSERT INTO folders (identity_id, path, name, delimiter, flags)
 		VALUES (?, ?, ?, '/', '[]')
-	`).run(accountId, path, path.split("/").pop());
+	`).run(identityId, path, path.split("/").pop());
 	return (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
 }
 
@@ -156,13 +163,13 @@ describe("MIME parsing with mailparser", () => {
 describe("schema migrations", () => {
 	test("version 2 adds special_use column to folders", () => {
 		const db = createTestDb();
-		const accountId = createAccount(db);
+		const identityId = createAccount(db);
 
 		// Insert a folder with special_use
 		db.prepare(`
-			INSERT INTO folders (account_id, path, name, delimiter, flags, special_use)
+			INSERT INTO folders (identity_id, path, name, delimiter, flags, special_use)
 			VALUES (?, 'INBOX', 'Inbox', '/', '[]', '\\Inbox')
-		`).run(accountId);
+		`).run(identityId);
 
 		const folder = db.prepare("SELECT special_use FROM folders WHERE path = 'INBOX'").get() as {
 			special_use: string;
@@ -179,17 +186,26 @@ describe("schema migrations", () => {
 		ensureSchema(db);
 
 		// Verify special_use column exists by inserting a folder that uses it
-		const accountId = db
-			.prepare(
-				`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-				 VALUES ('Test', 'test@test.com', 'localhost', 993, 1, 'user', 'pass')`,
-			)
-			.run().lastInsertRowid;
+		db.prepare(`
+			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+			VALUES ('Test Inbound', 'imap', 'localhost', 993, 1, 'user', 'pass')
+		`).run();
+		const inboundId = db.prepare("SELECT last_insert_rowid() as id").get() as { id: number };
+		db.prepare(
+			"INSERT INTO outbound_connectors (name, type) VALUES ('Test Outbound', 'smtp')",
+		).run();
+		const outboundId = db.prepare("SELECT last_insert_rowid() as id").get() as { id: number };
+		const identityId = db
+			.prepare(`
+				INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+				VALUES ('Test', 'test@test.com', ?, ?)
+			`)
+			.run(inboundId.id, outboundId.id).lastInsertRowid;
 
 		db.prepare(
-			`INSERT INTO folders (account_id, path, name, delimiter, flags, special_use)
+			`INSERT INTO folders (identity_id, path, name, delimiter, flags, special_use)
 				 VALUES (?, 'INBOX', 'Inbox', '/', '[]', '\\Inbox')`,
-		).run(accountId);
+		).run(identityId);
 
 		const folder = db.prepare("SELECT special_use FROM folders WHERE path = 'INBOX'").get() as {
 			special_use: string;
@@ -206,20 +222,20 @@ describe("schema migrations", () => {
 
 describe("database operations", () => {
 	let db: Database.Database;
-	let accountId: number;
+	let identityId: number;
 
 	beforeEach(() => {
 		db = createTestDb();
-		accountId = createAccount(db);
+		identityId = createAccount(db);
 	});
 
 	test("message insert with attachments", () => {
-		const folderId = createFolder(db, accountId, "INBOX");
+		const folderId = createFolder(db, identityId, "INBOX");
 
 		const result = db
 			.prepare(`
 			INSERT INTO messages (
-				account_id, folder_id, uid, message_id, subject,
+				identity_id, folder_id, uid, message_id, subject,
 				from_address, from_name, to_addresses, date,
 				text_body, html_body, flags, size, has_attachments
 			) VALUES (?, ?, 1, '<test@example.com>', 'Test Subject',
@@ -227,7 +243,7 @@ describe("database operations", () => {
 				'2026-01-01T00:00:00Z', 'body text', '<p>body</p>',
 				'["\\\\Seen"]', 1234, 1)
 		`)
-			.run(accountId, folderId);
+			.run(identityId, folderId);
 
 		const messageId = result.lastInsertRowid;
 
@@ -250,17 +266,17 @@ describe("database operations", () => {
 	});
 
 	test("UIDVALIDITY change triggers message cleanup", () => {
-		const folderId = createFolder(db, accountId, "INBOX");
+		const folderId = createFolder(db, identityId, "INBOX");
 
 		// Insert some messages
 		db.prepare(`
-			INSERT INTO messages (account_id, folder_id, uid, subject, from_address, flags, size)
+			INSERT INTO messages (identity_id, folder_id, uid, subject, from_address, flags, size)
 			VALUES (?, ?, 1, 'Msg 1', 'a@b.com', '[]', 100)
-		`).run(accountId, folderId);
+		`).run(identityId, folderId);
 		db.prepare(`
-			INSERT INTO messages (account_id, folder_id, uid, subject, from_address, flags, size)
+			INSERT INTO messages (identity_id, folder_id, uid, subject, from_address, flags, size)
 			VALUES (?, ?, 2, 'Msg 2', 'a@b.com', '[]', 200)
-		`).run(accountId, folderId);
+		`).run(identityId, folderId);
 
 		const countBefore = (
 			db.prepare("SELECT count(*) as c FROM messages WHERE folder_id = ?").get(folderId) as {
@@ -283,17 +299,17 @@ describe("database operations", () => {
 	});
 
 	test("folder deletion cascades to messages and sync_state", () => {
-		const folderId = createFolder(db, accountId, "INBOX");
+		const folderId = createFolder(db, identityId, "INBOX");
 
 		db.prepare(`
-			INSERT INTO messages (account_id, folder_id, uid, subject, from_address, flags, size)
+			INSERT INTO messages (identity_id, folder_id, uid, subject, from_address, flags, size)
 			VALUES (?, ?, 1, 'Test', 'a@b.com', '[]', 100)
-		`).run(accountId, folderId);
+		`).run(identityId, folderId);
 
 		db.prepare(`
-			INSERT INTO sync_state (account_id, folder_id, last_uid)
+			INSERT INTO sync_state (identity_id, folder_id, last_uid)
 			VALUES (?, ?, 1)
-		`).run(accountId, folderId);
+		`).run(identityId, folderId);
 
 		// Delete folder — should cascade
 		db.prepare("DELETE FROM folders WHERE id = ?").run(folderId);
@@ -316,12 +332,12 @@ describe("database operations", () => {
 	});
 
 	test("flag update on existing message", () => {
-		const folderId = createFolder(db, accountId, "INBOX");
+		const folderId = createFolder(db, identityId, "INBOX");
 
 		db.prepare(`
-			INSERT INTO messages (account_id, folder_id, uid, subject, from_address, flags, size)
+			INSERT INTO messages (identity_id, folder_id, uid, subject, from_address, flags, size)
 			VALUES (?, ?, 1, 'Test', 'a@b.com', '[]', 100)
-		`).run(accountId, folderId);
+		`).run(identityId, folderId);
 
 		// Simulate flag sync
 		db.prepare("UPDATE messages SET flags = ? WHERE folder_id = ? AND uid = ?").run(

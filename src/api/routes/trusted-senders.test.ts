@@ -2,7 +2,7 @@ import type Database from "better-sqlite3-multiple-ciphers";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../api/server.js";
-import { createTestAccount, createTestContext, createTestDb } from "../../test-helpers/test-db.js";
+import { createTestContext, createTestDb } from "../../test-helpers/test-db.js";
 
 describe("Trusted Senders API", () => {
 	let db: Database.Database;
@@ -16,7 +16,6 @@ describe("Trusted Senders API", () => {
 		app = result.app;
 		if (!ctx.scheduler) throw new Error("scheduler not initialized");
 		scheduler = ctx.scheduler;
-		accountId = createTestAccount(db);
 	});
 
 	afterEach(async () => {
@@ -30,16 +29,14 @@ describe("Trusted Senders API", () => {
 		return { status: res.status, body };
 	}
 
-	let accountId: number;
-
-	test("GET /api/accounts/:id/trusted-senders returns empty array initially", async () => {
-		const { status, body } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`);
+	test("GET /api/trusted-senders returns empty array initially", async () => {
+		const { status, body } = await jsonRequest("/api/trusted-senders");
 		expect(status).toBe(200);
 		expect(body).toEqual([]);
 	});
 
-	test("POST /api/accounts/:id/trusted-senders adds a trusted sender", async () => {
-		const { status, body } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
+	test("POST /api/trusted-senders adds a trusted sender", async () => {
+		const { status, body } = await jsonRequest("/api/trusted-senders", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ sender_address: "news@example.com" }),
@@ -47,24 +44,24 @@ describe("Trusted Senders API", () => {
 		expect(status).toBe(201);
 		expect(body.id).toBeGreaterThan(0);
 
-		const { body: senders } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`);
+		const { body: senders } = await jsonRequest("/api/trusted-senders");
 		expect(senders).toHaveLength(1);
 		expect(senders[0].sender_address).toBe("news@example.com");
 	});
 
 	test("POST normalizes sender address to lowercase", async () => {
-		await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
+		await jsonRequest("/api/trusted-senders", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ sender_address: "News@Example.COM" }),
 		});
 
-		const { body: senders } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`);
+		const { body: senders } = await jsonRequest("/api/trusted-senders");
 		expect(senders[0].sender_address).toBe("news@example.com");
 	});
 
 	test("POST rejects missing sender_address", async () => {
-		const { status } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
+		const { status } = await jsonRequest("/api/trusted-senders", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({}),
@@ -73,7 +70,7 @@ describe("Trusted Senders API", () => {
 	});
 
 	test("POST rejects invalid email (no @)", async () => {
-		const { status } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
+		const { status } = await jsonRequest("/api/trusted-senders", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ sender_address: "notanemail" }),
@@ -82,12 +79,12 @@ describe("Trusted Senders API", () => {
 	});
 
 	test("POST returns 409 for duplicate sender", async () => {
-		await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
+		await jsonRequest("/api/trusted-senders", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ sender_address: "news@example.com" }),
 		});
-		const { status, body } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
+		const { status, body } = await jsonRequest("/api/trusted-senders", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ sender_address: "news@example.com" }),
@@ -96,31 +93,29 @@ describe("Trusted Senders API", () => {
 		expect(body.error).toMatch(/already trusted/i);
 	});
 
-	test("GET /api/accounts/:id/trusted-senders/check returns trusted status", async () => {
-		await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
+	test("GET /api/trusted-senders/check returns trusted status", async () => {
+		await jsonRequest("/api/trusted-senders", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ sender_address: "trusted@example.com" }),
 		});
 
 		const { body: yes } = await jsonRequest(
-			`/api/accounts/${accountId}/trusted-senders/check?sender=trusted@example.com`,
+			"/api/trusted-senders/check?sender=trusted@example.com",
 		);
 		expect(yes.trusted).toBe(true);
 
-		const { body: no } = await jsonRequest(
-			`/api/accounts/${accountId}/trusted-senders/check?sender=unknown@example.com`,
-		);
+		const { body: no } = await jsonRequest("/api/trusted-senders/check?sender=unknown@example.com");
 		expect(no.trusted).toBe(false);
 	});
 
 	test("GET check requires sender param", async () => {
-		const { status } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders/check`);
+		const { status } = await jsonRequest("/api/trusted-senders/check");
 		expect(status).toBe(400);
 	});
 
 	test("DELETE /api/trusted-senders/:id removes by ID", async () => {
-		const { body: created } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
+		const { body: created } = await jsonRequest("/api/trusted-senders", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ sender_address: "temp@example.com" }),
@@ -131,7 +126,7 @@ describe("Trusted Senders API", () => {
 		});
 		expect(status).toBe(200);
 
-		const { body: senders } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`);
+		const { body: senders } = await jsonRequest("/api/trusted-senders");
 		expect(senders).toHaveLength(0);
 	});
 
@@ -142,58 +137,7 @@ describe("Trusted Senders API", () => {
 		expect(status).toBe(404);
 	});
 
-	test("DELETE /api/accounts/:id/trusted-senders removes by address", async () => {
-		await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ sender_address: "remove@example.com" }),
-		});
-
-		const { status } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
-			method: "DELETE",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ sender_address: "remove@example.com" }),
-		});
-		expect(status).toBe(200);
-
-		const { body: senders } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`);
-		expect(senders).toHaveLength(0);
-	});
-
-	test("DELETE by address returns 404 for non-trusted sender", async () => {
-		const { status } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
-			method: "DELETE",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ sender_address: "nope@example.com" }),
-		});
-		expect(status).toBe(404);
-	});
-
 	// ─── Route parameter validation ────────────────────────
-	test("GET /api/accounts/abc/trusted-senders returns 400 for non-numeric accountId", async () => {
-		const { status, body } = await jsonRequest("/api/accounts/abc/trusted-senders");
-		expect(status).toBe(400);
-		expect(body.error).toMatch(/accountId/);
-	});
-
-	test("GET /api/accounts/abc/trusted-senders/check returns 400", async () => {
-		const { status, body } = await jsonRequest(
-			"/api/accounts/abc/trusted-senders/check?sender=x@y.com",
-		);
-		expect(status).toBe(400);
-		expect(body.error).toMatch(/accountId/);
-	});
-
-	test("POST /api/accounts/abc/trusted-senders returns 400", async () => {
-		const { status, body } = await jsonRequest("/api/accounts/abc/trusted-senders", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ sender_address: "test@example.com" }),
-		});
-		expect(status).toBe(400);
-		expect(body.error).toMatch(/accountId/);
-	});
-
 	test("DELETE /api/trusted-senders/abc returns 400 for non-numeric id", async () => {
 		const { status, body } = await jsonRequest("/api/trusted-senders/abc", {
 			method: "DELETE",
@@ -202,37 +146,15 @@ describe("Trusted Senders API", () => {
 		expect(body.error).toMatch(/id/);
 	});
 
-	test("DELETE /api/accounts/abc/trusted-senders returns 400", async () => {
-		const { status, body } = await jsonRequest("/api/accounts/abc/trusted-senders", {
-			method: "DELETE",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ sender_address: "x@y.com" }),
-		});
-		expect(status).toBe(400);
-		expect(body.error).toMatch(/accountId/);
-	});
-
-	test("DELETE by address rejects missing sender_address", async () => {
-		const { status } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
-			method: "DELETE",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({}),
-		});
-		expect(status).toBe(400);
-	});
-
-	test("trusted senders are per-account", async () => {
-		const accountId2 = createTestAccount(db);
-
-		await jsonRequest(`/api/accounts/${accountId}/trusted-senders`, {
+	test("trusted senders are global (not per-identity)", async () => {
+		await jsonRequest("/api/trusted-senders", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ sender_address: "shared@example.com" }),
 		});
 
-		const { body: acc1 } = await jsonRequest(`/api/accounts/${accountId}/trusted-senders`);
-		const { body: acc2 } = await jsonRequest(`/api/accounts/${accountId2}/trusted-senders`);
-		expect(acc1).toHaveLength(1);
-		expect(acc2).toHaveLength(0);
+		const { body: senders } = await jsonRequest("/api/trusted-senders");
+		expect(senders).toHaveLength(1);
+		expect(senders[0].sender_address).toBe("shared@example.com");
 	});
 });

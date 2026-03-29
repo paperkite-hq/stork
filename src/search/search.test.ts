@@ -1,6 +1,6 @@
-import Database from "better-sqlite3-multiple-ciphers";
+import type Database from "better-sqlite3-multiple-ciphers";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { MIGRATIONS } from "../storage/schema.js";
+import { createTestDb, createTestFolder, createTestIdentity } from "../test-helpers/test-db.js";
 import { MessageSearch } from "./search.js";
 
 describe("MessageSearch", () => {
@@ -8,29 +8,22 @@ describe("MessageSearch", () => {
 	let search: MessageSearch;
 
 	beforeAll(() => {
-		db = new Database(":memory:");
-		db.exec("PRAGMA foreign_keys = ON");
-		db.exec(MIGRATIONS[0]);
+		db = createTestDb();
 
-		// Insert test account and folder
-		db.prepare(
-			"INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass) VALUES (?, ?, ?, ?, ?)",
-		).run("Test", "test@example.com", "imap.example.com", "test", "pass");
-
-		db.prepare(
-			"INSERT INTO folders (account_id, path, name, uid_validity) VALUES (?, ?, ?, ?)",
-		).run(1, "INBOX", "Inbox", 1);
+		// Insert test identity and folder
+		const identityId = createTestIdentity(db);
+		const folderId = createTestFolder(db, identityId, "INBOX");
 
 		// Insert test messages
 		const insert = db.prepare(`
-			INSERT INTO messages (account_id, folder_id, uid, message_id, subject,
-				from_address, from_name, to_addresses, date, text_body, flags)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO messages (identity_id, folder_id, uid, message_id, subject,
+				from_address, from_name, to_addresses, date, text_body, flags, size, has_attachments)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1000, 0)
 		`);
 
 		insert.run(
-			1,
-			1,
+			identityId,
+			folderId,
 			1,
 			"<msg1@example.com>",
 			"Project update for Q4",
@@ -43,8 +36,8 @@ describe("MessageSearch", () => {
 		);
 
 		insert.run(
-			1,
-			1,
+			identityId,
+			folderId,
 			2,
 			"<msg2@example.com>",
 			"Lunch tomorrow?",
@@ -57,8 +50,8 @@ describe("MessageSearch", () => {
 		);
 
 		insert.run(
-			1,
-			1,
+			identityId,
+			folderId,
 			3,
 			"<msg3@example.com>",
 			"Invoice #2847",

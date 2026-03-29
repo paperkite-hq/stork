@@ -449,11 +449,11 @@ describe("useHistoryNavigation", () => {
 		history.replaceState(null, "");
 	});
 
-	it("replaces initial history entry with current state when accountId becomes non-null", () => {
+	it("replaces initial history entry with current state when identityId becomes non-null", () => {
 		const onNavigate = vi.fn();
 		const { rerender } = renderHook(
 			(props: {
-				accountId: number | null;
+				identityId: number | null;
 				labelId: number | null;
 				messageId: number | null;
 			}) =>
@@ -461,16 +461,16 @@ describe("useHistoryNavigation", () => {
 					...props,
 					onNavigate,
 				}),
-			{ initialProps: { accountId: null, labelId: null, messageId: null } },
+			{ initialProps: { identityId: null, labelId: null, messageId: null } },
 		);
 
-		// accountId is null — should not set state yet
+		// identityId is null — should not set state yet
 		expect(history.state).toBeNull();
 
-		// Rerender with a valid accountId
-		rerender({ accountId: 1, labelId: 5, messageId: null });
+		// Rerender with a valid identityId
+		rerender({ identityId: 1, labelId: 5, messageId: null });
 		expect(history.state).toEqual({
-			accountId: 1,
+			identityId: 1,
 			labelId: 5,
 			messageId: null,
 			searchActive: undefined,
@@ -483,7 +483,7 @@ describe("useHistoryNavigation", () => {
 
 		const { rerender } = renderHook(
 			(props: {
-				accountId: number | null;
+				identityId: number | null;
 				labelId: number | null;
 				messageId: number | null;
 			}) =>
@@ -491,16 +491,16 @@ describe("useHistoryNavigation", () => {
 					...props,
 					onNavigate,
 				}),
-			{ initialProps: { accountId: 1, labelId: 5, messageId: null } },
+			{ initialProps: { identityId: 1, labelId: 5, messageId: null } },
 		);
 
 		// Clear the calls from initialization
 		pushSpy.mockClear();
 
 		// Change navigation state
-		rerender({ accountId: 1, labelId: 10, messageId: null });
+		rerender({ identityId: 1, labelId: 10, messageId: null });
 		expect(pushSpy).toHaveBeenCalledWith(
-			{ accountId: 1, labelId: 10, messageId: null, searchActive: undefined },
+			{ identityId: 1, labelId: 10, messageId: null, searchActive: undefined },
 			"",
 		);
 
@@ -513,7 +513,7 @@ describe("useHistoryNavigation", () => {
 
 		const { rerender } = renderHook(
 			(props: {
-				accountId: number | null;
+				identityId: number | null;
 				labelId: number | null;
 				messageId: number | null;
 			}) =>
@@ -521,13 +521,13 @@ describe("useHistoryNavigation", () => {
 					...props,
 					onNavigate,
 				}),
-			{ initialProps: { accountId: 1, labelId: 5, messageId: null } },
+			{ initialProps: { identityId: 1, labelId: 5, messageId: null } },
 		);
 
 		pushSpy.mockClear();
 
 		// Re-render with same state — should not push
-		rerender({ accountId: 1, labelId: 5, messageId: null });
+		rerender({ identityId: 1, labelId: 5, messageId: null });
 		expect(pushSpy).not.toHaveBeenCalled();
 
 		pushSpy.mockRestore();
@@ -538,7 +538,7 @@ describe("useHistoryNavigation", () => {
 
 		renderHook(() =>
 			useHistoryNavigation({
-				accountId: 1,
+				identityId: 1,
 				labelId: 5,
 				messageId: null,
 				onNavigate,
@@ -546,7 +546,7 @@ describe("useHistoryNavigation", () => {
 		);
 
 		// Simulate a popstate event (browser back/forward)
-		const navState = { accountId: 1, labelId: 3, messageId: 42, searchActive: false };
+		const navState = { identityId: 1, labelId: 3, messageId: 42, searchActive: false };
 		act(() => {
 			const event = new PopStateEvent("popstate", { state: navState });
 			window.dispatchEvent(event);
@@ -560,7 +560,7 @@ describe("useHistoryNavigation", () => {
 
 		renderHook(() =>
 			useHistoryNavigation({
-				accountId: 1,
+				identityId: 1,
 				labelId: 5,
 				messageId: null,
 				onNavigate,
@@ -581,7 +581,7 @@ describe("useHistoryNavigation", () => {
 
 		const { rerender } = renderHook(
 			(props: {
-				accountId: number | null;
+				identityId: number | null;
 				labelId: number | null;
 				messageId: number | null;
 			}) =>
@@ -589,19 +589,19 @@ describe("useHistoryNavigation", () => {
 					...props,
 					onNavigate,
 				}),
-			{ initialProps: { accountId: 1, labelId: 5, messageId: null } },
+			{ initialProps: { identityId: 1, labelId: 5, messageId: null } },
 		);
 
 		pushSpy.mockClear();
 
 		// Simulate popstate
-		const navState = { accountId: 1, labelId: 3, messageId: null };
+		const navState = { identityId: 1, labelId: 3, messageId: null };
 		act(() => {
 			window.dispatchEvent(new PopStateEvent("popstate", { state: navState }));
 		});
 
 		// Rerender with the navigated state (simulating what the App would do after onNavigate)
-		rerender({ accountId: 1, labelId: 3, messageId: null });
+		rerender({ identityId: 1, labelId: 3, messageId: null });
 
 		// Should NOT push (isPopstateRef prevents it)
 		expect(pushSpy).not.toHaveBeenCalled();
