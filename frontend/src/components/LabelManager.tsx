@@ -44,12 +44,11 @@ function ColorPicker({ value, onChange }: ColorPickerProps) {
 }
 
 interface CreateLabelFormProps {
-	accountId: number;
 	onCreated: () => void;
 	onClose: () => void;
 }
 
-function CreateLabelForm({ accountId, onCreated, onClose }: CreateLabelFormProps) {
+function CreateLabelForm({ onCreated, onClose }: CreateLabelFormProps) {
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
@@ -65,7 +64,7 @@ function CreateLabelForm({ accountId, onCreated, onClose }: CreateLabelFormProps
 			if (!name.trim()) return;
 			setSaving(true);
 			try {
-				await api.labels.create(accountId, { name: name.trim(), color: color ?? undefined });
+				await api.labels.create({ name: name.trim(), color: color ?? undefined });
 				toast(`Label "${name.trim()}" created`);
 				onCreated();
 				onClose();
@@ -75,7 +74,7 @@ function CreateLabelForm({ accountId, onCreated, onClose }: CreateLabelFormProps
 				setSaving(false);
 			}
 		},
-		[accountId, name, color, onCreated, onClose],
+		[name, color, onCreated, onClose],
 	);
 
 	return (
@@ -229,14 +228,12 @@ export function LabelContextMenu({ position, onEdit, onDelete, onClose }: LabelC
 }
 
 interface LabelManagerProps {
-	accountId: number;
 	onLabelsChanged: () => void;
 	contextMenu: { label: Label; position: { x: number; y: number } } | null;
 	onContextMenuClose: () => void;
 }
 
 export function LabelManager({
-	accountId,
 	onLabelsChanged,
 	contextMenu,
 	onContextMenuClose,
@@ -264,11 +261,7 @@ export function LabelManager({
 			{/* Create label section */}
 			{showCreate ? (
 				<div className="mt-1 border-t border-gray-200 dark:border-gray-800">
-					<CreateLabelForm
-						accountId={accountId}
-						onCreated={onLabelsChanged}
-						onClose={() => setShowCreate(false)}
-					/>
+					<CreateLabelForm onCreated={onLabelsChanged} onClose={() => setShowCreate(false)} />
 				</div>
 			) : (
 				<button
@@ -336,15 +329,10 @@ export function LabelManager({
  */
 interface MessageLabelPickerProps {
 	messageId: number;
-	accountId: number | null;
 	onLabelsChanged?: () => void;
 }
 
-export function MessageLabelPicker({
-	messageId,
-	accountId,
-	onLabelsChanged,
-}: MessageLabelPickerProps) {
+export function MessageLabelPicker({ messageId, onLabelsChanged }: MessageLabelPickerProps) {
 	const [open, setOpen] = useState(false);
 	const [allLabels, setAllLabels] = useState<Label[]>([]);
 	const [messageLabels, setMessageLabels] = useState<LabelSummary[]>([]);
@@ -364,13 +352,9 @@ export function MessageLabelPicker({
 	}, [open]);
 
 	const loadLabels = useCallback(async () => {
-		if (!accountId) return;
 		setLoading(true);
 		try {
-			const [all, current] = await Promise.all([
-				api.labels.list(accountId),
-				api.messages.labels(messageId),
-			]);
+			const [all, current] = await Promise.all([api.labels.list(), api.messages.labels(messageId)]);
 			setAllLabels(all);
 			setMessageLabels(current);
 		} catch {
@@ -378,7 +362,7 @@ export function MessageLabelPicker({
 		} finally {
 			setLoading(false);
 		}
-	}, [accountId, messageId]);
+	}, [messageId]);
 
 	const handleOpen = useCallback(() => {
 		setOpen(true);

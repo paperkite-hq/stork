@@ -206,14 +206,9 @@ describe("MessageHeaderActions", () => {
 		expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 	});
 
-	it("renders label picker when accountId is provided", () => {
-		render(<MessageHeaderActions {...defaultProps({ accountId: 1 })} />);
+	it("always renders label picker regardless of accountId", () => {
+		render(<MessageHeaderActions {...defaultProps()} />);
 		expect(screen.getByTestId("label-picker-1")).toBeInTheDocument();
-	});
-
-	it("does not render label picker when accountId is null", () => {
-		render(<MessageHeaderActions {...defaultProps({ accountId: null })} />);
-		expect(screen.queryByTestId("label-picker-1")).not.toBeInTheDocument();
 	});
 
 	it("shows error toast when move fails", async () => {

@@ -874,8 +874,8 @@ describe("App — Multiple accounts", () => {
 		mockApi.folders.list.mockResolvedValue([]);
 		render(<App />);
 		await waitFor(() => {
-			// labels.list should be called with the first account's id
-			expect(mockApi.labels.list).toHaveBeenCalledWith(1);
+			// labels.list is global — no account ID argument
+			expect(mockApi.labels.list).toHaveBeenCalled();
 		});
 	});
 });
@@ -1299,9 +1299,9 @@ describe("App — Account switching", () => {
 		// Switch account via select
 		const select = screen.getByRole("combobox");
 		await userEvent.selectOptions(select, "2");
-		// Labels should be refetched for account 2
+		// Labels are global — folders should be fetched for the new account
 		await waitFor(() => {
-			expect(mockApi.labels.list).toHaveBeenCalledWith(2);
+			expect(mockApi.folders.list).toHaveBeenCalledWith(2);
 		});
 	});
 });

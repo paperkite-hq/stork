@@ -97,10 +97,11 @@ export function createTestFolder(
 	return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
 }
 
-/** Inserts a test label and returns its ID */
+/** Inserts a test label and returns its ID.
+ * accountId is accepted for backward-compat but ignored — labels are now global. */
 export function createTestLabel(
 	db: Database.Database,
-	accountId: number,
+	_accountId: number,
 	name: string,
 	overrides: Partial<{
 		color: string;
@@ -108,10 +109,11 @@ export function createTestLabel(
 	}> = {},
 ): number {
 	db.prepare(`
-		INSERT INTO labels (account_id, name, color, source)
-		VALUES (?, ?, ?, ?)
-	`).run(accountId, name, overrides.color ?? null, overrides.source ?? "user");
-	return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
+		INSERT OR IGNORE INTO labels (name, color, source)
+		VALUES (?, ?, ?)
+	`).run(name, overrides.color ?? null, overrides.source ?? "user");
+	const row = db.prepare("SELECT id FROM labels WHERE name = ?").get(name) as { id: number };
+	return row.id;
 }
 
 /** Links a message to a label */

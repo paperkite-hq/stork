@@ -86,11 +86,8 @@ export function App() {
 	// Auto-select first account
 	const effectiveAccountId = selectedAccountId ?? accounts?.[0]?.id ?? null;
 
-	// Fetch labels for selected account
-	const { data: labels, refetch: refetchLabels } = useAsync(
-		() => (effectiveAccountId ? api.labels.list(effectiveAccountId) : Promise.resolve([])),
-		[effectiveAccountId],
-	);
+	// Labels are global — not per-account
+	const { data: labels, refetch: refetchLabels } = useAsync(() => api.labels.list(), []);
 
 	// Also fetch folders (still needed for move-to-folder in MessageDetail)
 	const { data: folders } = useAsync(
@@ -112,8 +109,13 @@ export function App() {
 		return INBOX_LABEL_ID; // 'inbox' or unknown
 	}, [effectiveAccount, labels]);
 
-	// Auto-select default view (uses per-account setting, falls back to Inbox)
-	const effectiveLabelId = selectedLabelId ?? (labels && labels.length > 0 ? defaultLabelId : null);
+	// Auto-select default view (uses per-account setting, falls back to Inbox).
+	// Guard on accounts !== null to avoid a double-fetch: if labels resolve before
+	// accounts, effectiveLabelId would become non-null with effectiveAccountId=null,
+	// then when accounts load effectiveAccountId changes → getFetchFn changes → second
+	// message fetch with the same args. Waiting for accounts ensures one fetch.
+	const effectiveLabelId =
+		selectedLabelId ?? (labels && labels.length > 0 && accounts !== null ? defaultLabelId : null);
 
 	const isAllMail = effectiveLabelId === ALL_MAIL_LABEL_ID;
 	const isUnread = effectiveLabelId === UNREAD_LABEL_ID;

@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -412,6 +412,65 @@ INSERT INTO accounts_v14 SELECT * FROM accounts;
 
 DROP TABLE accounts;
 ALTER TABLE accounts_v14 RENAME TO accounts;
+
+COMMIT;
+PRAGMA foreign_keys = ON;
+`,
+	// Version 15: Unify labels — remove per-account scoping.
+	//
+	// Previously, labels had an account_id FK and were scoped to a single account.
+	// This produced the confusing UX where label choices varied depending on which
+	// account was selected in the compose or sidebar.
+	//
+	// The unified model: labels are instance-level (no account FK). All accounts share
+	// the same label namespace. When multiple accounts had labels with the same name
+	// (e.g. both had "INBOX"), the rows are merged: the lowest-id row becomes canonical
+	// and all message_labels pointing at the duplicate rows are redirected.
+	//
+	// Implications:
+	//   - refreshLabelCounts() now counts across all accounts (no account filter)
+	//   - ensureLabelsForFolders() uses ON CONFLICT(name) instead of (account_id, name)
+	//   - applyFolderLabelsToMessages() joins labels by name only (no account scope)
+	`
+PRAGMA foreign_keys = OFF;
+BEGIN;
+
+CREATE TEMP TABLE label_canonicals AS
+SELECT name, MIN(id) AS canonical_id
+FROM labels
+GROUP BY name;
+
+UPDATE message_labels
+SET label_id = (
+    SELECT lc.canonical_id
+    FROM labels l
+    JOIN label_canonicals lc ON lc.name = l.name
+    WHERE l.id = message_labels.label_id
+)
+WHERE label_id NOT IN (SELECT canonical_id FROM label_canonicals);
+
+DELETE FROM labels WHERE id NOT IN (SELECT canonical_id FROM label_canonicals);
+
+CREATE TABLE labels_v15 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    color TEXT,
+    source TEXT NOT NULL DEFAULT 'user',
+    message_count INTEGER NOT NULL DEFAULT 0,
+    unread_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(name)
+);
+
+INSERT INTO labels_v15 (id, name, color, source, message_count, unread_count, created_at)
+SELECT id, name, color, source, message_count, unread_count, created_at
+FROM labels;
+
+DROP TABLE labels;
+ALTER TABLE labels_v15 RENAME TO labels;
+
+DROP INDEX IF EXISTS idx_labels_account;
+CREATE INDEX IF NOT EXISTS idx_message_labels_label_v15 ON message_labels(label_id);
 
 COMMIT;
 PRAGMA foreign_keys = ON;

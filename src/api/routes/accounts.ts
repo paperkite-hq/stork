@@ -398,14 +398,17 @@ export function accountRoutes(
 		return c.json(messages);
 	});
 
+	// Labels are now instance-level (no account scoping). The accountId param is
+	// accepted for backward compatibility but ignored — all accounts share one label set.
 	api.get("/:accountId/labels", (c) => {
 		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
 		if (accountId instanceof Response) return accountId;
+		void accountId; // accepted but unused — labels are global
 		const labels = getDb()
 			.prepare(
-				"SELECT id, name, color, source, created_at, message_count, unread_count FROM labels WHERE account_id = ? ORDER BY name",
+				"SELECT id, name, color, source, created_at, message_count, unread_count FROM labels ORDER BY name",
 			)
-			.all(accountId);
+			.all();
 		return c.json(labels);
 	});
 
@@ -413,13 +416,14 @@ export function accountRoutes(
 		const db = getDb();
 		const accountId = parseIntParam(c, "accountId", c.req.param("accountId"));
 		if (accountId instanceof Response) return accountId;
+		void accountId; // accepted but unused — labels are global
 		const body = await c.req.json();
 		if (!body.name) return c.json({ error: "name is required" }, 400);
 
 		try {
 			const result = db
-				.prepare("INSERT INTO labels (account_id, name, color, source) VALUES (?, ?, ?, ?)")
-				.run(accountId, body.name, body.color ?? null, body.source ?? "user");
+				.prepare("INSERT INTO labels (name, color, source) VALUES (?, ?, ?)")
+				.run(body.name, body.color ?? null, body.source ?? "user");
 			return c.json({ id: Number(result.lastInsertRowid) }, 201);
 		} catch (err) {
 			if (String(err).includes("UNIQUE constraint")) {

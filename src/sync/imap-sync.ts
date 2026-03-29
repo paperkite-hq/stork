@@ -958,14 +958,14 @@ export class ImapSync {
 			.all(this.accountId) as { id: number; name: string }[];
 
 		const upsertLabel = this.db.prepare(`
-			INSERT INTO labels (account_id, name, source)
-			VALUES (?, ?, 'imap')
-			ON CONFLICT(account_id, name) DO NOTHING
+			INSERT INTO labels (name, source)
+			VALUES (?, 'imap')
+			ON CONFLICT(name) DO NOTHING
 		`);
 
 		const insertMany = this.db.transaction(() => {
 			for (const folder of folders) {
-				upsertLabel.run(this.accountId, folder.name);
+				upsertLabel.run(folder.name);
 			}
 		});
 
@@ -985,7 +985,7 @@ export class ImapSync {
 			SELECT m.id, l.id
 			FROM messages m
 			JOIN folders f ON f.id = m.folder_id
-			JOIN labels l ON l.account_id = m.account_id AND l.name = f.name
+			JOIN labels l ON l.name = f.name
 			LEFT JOIN message_labels ml ON ml.message_id = m.id AND ml.label_id = l.id
 			WHERE m.account_id = ? AND ml.message_id IS NULL
 		`)
@@ -1002,7 +1002,7 @@ export class ImapSync {
 	 * full message_labels × messages join happens once (not once per label).
 	 */
 	refreshLabelCounts(): void {
-		// One pass: count total and unread per label for this account
+		// One pass: count total and unread per label across all accounts (labels are now global)
 		const counts = this.db
 			.prepare(`
 				SELECT ml.label_id,
@@ -1010,11 +1010,9 @@ export class ImapSync {
 					SUM(CASE WHEN m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%' THEN 1 ELSE 0 END) AS unread_count
 				FROM message_labels ml
 				JOIN messages m ON m.id = ml.message_id
-				JOIN labels l ON l.id = ml.label_id
-				WHERE l.account_id = ?
 				GROUP BY ml.label_id
 			`)
-			.all(this.accountId) as Array<{
+			.all() as Array<{
 			label_id: number;
 			message_count: number;
 			unread_count: number;
@@ -1026,10 +1024,8 @@ export class ImapSync {
 
 		const applyUpdate = this.db.transaction(
 			(rows: Array<{ label_id: number; message_count: number; unread_count: number }>) => {
-				// Reset all labels for this account to 0 (labels with no messages won't appear in counts)
-				this.db
-					.prepare("UPDATE labels SET message_count = 0, unread_count = 0 WHERE account_id = ?")
-					.run(this.accountId);
+				// Reset all labels to 0; labels with no messages won't appear in counts above
+				this.db.prepare("UPDATE labels SET message_count = 0, unread_count = 0").run();
 				for (const row of rows) {
 					updateStmt.run(row.message_count, row.unread_count, row.label_id);
 				}

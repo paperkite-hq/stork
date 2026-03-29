@@ -86,7 +86,9 @@ describe("MessageSearch — structured operators", () => {
 		db = new Database(":memory:");
 		db.exec("PRAGMA foreign_keys = ON");
 		db.exec(MIGRATIONS[0]);
-		db.exec(MIGRATIONS[2]); // labels
+		db.exec(MIGRATIONS[2]); // labels (v3, with account_id)
+		db.exec(MIGRATIONS[9]); // cached label counts (v10)
+		db.exec(MIGRATIONS[14]); // unify labels — remove account_id (v15)
 
 		db.prepare(
 			"INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass) VALUES (?, ?, ?, ?, ?)",
@@ -171,8 +173,7 @@ describe("MessageSearch — structured operators", () => {
 		);
 
 		// Create a label and assign it
-		db.prepare("INSERT INTO labels (account_id, name, color, source) VALUES (?, ?, ?, ?)").run(
-			1,
+		db.prepare("INSERT INTO labels (name, color, source) VALUES (?, ?, ?)").run(
 			"Important",
 			"#ef4444",
 			"user",

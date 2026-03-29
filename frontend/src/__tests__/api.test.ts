@@ -224,25 +224,25 @@ describe("api client", () => {
 	});
 
 	describe("labels", () => {
-		it("list fetches /api/accounts/:id/labels", async () => {
+		it("list fetches /api/labels", async () => {
 			const labels = [{ id: 1, name: "Inbox" }];
 			mockFetch.mockResolvedValue(mockJsonResponse(labels));
 
-			const result = await api.labels.list(1);
+			const result = await api.labels.list();
 			expect(result).toEqual(labels);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/1/labels",
+				"/api/labels",
 				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
 			);
 		});
 
-		it("create POSTs to /api/accounts/:id/labels", async () => {
+		it("create POSTs to /api/labels", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ id: 5 }));
 
-			const result = await api.labels.create(1, { name: "Important", color: "#ff0000" });
+			const result = await api.labels.create({ name: "Important", color: "#ff0000" });
 			expect(result).toEqual({ id: 5 });
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/accounts/1/labels",
+				"/api/labels",
 				expect.objectContaining({
 					method: "POST",
 					body: JSON.stringify({ name: "Important", color: "#ff0000" }),

@@ -641,13 +641,9 @@ describe("Messages API", () => {
 		describe("action: remove_label", () => {
 			test("removes label from multiple messages", async () => {
 				// Create a label and link it to messages
-				db.prepare("INSERT INTO labels (account_id, name, source) VALUES (?, 'Inbox', 'imap')").run(
-					accountId,
-				);
+				db.prepare("INSERT INTO labels (name, source) VALUES ('Inbox', 'imap')").run();
 				const labelId = (
-					db
-						.prepare("SELECT id FROM labels WHERE account_id = ? AND name = 'Inbox'")
-						.get(accountId) as { id: number }
+					db.prepare("SELECT id FROM labels WHERE name = 'Inbox'").get() as { id: number }
 				).id;
 				db.prepare("INSERT INTO message_labels (message_id, label_id) VALUES (?, ?)").run(
 					msg1,
