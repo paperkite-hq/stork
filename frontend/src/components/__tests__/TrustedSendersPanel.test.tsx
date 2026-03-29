@@ -39,26 +39,26 @@ describe("TrustedSendersPanel", () => {
 
 	it("shows loading state while fetching", () => {
 		mockApi.trustedSenders.list.mockReturnValue(new Promise(() => {}));
-		render(<TrustedSendersPanel accountId={1} onClose={onClose} />);
+		render(<TrustedSendersPanel onClose={onClose} />);
 		expect(screen.getByText("Loading…")).toBeInTheDocument();
 	});
 
 	it("shows empty state when no trusted senders", async () => {
 		mockApi.trustedSenders.list.mockResolvedValue([]);
-		render(<TrustedSendersPanel accountId={1} onClose={onClose} />);
+		render(<TrustedSendersPanel onClose={onClose} />);
 		await waitFor(() => expect(screen.getByText(/No trusted senders yet/i)).toBeInTheDocument());
 	});
 
 	it("renders list of trusted senders", async () => {
 		mockApi.trustedSenders.list.mockResolvedValue(mockSenders);
-		render(<TrustedSendersPanel accountId={1} onClose={onClose} />);
+		render(<TrustedSendersPanel onClose={onClose} />);
 		await waitFor(() => expect(screen.getByText("alice@example.com")).toBeInTheDocument());
 		expect(screen.getByText("bob@example.com")).toBeInTheDocument();
 	});
 
 	it("calls onClose when Close button clicked", async () => {
 		mockApi.trustedSenders.list.mockResolvedValue([]);
-		render(<TrustedSendersPanel accountId={1} onClose={onClose} />);
+		render(<TrustedSendersPanel onClose={onClose} />);
 		await waitFor(() => expect(screen.queryByText("Loading…")).not.toBeInTheDocument());
 		fireEvent.click(screen.getByRole("button", { name: /close trusted senders/i }));
 		expect(onClose).toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe("TrustedSendersPanel", () => {
 
 	it("shows confirm dialog when Remove button clicked", async () => {
 		mockApi.trustedSenders.list.mockResolvedValue(mockSenders);
-		render(<TrustedSendersPanel accountId={1} onClose={onClose} />);
+		render(<TrustedSendersPanel onClose={onClose} />);
 		await waitFor(() => expect(screen.getByText("alice@example.com")).toBeInTheDocument());
 		fireEvent.click(screen.getByRole("button", { name: /remove alice@example\.com/i }));
 		expect(screen.getByText(/Remove trusted sender/i)).toBeInTheDocument();
@@ -75,12 +75,12 @@ describe("TrustedSendersPanel", () => {
 	it("removes sender on confirm", async () => {
 		mockApi.trustedSenders.list.mockResolvedValue(mockSenders);
 		mockApi.trustedSenders.remove.mockResolvedValue({ ok: true });
-		render(<TrustedSendersPanel accountId={1} onClose={onClose} />);
+		render(<TrustedSendersPanel onClose={onClose} />);
 		await waitFor(() => expect(screen.getByText("alice@example.com")).toBeInTheDocument());
 		fireEvent.click(screen.getByRole("button", { name: /remove alice@example\.com/i }));
 		fireEvent.click(screen.getByRole("button", { name: "Remove" }));
 		await waitFor(() =>
-			expect(mockApi.trustedSenders.remove).toHaveBeenCalledWith(1, "alice@example.com"),
+			expect(mockApi.trustedSenders.remove).toHaveBeenCalledWith("alice@example.com"),
 		);
 		await waitFor(() =>
 			expect(mockToast).toHaveBeenCalledWith(
@@ -93,7 +93,7 @@ describe("TrustedSendersPanel", () => {
 	it("shows error toast when remove fails", async () => {
 		mockApi.trustedSenders.list.mockResolvedValue(mockSenders);
 		mockApi.trustedSenders.remove.mockRejectedValue(new Error("fail"));
-		render(<TrustedSendersPanel accountId={1} onClose={onClose} />);
+		render(<TrustedSendersPanel onClose={onClose} />);
 		await waitFor(() => expect(screen.getByText("alice@example.com")).toBeInTheDocument());
 		fireEvent.click(screen.getByRole("button", { name: /remove alice@example\.com/i }));
 		fireEvent.click(screen.getByRole("button", { name: "Remove" }));
@@ -104,7 +104,7 @@ describe("TrustedSendersPanel", () => {
 
 	it("cancels remove dialog without deleting", async () => {
 		mockApi.trustedSenders.list.mockResolvedValue(mockSenders);
-		render(<TrustedSendersPanel accountId={1} onClose={onClose} />);
+		render(<TrustedSendersPanel onClose={onClose} />);
 		await waitFor(() => expect(screen.getByText("alice@example.com")).toBeInTheDocument());
 		fireEvent.click(screen.getByRole("button", { name: /remove alice@example\.com/i }));
 		fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
@@ -114,7 +114,7 @@ describe("TrustedSendersPanel", () => {
 
 	it("silently handles list fetch error", async () => {
 		mockApi.trustedSenders.list.mockRejectedValue(new Error("network error"));
-		render(<TrustedSendersPanel accountId={1} onClose={onClose} />);
+		render(<TrustedSendersPanel onClose={onClose} />);
 		await waitFor(() => expect(screen.queryByText("Loading…")).not.toBeInTheDocument());
 		// Should show empty state (no crash)
 		expect(screen.getByText(/No trusted senders yet/i)).toBeInTheDocument();

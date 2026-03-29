@@ -11,7 +11,7 @@ import {
 
 type Step = 1 | 2 | 3 | 4;
 
-interface AccountData {
+interface IdentityData {
 	name: string;
 	email: string;
 }
@@ -84,7 +84,7 @@ function defaultOutbound(existing: OutboundConnector[]): OutboundData {
 
 function StepIndicator({ current }: { current: Step }) {
 	const steps = [
-		{ n: 1, label: "Account" },
+		{ n: 1, label: "Email" },
 		{ n: 2, label: "Inbound" },
 		{ n: 3, label: "Outbound" },
 		{ n: 4, label: "Review" },
@@ -155,7 +155,7 @@ function Field({
 const inputCls =
 	"w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100";
 
-// ── Step 1: Account basics ─────────────────────────────────────────────────
+// ── Step 1: Email identity basics ──────────────────────────────────────────
 
 function Step1({
 	data,
@@ -163,8 +163,8 @@ function Step1({
 	onNext,
 	onCancel,
 }: {
-	data: AccountData;
-	onChange: (d: AccountData) => void;
+	data: IdentityData;
+	onChange: (d: IdentityData) => void;
 	onNext: () => void;
 	onCancel: () => void;
 }) {
@@ -177,8 +177,8 @@ function Step1({
 		<form onSubmit={handleSubmit} className="space-y-4">
 			<div>
 				<p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-					Start with your account identity — the name and email address that will appear when you
-					send mail.
+					Start with your email identity — the name and email address that will appear when you send
+					mail.
 				</p>
 			</div>
 			<div className="grid grid-cols-2 gap-3">
@@ -614,7 +614,7 @@ function Step3({
 // ── Step 4: Review & Create ────────────────────────────────────────────────
 
 function Step4({
-	account,
+	identity,
 	inbound,
 	outbound,
 	existingInbound,
@@ -622,7 +622,7 @@ function Step4({
 	onBack,
 	onDone,
 }: {
-	account: AccountData;
+	identity: IdentityData;
 	inbound: InboundData;
 	outbound: OutboundData;
 	existingInbound: InboundConnector[];
@@ -718,13 +718,12 @@ function Step4({
 				outboundId = outbound.existingId ?? undefined;
 			}
 
-			// Create account
-			await api.accounts.create({
-				name: account.name,
-				email: account.email,
+			// Create identity
+			await api.identities.create({
+				name: identity.name,
+				email: identity.email,
 				inbound_connector_id: inboundId,
 				...(outboundId ? { outbound_connector_id: outboundId } : {}),
-				sync_delete_from_server: inbound.mode === "new" ? inbound.sync_delete_from_server : 0,
 				default_view: "inbox",
 			});
 
@@ -743,7 +742,7 @@ function Step4({
 			</p>
 
 			<div className="rounded-lg border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
-				<ReviewRow label="Account" value={`${account.name} <${account.email}>`} />
+				<ReviewRow label="Email" value={`${identity.name} <${identity.email}>`} />
 				<ReviewRow label="Inbound" value={inboundSummary} />
 				<ReviewRow label="Outbound" value={outboundSummary} />
 			</div>
@@ -769,7 +768,7 @@ function Step4({
 					disabled={creating}
 					className="px-5 py-1.5 bg-stork-600 hover:bg-stork-700 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"
 				>
-					{creating ? "Creating…" : "Create Account"}
+					{creating ? "Creating…" : "Create Email Identity"}
 				</button>
 			</div>
 		</div>
@@ -863,7 +862,7 @@ export function AccountSetupWizard({
 	onCancel: () => void;
 }) {
 	const [step, setStep] = useState<Step>(1);
-	const [account, setAccount] = useState<AccountData>({ name: "", email: "" });
+	const [identity, setIdentity] = useState<IdentityData>({ name: "", email: "" });
 	const [inbound, setInbound] = useState<InboundData>(() => defaultInbound(existingInbound));
 	const [outbound, setOutbound] = useState<OutboundData>(() => defaultOutbound(existingOutbound));
 
@@ -872,11 +871,13 @@ export function AccountSetupWizard({
 			className="fixed inset-0 z-60 flex items-center justify-center bg-black/50"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Add Account"
+			aria-label="Add Email Identity"
 		>
 			<div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6 flex flex-col max-h-[90vh] overflow-y-auto">
 				<div className="flex items-center justify-between mb-2">
-					<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Add Account</h3>
+					<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+						Add Email Identity
+					</h3>
 					<button
 						type="button"
 						onClick={onCancel}
@@ -891,8 +892,8 @@ export function AccountSetupWizard({
 
 				{step === 1 && (
 					<Step1
-						data={account}
-						onChange={setAccount}
+						data={identity}
+						onChange={setIdentity}
 						onNext={() => setStep(2)}
 						onCancel={onCancel}
 					/>
@@ -917,7 +918,7 @@ export function AccountSetupWizard({
 				)}
 				{step === 4 && (
 					<Step4
-						account={account}
+						identity={identity}
 						inbound={inbound}
 						outbound={outbound}
 						existingInbound={existingInbound}

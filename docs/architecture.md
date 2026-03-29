@@ -28,7 +28,7 @@ Stork is a self-hosted email client that syncs mail from IMAP servers into local
 1. **Connector Layer** — abstracts how mail enters and leaves the system (IMAP, SMTP, future: Cloudflare Workers, SES).
 2. **Sync + Storage** — the IMAP sync engine pulls mail into SQLite; the FTS5 index enables search.
 3. **Encryption Layer** — whole-database encryption via SQLCipher. Vault key pattern with password and recovery key envelopes. Container boots locked; unlocking loads the vault key into memory and opens the database.
-4. **REST API** — Hono routes expose container lifecycle (setup, unlock, password management), accounts, folders, messages, search, and sync controls.
+4. **REST API** — Hono routes expose container lifecycle (setup, unlock, password management), identities, folders, messages, search, and sync controls.
 5. **Web UI** — React SPA talks to the REST API.
 
 ## Directory Structure
@@ -40,7 +40,7 @@ src/
     server.ts                App composition — mounts route modules, lock middleware
     routes/
       encryption.ts          Setup, unlock, password change, recovery key rotation
-      accounts.ts            Account CRUD, folders, folder messages, labels, sync trigger
+      identities.ts            Identity CRUD, folders, folder messages, labels, sync trigger
       messages.ts            Message CRUD, threads, flags, bulk ops, message labels
       labels.ts              Label update/delete, messages-by-label
       attachments.ts         Attachment download
@@ -64,7 +64,7 @@ src/
     migrate.ts               Standalone migration runner
   sync/
     imap-sync.ts             IMAP sync engine (folders, messages, flags, attachments)
-    sync-scheduler.ts        Per-account background sync with backoff
+    sync-scheduler.ts        Per-identity background sync with backoff
     connection-pool.ts       IMAP connection pooling across sync cycles
 
 frontend/src/
@@ -72,12 +72,12 @@ frontend/src/
   api.ts                     Type-safe REST API client
   hooks.ts                   Custom hooks (useAsync, useSyncPoller, useDarkMode, useKeyboardShortcuts)
   components/
-    Sidebar.tsx              Account + folder navigation
+    Sidebar.tsx              Identity + folder navigation
     MessageList.tsx          Paginated message list with unread badges
     MessageDetail.tsx        Full message view with thread display
     ComposeModal.tsx         Compose, reply, reply-all
     SearchPanel.tsx          FTS5-powered search
-    Settings.tsx             Account configuration
+    Settings.tsx             Identity configuration
     Welcome.tsx              First-run IMAP setup wizard
     ShortcutsHelp.tsx        Keyboard shortcut reference
     Toast.tsx                Notification toasts
@@ -116,7 +116,7 @@ The database is **not opened until the user unlocks the container** — only aft
 
 ### IMAP Sync Engine (`src/sync/imap-sync.ts`)
 
-The `ImapSync` class handles the core sync logic for a single account:
+The `ImapSync` class handles the core sync logic for a single identity:
 
 - **Folder sync** — lists mailboxes from the IMAP server, upserts folder metadata, detects deleted/renamed folders, and resolves special-use attributes (Inbox, Sent, Drafts, Trash, Junk, Archive) via RFC 6154 attributes or common name fallback.
 - **Incremental message sync** — uses IMAP UIDs and `UIDVALIDITY` for efficient incremental fetch. Only fetches messages newer than the last synced UID. If `UIDVALIDITY` changes (folder was recreated on the server), triggers a full resync of that folder.
@@ -124,14 +124,14 @@ The `ImapSync` class handles the core sync logic for a single account:
 - **Attachment extraction** — stores attachment data (filename, content type, binary data) in the `attachments` table, linked to the parent message.
 - **Flag sync** — periodically fetches flags for all known UIDs and updates any that changed locally (read/unread, starred, etc.). Fetches in batches of 50 to avoid oversized IMAP commands.
 - **Server deletion detection** — can compare local UIDs against server UIDs to find messages deleted upstream.
-- **Connector mode (delete-from-server)** — opt-in per-account mode. After each sync, messages that were successfully fetched are deleted from the IMAP server. The IMAP provider acts as a transient delivery edge; Stork becomes the single source of truth. Only newly-synced UIDs are deleted — messages already in Stork before the flag was enabled are unaffected. Deletion is crash-safe: newly inserted messages are immediately marked `pending_archive = 1` in the database. Phase 3 queries this column rather than an in-memory list, so if the process is killed after Phase 1 (fetch) but before Phase 3 (delete), the next sync cycle finds and clears the pending messages. The flag is set to 0 once `deleted_from_server` is confirmed.
+- **Connector mode (delete-from-server)** — opt-in per-identity mode. After each sync, messages that were successfully fetched are deleted from the IMAP server. The IMAP provider acts as a transient delivery edge; Stork becomes the single source of truth. Only newly-synced UIDs are deleted — messages already in Stork before the flag was enabled are unaffected. Deletion is crash-safe: newly inserted messages are immediately marked `pending_archive = 1` in the database. Phase 3 queries this column rather than an in-memory list, so if the process is killed after Phase 1 (fetch) but before Phase 3 (delete), the next sync cycle finds and clears the pending messages. The flag is set to 0 once `deleted_from_server` is confirmed.
 - **Retry logic** — all IMAP operations use a `withRetry` wrapper with 3 attempts and exponential backoff (1s, 2s, 3s). Each retry creates a fresh `ImapFlow` instance since closed instances cannot be reconnected.
 
 ### Connection Pool (`src/sync/connection-pool.ts`)
 
-The `ConnectionPool` manages IMAP connections across multiple accounts:
+The `ConnectionPool` manages IMAP connections across multiple identities:
 
-- Enforces per-account limits (default: 1) and total connection limits (default: 10).
+- Enforces per-identity limits (default: 1) and total connection limits (default: 10).
 - Evicts idle connections after a configurable timeout (default: 5 minutes).
 - When the total limit is reached, evicts the oldest idle connection to make room.
 - On `acquire`, always creates a fresh IMAP connection (ImapFlow instances are not reliably reusable after ungraceful shutdown).
@@ -139,13 +139,13 @@ The `ConnectionPool` manages IMAP connections across multiple accounts:
 
 ### Sync Scheduler (`src/sync/sync-scheduler.ts`)
 
-The `SyncScheduler` orchestrates background sync for all accounts:
+The `SyncScheduler` orchestrates background sync for all identities:
 
-- Each account syncs on its own interval (default: 5 minutes).
+- Each identity syncs on its own interval (default: 5 minutes).
 - Failed syncs use exponential backoff up to 30 minutes to avoid hammering broken servers.
-- Tracks per-account status: running, last sync time, last error, consecutive error count.
-- Supports on-demand sync via `syncNow(accountId)`.
-- On startup, loads all accounts from the database and registers them for periodic sync.
+- Tracks per-identity status: running, last sync time, last error, consecutive error count.
+- Supports on-demand sync via `syncNow(identityId)`.
+- On startup, loads all identities from the database and registers them for periodic sync.
 
 ### Connector Layer (`src/connectors/`)
 
@@ -165,9 +165,9 @@ Stork uses a pluggable connector architecture to abstract mail transport. Two in
 
 **Barrel export** (`index.ts`) — re-exports all types, implementations, and factory functions.
 
-**Account configuration** — each account stores its `ingest_connector_type` and `send_connector_type` in the database alongside connector-specific configuration columns. The sync scheduler only polls IMAP accounts; push-based connectors (Cloudflare Email) receive messages via webhook without polling. The send route uses the registry to create the appropriate send connector based on the account's configuration.
+**Identity configuration** — each identity stores its `ingest_connector_type` and `send_connector_type` in the database alongside connector-specific configuration columns. The sync scheduler only polls IMAP identities; push-based connectors (Cloudflare Email) receive messages via webhook without polling. The send route uses the registry to create the appropriate send connector based on the identity's configuration.
 
-**Health checks** — `GET /api/accounts/:accountId/connector-health` tests both ingest and send connectors, returning structured status with error details and sync scheduler state.
+**Health checks** — `GET /api/identities/:identityId/connector-health` tests both ingest and send connectors, returning structured status with error details and sync scheduler state.
 
 See [Writing Custom Connectors](./writing-connectors.md) for a guide on implementing new connectors.
 
@@ -182,7 +182,7 @@ See [Writing Custom Connectors](./writing-connectors.md) for a guide on implemen
 
 **Schema** (`schema.ts`):
 - Versioned migrations stored as SQL strings in the `MIGRATIONS` array.
-- **v1**: accounts, folders, messages, attachments, sync_state, FTS5 virtual table with triggers.
+- **v1**: identities, folders, messages, attachments, sync_state, FTS5 virtual table with triggers.
 - **v2**: adds `special_use` column to folders for IMAP special-use detection.
 - **v3**: adds `labels` and `message_labels` tables for Gmail-style label organization.
 - The `schema_version` table tracks the current version.
@@ -191,7 +191,7 @@ See [Writing Custom Connectors](./writing-connectors.md) for a guide on implemen
 **Key design decisions**:
 - Messages are uniquely identified by `(folder_id, uid)` to match IMAP semantics.
 - **Labels replace folders as the primary organizational model.** IMAP folders are still synced for tracking sync state, but user-facing navigation uses labels. When a message syncs from an IMAP folder, the folder name becomes a suggested label (source: `imap`). Users can also create their own labels (source: `user`). A message can have multiple labels — unlike folders, which enforce single-parent hierarchy.
-- The `labels` table stores label metadata (name, color, source) per account. The `message_labels` junction table provides the many-to-many relationship between messages and labels.
+- The `labels` table stores label metadata (name, color, source) per identity. The `message_labels` junction table provides the many-to-many relationship between messages and labels.
 - FTS5 uses porter tokenizer with unicode61 for language-aware stemming.
 - FTS5 content table syncs via INSERT/UPDATE/DELETE triggers on the messages table.
 - Attachments store binary data directly in SQLite BLOBs — simple and avoids filesystem management.
@@ -202,12 +202,12 @@ Built with Hono. The API is composed from domain-specific route modules (`src/ap
 
 Route modules:
 - **`encryption.ts`** — container lifecycle: health, status, setup, unlock, password change, recovery key rotation. These endpoints handle their own auth checks (setup/locked state guards).
-- **`accounts.ts`** — account CRUD, folder listing, folder messages, account labels, sync trigger.
+- **`identities.ts`** — identity CRUD, folder listing, folder messages, identity labels, sync trigger.
 - **`messages.ts`** — message CRUD, threading, flags, move, bulk operations, attachments listing, message labels.
 - **`labels.ts`** — label update/delete, messages-by-label listing.
 - **`attachments.ts`** — raw attachment download with content-type and sanitized filenames.
 - **`search.ts`** — FTS5-powered full-text search.
-- **`sync.ts`** — sync status for all accounts.
+- **`sync.ts`** — sync status for all identities.
 
 See [API Reference](./api.md) for the full endpoint listing.
 
@@ -217,7 +217,7 @@ The `MessageSearch` class wraps SQLite FTS5 queries:
 
 - Supports FTS5 query syntax: AND, OR, NOT, phrase matching with quotes.
 - Returns snippets with `<mark>` highlighting and contextual ellipsis.
-- Filters by account and/or folder.
+- Filters by identity and/or folder.
 - Pagination via limit/offset.
 - Includes a `rebuildIndex()` method for reindexing after bulk operations.
 
@@ -228,27 +228,27 @@ The `MessageSearch` class wraps SQLite FTS5 queries:
 The frontend uses React's built-in state (`useState`) in `App.tsx` as the central state container. No external state library — the app is simple enough that prop drilling + a few custom hooks suffice.
 
 Key state:
-- `accounts`, `folders`, `messages` — data from the API.
-- `selectedAccount`, `selectedFolder`, `selectedMessage` — navigation state.
+- `identities`, `folders`, `messages` — data from the API.
+- `selectedIdentity`, `selectedFolder`, `selectedMessage` — navigation state.
 - `showCompose`, `showSearch`, `showSettings`, `showShortcuts` — UI panel toggles.
 - Dark mode preference persisted to `localStorage`.
 
 ### Custom Hooks (`hooks.ts`)
 
 - **`useAsync(fn, deps)`** — generic hook for async data fetching with loading/error states.
-- **`useSyncPoller(accountId)`** — polls `GET /api/sync/status` every 5 seconds to show sync progress.
+- **`useSyncPoller(identityId)`** — polls `GET /api/sync/status` every 5 seconds to show sync progress.
 - **`useDarkMode()`** — toggles dark mode class on `<html>`, persists to localStorage.
 - **`useKeyboardShortcuts(handlers)`** — registers keyboard shortcut listeners.
 
 ### Component Architecture
 
-- **`Sidebar`** — renders accounts and their folders in a collapsible tree. Shows unread counts. Highlights the active folder.
+- **`Sidebar`** — renders identities and their folders in a collapsible tree. Shows unread counts. Highlights the active folder.
 - **`MessageList`** — paginated list of messages with subject, sender, date, and preview. Supports load-more pagination. Shows unread indicator.
 - **`MessageDetail`** — displays the full message (HTML sanitized with DOMPurify, or plain text fallback). Shows thread context. Renders attachments with download links.
 - **`ComposeModal`** — email composition with To, CC, BCC, Subject, Body. Pre-fills fields for reply and reply-all.
 - **`SearchPanel`** — text input with real-time search results from the FTS5 endpoint.
-- **`Settings`** — account management (add/edit/remove IMAP+SMTP configuration).
-- **`Welcome`** — first-run setup wizard shown when no accounts exist.
+- **`Settings`** — identity management (add/edit/remove IMAP+SMTP configuration).
+- **`Welcome`** — first-run setup wizard shown when no identities exist.
 
 ### Build
 
@@ -322,11 +322,11 @@ For a script in an HTML email to access the parent DOM and leak private informat
 
 The sandbox attribute alone is sufficient — it is enforced by the browser's security model, not by HTML parsing. Even a novel DOMPurify bypass cannot execute scripts inside a `sandbox` iframe without `allow-scripts`.
 
-## Multi-Account Model
+## Multi-Identity Model
 
-Stork uses a unified-first multi-account model: all accounts share one SQLite database, and unified views (All Inboxes, All Unread, All Mail) span all accounts by default. Per-account views remain available for focused workflows.
+Stork uses a unified-first multi-identity model: all identities share one SQLite database, and unified views (All Inboxes, All Unread, All Mail) span all identities by default. Per-identity views remain available for focused workflows.
 
-See [Multi-Account Support](./multi-account.md) for the full philosophy and UX model.
+See [Multi-Identity Support](./multi-account.md) for the full philosophy and UX model.
 
 ## Design Principles
 

@@ -4,7 +4,7 @@ import { type SendConnectorType, createSendConnector } from "../../connectors/re
 import { SmtpSendConnector } from "../../connectors/smtp.js";
 import type { OutgoingAttachment } from "../../connectors/types.js";
 
-interface AccountSendRow {
+interface IdentitySendRow {
 	id: number;
 	email: string;
 	name: string;
@@ -26,13 +26,13 @@ interface FolderRow {
 export function sendRoutes(getDb: () => Database.Database): Hono {
 	const api = new Hono();
 
-	/** POST /send — send an email via the account's configured SMTP server */
+	/** POST /send — send an email via the identity's configured send connector */
 	api.post("/", async (c) => {
 		const db = getDb();
 		const body = await c.req.json();
 
 		const {
-			account_id,
+			identity_id,
 			to,
 			cc,
 			bcc,
@@ -43,7 +43,7 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 			references,
 			attachments,
 		} = body as {
-			account_id: number;
+			identity_id: number;
 			to: string[];
 			cc?: string[];
 			bcc?: string[];
@@ -55,57 +55,57 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 			attachments?: { filename: string; content_type: string; content_base64: string }[];
 		};
 
-		if (!account_id) return c.json({ error: "account_id is required" }, 400);
+		if (!identity_id) return c.json({ error: "identity_id is required" }, 400);
 		if (!Array.isArray(to) || to.length === 0)
 			return c.json({ error: "to must be a non-empty array of email addresses" }, 400);
 		if (!subject && !text_body && !html_body)
 			return c.json({ error: "At least one of subject, text_body, or html_body is required" }, 400);
 
-		const account = db
+		const identity = db
 			.prepare(
-				`SELECT a.id, a.email, a.name,
+				`SELECT i.id, i.email, i.name,
 					oc.type AS send_type,
 					oc.smtp_host, oc.smtp_port, oc.smtp_tls, oc.smtp_user, oc.smtp_pass,
 					oc.ses_region, oc.ses_access_key_id, oc.ses_secret_access_key
-				FROM accounts a
-				LEFT JOIN outbound_connectors oc ON oc.id = a.outbound_connector_id
-				WHERE a.id = ?`,
+				FROM identities i
+				LEFT JOIN outbound_connectors oc ON oc.id = i.outbound_connector_id
+				WHERE i.id = ?`,
 			)
-			.get(account_id) as AccountSendRow | undefined;
+			.get(identity_id) as IdentitySendRow | undefined;
 
-		if (!account) return c.json({ error: "Account not found" }, 404);
+		if (!identity) return c.json({ error: "Identity not found" }, 404);
 
-		const sendType = account.send_type ?? "smtp";
+		const sendType = identity.send_type ?? "smtp";
 		let connector: import("../../connectors/types.js").SendConnector;
 		try {
 			if (sendType === "ses") {
-				if (!account.ses_region) {
-					return c.json({ error: "SES is not configured for this account" }, 400);
+				if (!identity.ses_region) {
+					return c.json({ error: "SES is not configured for this identity" }, 400);
 				}
 				connector = createSendConnector({
 					type: "ses",
 					ses: {
-						region: account.ses_region,
+						region: identity.ses_region,
 						credentials:
-							account.ses_access_key_id && account.ses_secret_access_key
+							identity.ses_access_key_id && identity.ses_secret_access_key
 								? {
-										accessKeyId: account.ses_access_key_id,
-										secretAccessKey: account.ses_secret_access_key,
+										accessKeyId: identity.ses_access_key_id,
+										secretAccessKey: identity.ses_secret_access_key,
 									}
 								: undefined,
 					},
 				});
 			} else {
-				if (!account.smtp_host || !account.smtp_user || !account.smtp_pass) {
-					return c.json({ error: "SMTP is not configured for this account" }, 400);
+				if (!identity.smtp_host || !identity.smtp_user || !identity.smtp_pass) {
+					return c.json({ error: "SMTP is not configured for this identity" }, 400);
 				}
 				connector = createSendConnector({
 					type: "smtp",
 					smtp: {
-						host: account.smtp_host,
-						port: account.smtp_port ?? 587,
-						secure: (account.smtp_tls ?? 1) === 1,
-						auth: { user: account.smtp_user, pass: account.smtp_pass },
+						host: identity.smtp_host,
+						port: identity.smtp_port ?? 587,
+						secure: (identity.smtp_tls ?? 1) === 1,
+						auth: { user: identity.smtp_user, pass: identity.smtp_pass },
 					},
 				});
 			}
@@ -120,7 +120,7 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 			content: Buffer.from(a.content_base64, "base64"),
 		}));
 
-		const fromAddress = account.name ? `${account.name} <${account.email}>` : account.email;
+		const fromAddress = identity.name ? `${identity.name} <${identity.email}>` : identity.email;
 
 		try {
 			const result = await connector.send({
@@ -137,26 +137,26 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 			});
 
 			// Save sent message to local storage
-			const sentFolderId = findOrCreateSentFolder(db, account_id);
+			const sentFolderId = findOrCreateSentFolder(db, identity_id);
 			const nextUid = getNextLocalUid(db, sentFolderId);
 
 			const msgId = db
 				.prepare(`
 					INSERT INTO messages (
-						account_id, folder_id, uid, message_id, subject,
+						identity_id, folder_id, uid, message_id, subject,
 						from_address, from_name, to_addresses, cc_addresses, bcc_addresses,
 						date, text_body, html_body, flags, size, has_attachments,
 						in_reply_to, "references"
 					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, '\\Seen', ?, ?, ?, ?)
 				`)
 				.run(
-					account_id,
+					identity_id,
 					sentFolderId,
 					nextUid,
 					result.messageId,
 					subject ?? "",
-					account.email,
-					account.name ?? null,
+					identity.email,
+					identity.name ?? null,
 					JSON.stringify(to),
 					cc ? JSON.stringify(cc) : null,
 					bcc ? JSON.stringify(bcc) : null,
@@ -224,26 +224,26 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 	return api;
 }
 
-/** Find or create a "Sent" folder for the account */
-function findOrCreateSentFolder(db: Database.Database, accountId: number): number {
+/** Find or create a "Sent" folder for the identity */
+function findOrCreateSentFolder(db: Database.Database, identityId: number): number {
 	// Look for existing Sent folder (by special_use or name)
 	const existing = db
 		.prepare(
 			`SELECT id FROM folders
-			 WHERE account_id = ? AND (special_use = '\\\\Sent' OR path IN ('Sent', '[Gmail]/Sent Mail', 'INBOX.Sent'))
+			 WHERE identity_id = ? AND (special_use = '\\\\Sent' OR path IN ('Sent', '[Gmail]/Sent Mail', 'INBOX.Sent'))
 			 LIMIT 1`,
 		)
-		.get(accountId) as FolderRow | undefined;
+		.get(identityId) as FolderRow | undefined;
 
 	if (existing) return existing.id;
 
 	// Create a local Sent folder
 	const result = db
 		.prepare(
-			`INSERT INTO folders (account_id, path, name, delimiter, flags, special_use, message_count, unread_count)
+			`INSERT INTO folders (identity_id, path, name, delimiter, flags, special_use, message_count, unread_count)
 			 VALUES (?, 'Sent', 'Sent', '/', '[]', '\\Sent', 0, 0)`,
 		)
-		.run(accountId);
+		.run(identityId);
 	return Number(result.lastInsertRowid);
 }
 

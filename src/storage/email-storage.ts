@@ -2,7 +2,7 @@
  * Shared helper for storing inbound emails received via push (webhook) or
  * pull (R2 queue poll) connectors.
  *
- * Handles account lookup, message-ID deduplication, DB insertion, auto-labeling,
+ * Handles identity lookup, message-ID deduplication, DB insertion, auto-labeling,
  * and folder unread-count maintenance. Both the webhook route and the R2 poller
  * delegate here so the storage logic stays in one place.
  */
@@ -22,11 +22,11 @@ export interface InboundEmailPayload {
 }
 
 export interface StoreEmailResult {
-	/** Number of accounts the message was stored for */
+	/** Number of identities the message was stored for */
 	stored: number;
 }
 
-const accountLabelPalette = [
+const identityLabelPalette = [
 	"#3b82f6",
 	"#10b981",
 	"#f59e0b",
@@ -38,10 +38,10 @@ const accountLabelPalette = [
 ];
 
 /**
- * Parse and store an inbound email for all accounts linked to the given connector.
+ * Parse and store an inbound email for all identities linked to the given connector.
  *
- * Returns the number of accounts the message was stored for. Returns 0 if the
- * connector has no linked accounts or all deliveries were duplicates.
+ * Returns the number of identities the message was stored for. Returns 0 if the
+ * connector has no linked identities or all deliveries were duplicates.
  *
  * Throws if `payload.raw` cannot be parsed as a valid RFC 5322 message.
  */
@@ -50,12 +50,12 @@ export async function storeInboundEmail(
 	connectorId: number,
 	payload: InboundEmailPayload,
 ): Promise<StoreEmailResult> {
-	// Find all accounts linked to this connector
-	const accounts = db
-		.prepare("SELECT id FROM accounts WHERE inbound_connector_id = ?")
+	// Find all identities linked to this connector
+	const identities = db
+		.prepare("SELECT id FROM identities WHERE inbound_connector_id = ?")
 		.all(connectorId) as { id: number }[];
 
-	if (accounts.length === 0) {
+	if (identities.length === 0) {
 		return { stored: 0 };
 	}
 
@@ -82,25 +82,25 @@ export async function storeInboundEmail(
 		: null;
 
 	const checkDuplicate = parsed.messageId
-		? db.prepare("SELECT id FROM messages WHERE account_id = ? AND message_id = ? LIMIT 1")
+		? db.prepare("SELECT id FROM messages WHERE identity_id = ? AND message_id = ? LIMIT 1")
 		: null;
 
 	const insertMessage = db.prepare(`
 		INSERT INTO messages (
-			account_id, folder_id, uid, message_id, in_reply_to, "references",
+			identity_id, folder_id, uid, message_id, in_reply_to, "references",
 			subject, from_address, from_name, to_addresses, cc_addresses,
 			date, text_body, html_body, flags, size, has_attachments
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
 	`);
 
-	const ensureAccountLabel = db.prepare(`
+	const ensureIdentityLabel = db.prepare(`
 		INSERT INTO labels (name, source, color)
-		VALUES (?, 'account', ?)
-		ON CONFLICT(name) DO UPDATE SET source = 'account'
+		VALUES (?, 'identity', ?)
+		ON CONFLICT(name) DO UPDATE SET source = 'identity'
 	`);
-	const applyAccountLabel = db.prepare(`
+	const applyIdentityLabel = db.prepare(`
 		INSERT OR IGNORE INTO message_labels (message_id, label_id)
-		SELECT ?, l.id FROM labels l WHERE l.name = ? AND l.source = 'account'
+		SELECT ?, l.id FROM labels l WHERE l.name = ? AND l.source = 'identity'
 	`);
 	const applyInboxLabel = db.prepare(`
 		INSERT OR IGNORE INTO message_labels (message_id, label_id)
@@ -109,20 +109,20 @@ export async function storeInboundEmail(
 
 	let stored = 0;
 
-	for (const account of accounts) {
+	for (const identity of identities) {
 		// Deduplicate by message-id to handle at-least-once delivery
 		if (checkDuplicate) {
-			const existing = checkDuplicate.get(account.id, parsed.messageId) as
+			const existing = checkDuplicate.get(identity.id, parsed.messageId) as
 				| { id: number }
 				| undefined;
 			if (existing) continue;
 		}
 
-		const folderId = findOrCreateInbox(db, account.id);
+		const folderId = findOrCreateInbox(db, identity.id);
 		const uid = nextInboxUid(db, folderId);
 
 		const result = insertMessage.run(
-			account.id,
+			identity.id,
 			folderId,
 			uid,
 			parsed.messageId ?? null,
@@ -141,14 +141,14 @@ export async function storeInboundEmail(
 		);
 		const messageRowId = Number(result.lastInsertRowid);
 
-		// Auto-label with account name and Inbox
-		const accountRow = db.prepare("SELECT name FROM accounts WHERE id = ?").get(account.id) as
+		// Auto-label with identity name and Inbox
+		const identityRow = db.prepare("SELECT name FROM identities WHERE id = ?").get(identity.id) as
 			| { name: string }
 			| undefined;
-		if (accountRow) {
-			const color = accountLabelPalette[(account.id - 1) % accountLabelPalette.length];
-			ensureAccountLabel.run(accountRow.name, color);
-			applyAccountLabel.run(messageRowId, accountRow.name);
+		if (identityRow) {
+			const color = identityLabelPalette[(identity.id - 1) % identityLabelPalette.length];
+			ensureIdentityLabel.run(identityRow.name, color);
+			applyIdentityLabel.run(messageRowId, identityRow.name);
 		}
 		applyInboxLabel.run(messageRowId);
 
@@ -161,24 +161,24 @@ export async function storeInboundEmail(
 	return { stored };
 }
 
-/** Find or create the INBOX folder for an account, returning its ID. */
-function findOrCreateInbox(db: Database.Database, accountId: number): number {
+/** Find or create the INBOX folder for an identity, returning its ID. */
+function findOrCreateInbox(db: Database.Database, identityId: number): number {
 	const existing = db
 		.prepare(
 			`SELECT id FROM folders
-			WHERE account_id = ? AND (path = 'INBOX' OR special_use = '\\\\Inbox' OR name = 'Inbox')
+			WHERE identity_id = ? AND (path = 'INBOX' OR special_use = '\\\\Inbox' OR name = 'Inbox')
 			LIMIT 1`,
 		)
-		.get(accountId) as { id: number } | undefined;
+		.get(identityId) as { id: number } | undefined;
 
 	if (existing) return existing.id;
 
 	const result = db
 		.prepare(
-			`INSERT INTO folders (account_id, path, name, delimiter, flags, special_use, message_count, unread_count)
+			`INSERT INTO folders (identity_id, path, name, delimiter, flags, special_use, message_count, unread_count)
 			VALUES (?, 'INBOX', 'Inbox', '/', '[]', '\\Inbox', 0, 0)`,
 		)
-		.run(accountId);
+		.run(identityId);
 	return Number(result.lastInsertRowid);
 }
 

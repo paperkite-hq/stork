@@ -16,8 +16,8 @@ export interface ActiveSyncProgress {
 	startedAt: number;
 }
 
-export interface AccountSyncConfig {
-	accountId: number;
+export interface IdentitySyncConfig {
+	identityId: number;
 	imapConfig: ImapConfig;
 	/** Sync interval in ms (default: 5 minutes) */
 	intervalMs?: number;
@@ -29,15 +29,15 @@ export interface SyncSchedulerOptions {
 	/** Connection pool options */
 	poolOptions?: ConnectionPoolOptions;
 	/** Called when a sync completes */
-	onSyncComplete?: (accountId: number, result: SyncAllResult) => void;
+	onSyncComplete?: (identityId: number, result: SyncAllResult) => void;
 	/** Called immediately when a sync error is recorded (for inline logging) */
-	onSyncRecordError?: (accountId: number, error: SyncError) => void;
+	onSyncRecordError?: (identityId: number, error: SyncError) => void;
 	/** Called when a sync fails */
-	onSyncError?: (accountId: number, error: Error) => void;
+	onSyncError?: (identityId: number, error: Error) => void;
 }
 
-interface ScheduledAccount {
-	config: AccountSyncConfig;
+interface ScheduledIdentity {
+	config: IdentitySyncConfig;
 	timer: ReturnType<typeof setInterval> | null;
 	running: boolean;
 	lastSync: number | null;
@@ -55,20 +55,20 @@ const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 const MAX_BACKOFF_MS = 30 * 60 * 1000;
 
 /**
- * Manages periodic background sync for multiple IMAP accounts.
+ * Manages periodic background sync for multiple IMAP identities.
  *
- * Each account syncs on its own interval. Failed syncs use exponential
+ * Each identity syncs on its own interval. Failed syncs use exponential
  * backoff to avoid hammering a broken server. Uses ConnectionPool to
  * reuse IMAP connections across sync cycles.
  */
 export class SyncScheduler {
-	private accounts: Map<number, ScheduledAccount> = new Map();
+	private identities: Map<number, ScheduledIdentity> = new Map();
 	private pool: ConnectionPool;
 	private db: Database.Database;
 	private defaultIntervalMs: number;
-	private onSyncComplete?: (accountId: number, result: SyncAllResult) => void;
-	private onSyncRecordError?: (accountId: number, error: SyncError) => void;
-	private onSyncError?: (accountId: number, error: Error) => void;
+	private onSyncComplete?: (identityId: number, result: SyncAllResult) => void;
+	private onSyncRecordError?: (identityId: number, error: SyncError) => void;
+	private onSyncError?: (identityId: number, error: Error) => void;
 	private started = false;
 
 	constructor(db: Database.Database, options: SyncSchedulerOptions = {}) {
@@ -81,15 +81,15 @@ export class SyncScheduler {
 	}
 
 	/**
-	 * Adds an account to the scheduler.
+	 * Adds an identity to the scheduler.
 	 * If the scheduler is already started, begins syncing immediately.
 	 */
-	addAccount(config: AccountSyncConfig): void {
-		if (this.accounts.has(config.accountId)) {
-			throw new Error(`Account ${config.accountId} is already scheduled`);
+	addIdentity(config: IdentitySyncConfig): void {
+		if (this.identities.has(config.identityId)) {
+			throw new Error(`Identity ${config.identityId} is already scheduled`);
 		}
 
-		const scheduled: ScheduledAccount = {
+		const scheduled: ScheduledIdentity = {
 			config,
 			timer: null,
 			running: false,
@@ -101,36 +101,36 @@ export class SyncScheduler {
 			progress: null,
 		};
 
-		this.accounts.set(config.accountId, scheduled);
+		this.identities.set(config.identityId, scheduled);
 
 		if (this.started) {
-			this.startAccountSync(scheduled);
+			this.startIdentitySync(scheduled);
 		}
 	}
 
 	/**
-	 * Removes an account from the scheduler and releases its connections.
+	 * Removes an identity from the scheduler and releases its connections.
 	 */
-	removeAccount(accountId: number): void {
-		const scheduled = this.accounts.get(accountId);
+	removeIdentity(identityId: number): void {
+		const scheduled = this.identities.get(identityId);
 		if (!scheduled) return;
 
 		if (scheduled.timer) {
 			clearInterval(scheduled.timer);
 		}
 
-		this.accounts.delete(accountId);
+		this.identities.delete(identityId);
 	}
 
 	/**
-	 * Starts the scheduler — begins periodic sync for all registered accounts.
+	 * Starts the scheduler — begins periodic sync for all registered identities.
 	 */
 	start(): void {
 		if (this.started) return;
 		this.started = true;
 
-		for (const scheduled of this.accounts.values()) {
-			this.startAccountSync(scheduled);
+		for (const scheduled of this.identities.values()) {
+			this.startIdentitySync(scheduled);
 		}
 	}
 
@@ -143,7 +143,7 @@ export class SyncScheduler {
 
 		const pendingSyncs: Promise<void>[] = [];
 
-		for (const scheduled of this.accounts.values()) {
+		for (const scheduled of this.identities.values()) {
 			if (scheduled.timer) {
 				clearInterval(scheduled.timer);
 				scheduled.timer = null;
@@ -169,20 +169,20 @@ export class SyncScheduler {
 	}
 
 	/**
-	 * Triggers an immediate sync for a specific account.
-	 * Returns the sync result, or throws if the account is already syncing.
+	 * Triggers an immediate sync for a specific identity.
+	 * Returns the sync result, or throws if the identity is already syncing.
 	 */
-	async syncNow(accountId: number): Promise<SyncAllResult> {
-		const scheduled = this.accounts.get(accountId);
+	async syncNow(identityId: number): Promise<SyncAllResult> {
+		const scheduled = this.identities.get(identityId);
 		if (!scheduled) {
-			throw new Error(`Account ${accountId} is not registered`);
+			throw new Error(`Identity ${identityId} is not registered`);
 		}
 
 		return this.runSync(scheduled);
 	}
 
 	/**
-	 * Returns the status of all scheduled accounts.
+	 * Returns the status of all scheduled identities.
 	 */
 	getStatus(): Map<
 		number,
@@ -205,8 +205,8 @@ export class SyncScheduler {
 			}
 		>();
 
-		for (const [accountId, scheduled] of this.accounts) {
-			status.set(accountId, {
+		for (const [identityId, scheduled] of this.identities) {
+			status.set(identityId, {
 				running: scheduled.running,
 				lastSync: scheduled.lastSync,
 				lastError: scheduled.lastError,
@@ -219,17 +219,17 @@ export class SyncScheduler {
 	}
 
 	/**
-	 * Loads all accounts from the database and adds them to the scheduler.
+	 * Loads all identities from the database and adds them to the scheduler.
 	 */
-	loadAccountsFromDb(): void {
-		// Only load accounts with IMAP inbound connectors for periodic sync —
-		// Cloudflare Email accounts are push-based (webhook) and don't need polling.
+	loadIdentitiesFromDb(): void {
+		// Only load identities with IMAP inbound connectors for periodic sync —
+		// Cloudflare Email identities are push-based (webhook) and don't need polling.
 		// Join with inbound_connectors to get IMAP credentials from the connector table.
-		const accounts = this.db
+		const identities = this.db
 			.prepare(
-				`SELECT a.id, ic.imap_host, ic.imap_port, ic.imap_tls, ic.imap_user, ic.imap_pass
-				FROM accounts a
-				JOIN inbound_connectors ic ON ic.id = a.inbound_connector_id
+				`SELECT i.id, ic.imap_host, ic.imap_port, ic.imap_tls, ic.imap_user, ic.imap_pass
+				FROM identities i
+				JOIN inbound_connectors ic ON ic.id = i.inbound_connector_id
 				WHERE ic.type = 'imap'`,
 			)
 			.all() as {
@@ -241,25 +241,25 @@ export class SyncScheduler {
 			imap_pass: string;
 		}[];
 
-		for (const account of accounts) {
-			if (this.accounts.has(account.id)) continue;
+		for (const identity of identities) {
+			if (this.identities.has(identity.id)) continue;
 
-			this.addAccount({
-				accountId: account.id,
+			this.addIdentity({
+				identityId: identity.id,
 				imapConfig: {
-					host: account.imap_host,
-					port: account.imap_port,
-					secure: account.imap_tls === 1,
+					host: identity.imap_host,
+					port: identity.imap_port,
+					secure: identity.imap_tls === 1,
 					auth: {
-						user: account.imap_user,
-						pass: account.imap_pass,
+						user: identity.imap_user,
+						pass: identity.imap_pass,
 					},
 				},
 			});
 		}
 	}
 
-	private startAccountSync(scheduled: ScheduledAccount): void {
+	private startIdentitySync(scheduled: ScheduledIdentity): void {
 		// Run an initial sync immediately
 		this.runSync(scheduled).catch(() => {});
 
@@ -269,9 +269,9 @@ export class SyncScheduler {
 		}, intervalMs);
 	}
 
-	private async runSync(scheduled: ScheduledAccount): Promise<SyncAllResult> {
+	private async runSync(scheduled: ScheduledIdentity): Promise<SyncAllResult> {
 		if (scheduled.running) {
-			throw new Error(`Account ${scheduled.config.accountId} is already syncing`);
+			throw new Error(`Identity ${scheduled.config.identityId} is already syncing`);
 		}
 
 		scheduled.running = true;
@@ -283,7 +283,7 @@ export class SyncScheduler {
 			errors: 0,
 			startedAt: Date.now(),
 		};
-		const accountId = scheduled.config.accountId;
+		const identityId = scheduled.config.identityId;
 		const abortController = new AbortController();
 		scheduled.abortController = abortController;
 
@@ -301,20 +301,20 @@ export class SyncScheduler {
 
 		const doSync = async (): Promise<SyncAllResult> => {
 			try {
-				const sync = await this.pool.acquire(accountId, scheduled.config.imapConfig);
+				const sync = await this.pool.acquire(identityId, scheduled.config.imapConfig);
 
 				try {
 					const onError = this.onSyncRecordError
-						? (err: SyncError) => this.onSyncRecordError?.(accountId, err)
+						? (err: SyncError) => this.onSyncRecordError?.(identityId, err)
 						: undefined;
 					const result = await sync.syncAll(abortController.signal, onProgress, onError);
 					scheduled.lastSync = Date.now();
 					scheduled.lastError = null;
 					scheduled.consecutiveErrors = 0;
-					this.onSyncComplete?.(accountId, result);
+					this.onSyncComplete?.(identityId, result);
 					return result;
 				} finally {
-					this.pool.release(accountId, sync);
+					this.pool.release(identityId, sync);
 				}
 			} catch (err) {
 				const error = err instanceof Error ? err : new Error(String(err));
@@ -324,7 +324,7 @@ export class SyncScheduler {
 					? `${imapErr.responseStatus ?? "ERROR"}: ${imapErr.responseText}`
 					: error.message;
 				scheduled.consecutiveErrors++;
-				this.onSyncError?.(accountId, error);
+				this.onSyncError?.(identityId, error);
 
 				// Apply exponential backoff by rescheduling with delay
 				if (scheduled.consecutiveErrors > 1 && scheduled.timer) {

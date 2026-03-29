@@ -37,15 +37,15 @@ const mockR2PollerLoad = vi.fn();
 
 // Callbacks captured when SyncScheduler is constructed; tests invoke them directly.
 let mockCapturedOnSyncComplete:
-	| ((accountId: number, result: { totalNew: number; totalErrors: number }) => void)
+	| ((identityId: number, result: { totalNew: number; totalErrors: number }) => void)
 	| undefined;
 let mockCapturedOnSyncRecordError:
 	| ((
-			accountId: number,
+			identityId: number,
 			error: { errorType: string; message: string; retriable: boolean; folderPath?: string | null },
 	  ) => void)
 	| undefined;
-let mockCapturedOnSyncError: ((accountId: number, error: Error) => void) | undefined;
+let mockCapturedOnSyncError: ((identityId: number, error: Error) => void) | undefined;
 
 vi.mock("../sync/sync-scheduler.js", () => ({
 	// Must use `function` (not arrow) so `new SyncScheduler(...)` works.
@@ -54,11 +54,11 @@ vi.mock("../sync/sync-scheduler.js", () => ({
 		_db: unknown,
 		opts: {
 			onSyncComplete?: (
-				accountId: number,
+				identityId: number,
 				result: { totalNew: number; totalErrors: number },
 			) => void;
 			onSyncRecordError?: (
-				accountId: number,
+				identityId: number,
 				error: {
 					errorType: string;
 					message: string;
@@ -66,7 +66,7 @@ vi.mock("../sync/sync-scheduler.js", () => ({
 					folderPath?: string | null;
 				},
 			) => void;
-			onSyncError?: (accountId: number, error: Error) => void;
+			onSyncError?: (identityId: number, error: Error) => void;
 		},
 	) {
 		mockCapturedOnSyncComplete = opts.onSyncComplete;
@@ -76,7 +76,7 @@ vi.mock("../sync/sync-scheduler.js", () => ({
 		return {
 			start: mockSchedulerStart,
 			stop: mockSchedulerStop,
-			loadAccountsFromDb: mockSchedulerLoad,
+			loadIdentitiesFromDb: mockSchedulerLoad,
 		};
 	}),
 }));
@@ -204,7 +204,7 @@ describe("transitionToUnlocked — scheduler callbacks", () => {
 		};
 	}
 
-	test("onSyncComplete callback logs account id, new-message count, and error count", () => {
+	test("onSyncComplete callback logs identity id, new-message count, and error count", () => {
 		const context = makeLockedContext();
 		transitionToUnlocked(context, Buffer.alloc(32));
 
@@ -216,7 +216,7 @@ describe("transitionToUnlocked — scheduler callbacks", () => {
 			folders: [],
 		});
 
-		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("account 42"));
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("identity 42"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("7 new"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("2 errors"));
 		consoleSpy.mockRestore();
@@ -265,14 +265,14 @@ describe("transitionToUnlocked — scheduler callbacks", () => {
 		consoleSpy.mockRestore();
 	});
 
-	test("onSyncError callback logs account id and error message", () => {
+	test("onSyncError callback logs identity id and error message", () => {
 		const context = makeLockedContext();
 		transitionToUnlocked(context, Buffer.alloc(32));
 
 		const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		mockCapturedOnSyncError?.(13, new Error("connection refused"));
 
-		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("account 13"));
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("identity 13"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("connection refused"));
 		consoleSpy.mockRestore();
 	});

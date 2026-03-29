@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { ImapIngestConnector } from "../../connectors/imap.js";
 import { parseIntParam } from "../validation.js";
 
-interface ImapAccountInfo {
+interface ImapConnectorInfo {
 	uid: number;
 	folder_path: string;
 	imap_host: string;
@@ -14,9 +14,9 @@ interface ImapAccountInfo {
 }
 
 /** Deletes messages from an IMAP server. Injectable for testing. */
-export type ImapDeleteFn = (info: ImapAccountInfo, uids: number[]) => Promise<void>;
+export type ImapDeleteFn = (info: ImapConnectorInfo, uids: number[]) => Promise<void>;
 
-async function defaultImapDelete(info: ImapAccountInfo, uids: number[]): Promise<void> {
+async function defaultImapDelete(info: ImapConnectorInfo, uids: number[]): Promise<void> {
 	const connector = new ImapIngestConnector({
 		host: info.imap_host,
 		port: info.imap_port,
@@ -59,14 +59,14 @@ export function messageRoutes(
 		if (messageId instanceof Response) return messageId;
 		const message = db
 			.prepare(
-				'SELECT message_id, in_reply_to, "references", account_id FROM messages WHERE id = ?',
+				'SELECT message_id, in_reply_to, "references", identity_id FROM messages WHERE id = ?',
 			)
 			.get(messageId) as
 			| {
 					message_id: string | null;
 					in_reply_to: string | null;
 					references: string | null;
-					account_id: number;
+					identity_id: number;
 			  }
 			| undefined;
 
@@ -109,13 +109,13 @@ export function messageRoutes(
 				SELECT DISTINCT m.*, f.path as folder_path, f.name as folder_name
 				FROM messages m
 				JOIN folders f ON f.id = m.folder_id
-				WHERE m.account_id = ?
+				WHERE m.identity_id = ?
 				AND (m.message_id IN (${placeholders})
 					OR m.in_reply_to IN (${placeholders})
 					OR m.id = ?)
 				ORDER BY m.date ASC
 			`)
-			.all(message.account_id, ...[...threadIds], ...[...threadIds], messageId);
+			.all(message.identity_id, ...[...threadIds], ...[...threadIds], messageId);
 
 		return c.json(thread);
 	});
@@ -164,27 +164,28 @@ export function messageRoutes(
 		const messageId = parseIntParam(c, "messageId", c.req.param("messageId"));
 		if (messageId instanceof Response) return messageId;
 
-		// Fetch message with folder and account info for optional server-side deletion
+		// Fetch message with folder and connector info for optional server-side deletion
 		const message = db
 			.prepare(
 				`SELECT m.uid, f.path AS folder_path,
-				        a.ingest_connector_type, a.sync_delete_from_server,
-				        a.imap_host, a.imap_port, a.imap_tls, a.imap_user, a.imap_pass
+				        ic.type AS ingest_connector_type, ic.sync_delete_from_server,
+				        ic.imap_host, ic.imap_port, ic.imap_tls, ic.imap_user, ic.imap_pass
 				 FROM messages m
 				 JOIN folders f ON f.id = m.folder_id
-				 JOIN accounts a ON a.id = m.account_id
+				 JOIN identities i ON i.id = m.identity_id
+				 LEFT JOIN inbound_connectors ic ON ic.id = i.inbound_connector_id
 				 WHERE m.id = ?`,
 			)
 			.get(messageId) as
-			| (ImapAccountInfo & {
-					ingest_connector_type: string;
-					sync_delete_from_server: number;
+			| (ImapConnectorInfo & {
+					ingest_connector_type: string | null;
+					sync_delete_from_server: number | null;
 			  })
 			| undefined;
 
 		if (!message) return c.json({ error: "Message not found" }, 404);
 
-		// Delete from IMAP server when the account is IMAP and sync deletions is enabled
+		// Delete from IMAP server when the connector is IMAP and sync deletions is enabled
 		if (message.ingest_connector_type === "imap" && message.sync_delete_from_server === 1) {
 			try {
 				await imapDelete(message, [message.uid]);
@@ -221,25 +222,26 @@ export function messageRoutes(
 		const placeholders = ids.map(() => "?").join(",");
 
 		if (action === "delete") {
-			// Fetch messages with folder/account info for server-side deletion
+			// Fetch messages with folder/connector info for server-side deletion
 			const toDelete = db
 				.prepare(
 					`SELECT m.id, m.uid, f.path AS folder_path,
-					        a.ingest_connector_type, a.sync_delete_from_server,
-					        a.imap_host, a.imap_port, a.imap_tls, a.imap_user, a.imap_pass
+					        ic.type AS ingest_connector_type, ic.sync_delete_from_server,
+					        ic.imap_host, ic.imap_port, ic.imap_tls, ic.imap_user, ic.imap_pass
 					 FROM messages m
 					 JOIN folders f ON f.id = m.folder_id
-					 JOIN accounts a ON a.id = m.account_id
+					 JOIN identities i ON i.id = m.identity_id
+					 LEFT JOIN inbound_connectors ic ON ic.id = i.inbound_connector_id
 					 WHERE m.id IN (${placeholders})`,
 				)
-				.all(...ids) as (ImapAccountInfo & {
+				.all(...ids) as (ImapConnectorInfo & {
 				id: number;
-				ingest_connector_type: string;
-				sync_delete_from_server: number;
+				ingest_connector_type: string | null;
+				sync_delete_from_server: number | null;
 			})[];
 
 			// Group IMAP messages by folder for efficient server-side deletion
-			const imapByFolder = new Map<string, ImapAccountInfo & { folderKey: string }[]>();
+			const imapByFolder = new Map<string, (ImapConnectorInfo & { folderKey: string })[]>();
 			for (const msg of toDelete) {
 				if (msg.ingest_connector_type === "imap" && msg.sync_delete_from_server === 1) {
 					const key = `${msg.imap_host}:${msg.imap_port}:${msg.imap_user}:${msg.folder_path}`;

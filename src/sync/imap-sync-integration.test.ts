@@ -104,7 +104,7 @@ describe("ImapSync integration with mock IMAP server", () => {
 	let server: MockImapServer;
 	let port: number;
 	let db: Database.Database;
-	let accountId: number;
+	let identityId: number;
 
 	beforeEach(async () => {
 		// Fresh server per test to avoid ImapFlow connection reuse issues
@@ -117,10 +117,25 @@ describe("ImapSync integration with mock IMAP server", () => {
 
 		db = createTestDb();
 		db.prepare(`
-			INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-			VALUES ('Test', 'test@example.com', '127.0.0.1', ?, 0, 'testuser', 'testpass')
+			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+			VALUES ('Test Inbound', 'imap', '127.0.0.1', ?, 0, 'testuser', 'testpass')
 		`).run(port);
-		accountId = Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
+		const inboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(
+			"INSERT INTO outbound_connectors (name, type) VALUES ('Test Outbound', 'smtp')",
+		).run();
+		const outboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(`
+			INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+			VALUES ('Test', 'test@example.com', ?, ?)
+		`).run(inboundId, outboundId);
+		identityId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
 	});
 
 	afterEach(async () => {
@@ -137,7 +152,7 @@ describe("ImapSync integration with mock IMAP server", () => {
 				auth: { user, pass },
 			},
 			db,
-			accountId,
+			identityId,
 		);
 	}
 
@@ -152,8 +167,8 @@ describe("ImapSync integration with mock IMAP server", () => {
 
 		// Verify folders in database
 		const dbFolders = db
-			.prepare("SELECT path, special_use FROM folders WHERE account_id = ? ORDER BY path")
-			.all(accountId) as { path: string; special_use: string | null }[];
+			.prepare("SELECT path, special_use FROM folders WHERE identity_id = ? ORDER BY path")
+			.all(identityId) as { path: string; special_use: string | null }[];
 
 		expect(dbFolders.length).toBe(3);
 		const inbox = dbFolders.find((f) => f.path === "INBOX");
@@ -172,8 +187,8 @@ describe("ImapSync integration with mock IMAP server", () => {
 
 		// Verify messages in DB
 		const messages = db
-			.prepare("SELECT subject, from_address FROM messages WHERE account_id = ? ORDER BY uid")
-			.all(accountId) as { subject: string; from_address: string }[];
+			.prepare("SELECT subject, from_address FROM messages WHERE identity_id = ? ORDER BY uid")
+			.all(identityId) as { subject: string; from_address: string }[];
 
 		expect(messages.length).toBeGreaterThanOrEqual(3);
 		expect(messages.some((m) => m.subject === "Hello from Alice")).toBe(true);
@@ -209,8 +224,10 @@ describe("ImapSync integration with mock IMAP server", () => {
 
 		// Check that the \\Flagged flag was synced for msg3
 		const flaggedMsg = db
-			.prepare("SELECT flags FROM messages WHERE account_id = ? AND subject = 'Important document'")
-			.get(accountId) as { flags: string } | undefined;
+			.prepare(
+				"SELECT flags FROM messages WHERE identity_id = ? AND subject = 'Important document'",
+			)
+			.get(identityId) as { flags: string } | undefined;
 
 		if (flaggedMsg) {
 			expect(flaggedMsg.flags).toContain("\\Flagged");
@@ -226,12 +243,12 @@ describe("ImapSync integration with mock IMAP server", () => {
 
 		// Manually add a local-only folder that doesn't exist on the server
 		db.prepare(`
-			INSERT INTO folders (account_id, path, name, delimiter, flags)
+			INSERT INTO folders (identity_id, path, name, delimiter, flags)
 			VALUES (?, 'OldFolder', 'OldFolder', '/', '[]')
-		`).run(accountId);
+		`).run(identityId);
 
 		const beforeCount = (
-			db.prepare("SELECT count(*) as c FROM folders WHERE account_id = ?").get(accountId) as {
+			db.prepare("SELECT count(*) as c FROM folders WHERE identity_id = ?").get(identityId) as {
 				c: number;
 			}
 		).c;
@@ -240,7 +257,7 @@ describe("ImapSync integration with mock IMAP server", () => {
 		await sync.syncFolders();
 
 		const afterCount = (
-			db.prepare("SELECT count(*) as c FROM folders WHERE account_id = ?").get(accountId) as {
+			db.prepare("SELECT count(*) as c FROM folders WHERE identity_id = ?").get(identityId) as {
 				c: number;
 			}
 		).c;
@@ -362,7 +379,7 @@ describe("ImapSync integration with mock IMAP server", () => {
 		expect(labelCountsAfterFolder.length).toBeGreaterThan(0);
 		expect(labelCountsAfterFolder[0]).toBeGreaterThan(0);
 
-		// Total message_labels: 4 messages × (folder label + account label) = 8
+		// Total message_labels: 4 messages × (folder label + identity label) = 8
 		const totalLabels = (
 			db.prepare("SELECT COUNT(*) as n FROM message_labels").get() as { n: number }
 		).n;
@@ -374,7 +391,7 @@ describe("detectServerDeletions", () => {
 	let server: MockImapServer;
 	let port: number;
 	let db: Database.Database;
-	let accountId: number;
+	let identityId: number;
 
 	beforeEach(async () => {
 		server = new MockImapServer({
@@ -424,10 +441,25 @@ describe("detectServerDeletions", () => {
 
 		db = createTestDb();
 		db.prepare(`
-			INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-			VALUES ('Test', 'test@example.com', '127.0.0.1', ?, 0, 'testuser', 'testpass')
+			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+			VALUES ('Test Inbound', 'imap', '127.0.0.1', ?, 0, 'testuser', 'testpass')
 		`).run(port);
-		accountId = Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
+		const inboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(
+			"INSERT INTO outbound_connectors (name, type) VALUES ('Test Outbound', 'smtp')",
+		).run();
+		const outboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(`
+			INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+			VALUES ('Test', 'test@example.com', ?, ?)
+		`).run(inboundId, outboundId);
+		identityId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
 	});
 
 	afterEach(async () => {
@@ -439,7 +471,7 @@ describe("detectServerDeletions", () => {
 		return new ImapSync(
 			{ host: "127.0.0.1", port, secure: false, auth: { user: "testuser", pass: "testpass" } },
 			db,
-			accountId,
+			identityId,
 		);
 	}
 
@@ -451,14 +483,14 @@ describe("detectServerDeletions", () => {
 
 		// Now manually insert a message with uid=2 (not on server) into local DB
 		const folder = db
-			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
-			.get(accountId) as { id: number };
+			.prepare("SELECT id FROM folders WHERE identity_id = ? AND path = 'INBOX'")
+			.get(identityId) as { id: number };
 		db.prepare(`
-			INSERT INTO messages (account_id, folder_id, uid, message_id, subject, from_address, from_name,
+			INSERT INTO messages (identity_id, folder_id, uid, message_id, subject, from_address, from_name,
 				to_addresses, date, text_body, flags, size, has_attachments)
 			VALUES (?, ?, 2, '<2@ex.com>', 'Missing msg', 'x@y.com', 'X', '[]',
 				'2026-01-15T10:00:00Z', 'body', '[]', 100, 0)
-		`).run(accountId, folder.id);
+		`).run(identityId, folder.id);
 
 		const deleted = await sync.detectServerDeletions("INBOX");
 		expect(deleted).toContain(2);
@@ -495,7 +527,7 @@ describe("deleteFromServer", () => {
 	let server: MockImapServer;
 	let port: number;
 	let db: Database.Database;
-	let accountId: number;
+	let identityId: number;
 
 	beforeEach(async () => {
 		server = new MockImapServer({
@@ -545,10 +577,25 @@ describe("deleteFromServer", () => {
 
 		db = createTestDb();
 		db.prepare(`
-			INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-			VALUES ('Test', 'test@example.com', '127.0.0.1', ?, 0, 'testuser', 'testpass')
+			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+			VALUES ('Test Inbound', 'imap', '127.0.0.1', ?, 0, 'testuser', 'testpass')
 		`).run(port);
-		accountId = Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
+		const inboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(
+			"INSERT INTO outbound_connectors (name, type) VALUES ('Test Outbound', 'smtp')",
+		).run();
+		const outboundId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(`
+			INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+			VALUES ('Test', 'test@example.com', ?, ?)
+		`).run(inboundId, outboundId);
+		identityId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
 	});
 
 	afterEach(async () => {
@@ -560,7 +607,7 @@ describe("deleteFromServer", () => {
 		return new ImapSync(
 			{ host: "127.0.0.1", port, secure: false, auth: { user: "testuser", pass: "testpass" } },
 			db,
-			accountId,
+			identityId,
 		);
 	}
 
@@ -583,8 +630,8 @@ describe("deleteFromServer", () => {
 
 		// Local message should be marked deleted_from_server
 		const folder = db
-			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
-			.get(accountId) as { id: number };
+			.prepare("SELECT id FROM folders WHERE identity_id = ? AND path = 'INBOX'")
+			.get(identityId) as { id: number };
 		const msg = db
 			.prepare("SELECT deleted_from_server FROM messages WHERE folder_id = ? AND uid = 2")
 			.get(folder.id) as { deleted_from_server: number } | undefined;
@@ -669,10 +716,25 @@ describe("deleteFromServer", () => {
 		const manyDb = createTestDb();
 		manyDb
 			.prepare(`
-			INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-			VALUES ('ManyTest', 'many@example.com', '127.0.0.1', ?, 0, 'testuser', 'testpass')
+			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+			VALUES ('Many Inbound', 'imap', '127.0.0.1', ?, 0, 'testuser', 'testpass')
 		`)
 			.run(manyPort);
+		const manyInboundId = Number(
+			(manyDb.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		manyDb
+			.prepare("INSERT INTO outbound_connectors (name, type) VALUES ('Many Outbound', 'smtp')")
+			.run();
+		const manyOutboundId = Number(
+			(manyDb.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		manyDb
+			.prepare(`
+			INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+			VALUES ('ManyTest', 'many@example.com', ?, ?)
+		`)
+			.run(manyInboundId, manyOutboundId);
 		const manyAccountId = Number(
 			(manyDb.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 		);
@@ -787,7 +849,7 @@ describe("SyncScheduler abort integration with mock IMAP server", () => {
 		});
 		port = await server.start();
 		db = createTestDb();
-		// Create inbound connector and account so loadAccountsFromDb finds it via JOIN
+		// Create inbound connector and identity so loadIdentitiesFromDb finds it via JOIN
 		db.prepare(`
 			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
 			VALUES ('Test (Inbound)', 'imap', '127.0.0.1', ?, 0, 'testuser', 'testpass')
@@ -802,7 +864,7 @@ describe("SyncScheduler abort integration with mock IMAP server", () => {
 			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 		);
 		db.prepare(`
-			INSERT INTO accounts (name, email, inbound_connector_id, outbound_connector_id)
+			INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
 			VALUES ('Test', 'test@example.com', ?, ?)
 		`).run(inboundId, outboundId);
 	});
@@ -814,13 +876,13 @@ describe("SyncScheduler abort integration with mock IMAP server", () => {
 
 	test("stop() with a running syncNow completes within grace period without hanging", async () => {
 		const scheduler = new SyncScheduler(db);
-		scheduler.loadAccountsFromDb();
+		scheduler.loadIdentitiesFromDb();
 
-		const accounts = db.prepare("SELECT id FROM accounts").all() as { id: number }[];
-		const accountId = accounts[0].id;
+		const identities = db.prepare("SELECT id FROM identities").all() as { id: number }[];
+		const identityId = identities[0].id;
 
 		// Start an async sync but don't await — we want to call stop() while it may be running
-		const syncPromise = scheduler.syncNow(accountId).catch(() => {
+		const syncPromise = scheduler.syncNow(identityId).catch(() => {
 			// Sync may be aborted or complete — either is fine
 		});
 
@@ -835,9 +897,9 @@ describe("SyncScheduler abort integration with mock IMAP server", () => {
 		// Let the sync promise settle (it may already be done)
 		await syncPromise;
 
-		// After stop(), the account should not be running
+		// After stop(), the identity should not be running
 		const status = scheduler.getStatus();
-		expect(status.get(accountId)?.running).toBe(false);
+		expect(status.get(identityId)?.running).toBe(false);
 	});
 });
 
@@ -845,7 +907,7 @@ describe("archive mode (auto-delete from server after sync)", () => {
 	let server: MockImapServer;
 	let port: number;
 	let db: Database.Database;
-	let accountId: number;
+	let identityId: number;
 
 	beforeEach(async () => {
 		server = new MockImapServer({
@@ -915,9 +977,22 @@ describe("archive mode (auto-delete from server after sync)", () => {
 
 	function makeAccount(syncDeleteFromServer: 0 | 1): number {
 		db.prepare(`
-			INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
-			VALUES ('Test', 'test@example.com', '127.0.0.1', ?, 0, 'testuser', 'testpass', ?)
+			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server)
+			VALUES ('Test Inbound', 'imap', '127.0.0.1', ?, 0, 'testuser', 'testpass', ?)
 		`).run(port, syncDeleteFromServer);
+		const ibId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(
+			"INSERT INTO outbound_connectors (name, type) VALUES ('Test Outbound', 'smtp')",
+		).run();
+		const obId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+		db.prepare(`
+			INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+			VALUES ('Test', 'test@example.com', ?, ?)
+		`).run(ibId, obId);
 		return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
 	}
 
@@ -930,16 +1005,16 @@ describe("archive mode (auto-delete from server after sync)", () => {
 	}
 
 	test("syncAll with archive mode off leaves messages on server", async () => {
-		accountId = makeAccount(0);
-		const sync = makeSync(accountId);
+		identityId = makeAccount(0);
+		const sync = makeSync(identityId);
 		await sync.connect();
 		const result = await sync.syncAll();
 		await sync.disconnect();
 
 		// All 3 messages stored locally
 		const folder = db
-			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
-			.get(accountId) as { id: number };
+			.prepare("SELECT id FROM folders WHERE identity_id = ? AND path = 'INBOX'")
+			.get(identityId) as { id: number };
 		const msgs = db
 			.prepare("SELECT uid, deleted_from_server FROM messages WHERE folder_id = ?")
 			.all(folder.id) as { uid: number; deleted_from_server: number }[];
@@ -960,16 +1035,16 @@ describe("archive mode (auto-delete from server after sync)", () => {
 	});
 
 	test("syncAll with archive mode on deletes synced messages from server", async () => {
-		accountId = makeAccount(1);
-		const sync = makeSync(accountId);
+		identityId = makeAccount(1);
+		const sync = makeSync(identityId);
 		await sync.connect();
 		const result = await sync.syncAll();
 		await sync.disconnect();
 
 		// All 3 messages stored locally
 		const folder = db
-			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
-			.get(accountId) as { id: number };
+			.prepare("SELECT id FROM folders WHERE identity_id = ? AND path = 'INBOX'")
+			.get(identityId) as { id: number };
 		const msgs = db
 			.prepare("SELECT uid, deleted_from_server FROM messages WHERE folder_id = ?")
 			.all(folder.id) as { uid: number; deleted_from_server: number }[];
@@ -991,14 +1066,14 @@ describe("archive mode (auto-delete from server after sync)", () => {
 	});
 
 	test("archive mode only deletes newly synced messages, not messages already in stork", async () => {
-		accountId = makeAccount(1);
+		identityId = makeAccount(1);
 
 		// First sync: gets uid=1 and uid=2 (simulate server having only 2 messages initially)
 		// We'll do this by syncing, then adding uid=3 to the server and syncing again.
 		// The key is: on the second sync, uid=3 is new — only uid=3 should be deleted.
 		// uid=1 and uid=2 were already deleted in the first sync.
 
-		const sync = makeSync(accountId);
+		const sync = makeSync(identityId);
 		await sync.connect();
 		await sync.syncAll();
 		await sync.disconnect();
@@ -1035,16 +1110,16 @@ describe("archive mode (auto-delete from server after sync)", () => {
 
 		// Verify DB state before second sync
 		const folder1 = db
-			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
-			.get(accountId) as { id: number } | undefined;
+			.prepare("SELECT id FROM folders WHERE identity_id = ? AND path = 'INBOX'")
+			.get(identityId) as { id: number } | undefined;
 		const syncState = db
-			.prepare("SELECT last_uid FROM sync_state WHERE account_id = ? AND folder_id = ?")
-			.get(accountId, folder1?.id) as { last_uid: number } | undefined;
+			.prepare("SELECT last_uid FROM sync_state WHERE identity_id = ? AND folder_id = ?")
+			.get(identityId, folder1?.id) as { last_uid: number } | undefined;
 		// After first sync, last_uid should be 3 (max uid seen: 1,2,3)
 		expect(syncState?.last_uid).toBe(3);
 
 		// Second sync: should pick up uid=10 and delete it
-		const sync2 = makeSync(accountId);
+		const sync2 = makeSync(identityId);
 		await sync2.connect();
 		const result2 = await sync2.syncAll();
 		await sync2.disconnect();
@@ -1072,8 +1147,8 @@ describe("archive mode (auto-delete from server after sync)", () => {
 
 		// All 4 messages (3 original + 1 new) are in local storage
 		const folder = db
-			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
-			.get(accountId) as { id: number };
+			.prepare("SELECT id FROM folders WHERE identity_id = ? AND path = 'INBOX'")
+			.get(identityId) as { id: number };
 		const total = db
 			.prepare("SELECT COUNT(*) as n FROM messages WHERE folder_id = ?")
 			.get(folder.id) as { n: number };
@@ -1081,33 +1156,33 @@ describe("archive mode (auto-delete from server after sync)", () => {
 	});
 
 	test("crash recovery: pending_archive messages from a previous interrupted sync are deleted on the next run", async () => {
-		accountId = makeAccount(1);
+		identityId = makeAccount(1);
 
 		// Run syncFolders first to create the folder record, then manually insert
 		// messages with pending_archive=1 (simulating Phase 1 completing before a crash).
-		const syncInit = makeSync(accountId);
+		const syncInit = makeSync(identityId);
 		await syncInit.connect();
 		await syncInit.syncFolders();
 		await syncInit.disconnect();
 
 		const folderRow = db
-			.prepare("SELECT id FROM folders WHERE account_id = ? AND path = 'INBOX'")
-			.get(accountId) as { id: number };
+			.prepare("SELECT id FROM folders WHERE identity_id = ? AND path = 'INBOX'")
+			.get(identityId) as { id: number };
 
 		// Insert messages with pending_archive=1 (simulating interrupted Phase 1)
 		for (const uid of [1, 2, 3]) {
 			db.prepare(`
-				INSERT OR IGNORE INTO messages (account_id, folder_id, uid, subject, flags, pending_archive)
+				INSERT OR IGNORE INTO messages (identity_id, folder_id, uid, subject, flags, pending_archive)
 				VALUES (?, ?, ?, ?, \'\', 1)
-			`).run(accountId, folderRow.id, uid, `Message ${uid}`);
+			`).run(identityId, folderRow.id, uid, `Message ${uid}`);
 		}
 
 		// Set last_uid so next sync thinks these were already fetched
 		db.prepare(`
-			INSERT INTO sync_state (account_id, folder_id, last_uid, last_synced_at)
+			INSERT INTO sync_state (identity_id, folder_id, last_uid, last_synced_at)
 			VALUES (?, ?, 3, datetime(\'now\'))
-			ON CONFLICT(account_id, folder_id) DO UPDATE SET last_uid = 3
-		`).run(accountId, folderRow.id);
+			ON CONFLICT(identity_id, folder_id) DO UPDATE SET last_uid = 3
+		`).run(identityId, folderRow.id);
 
 		// Verify messages are pending archive but not yet deleted from server
 		const pending = db
@@ -1123,7 +1198,7 @@ describe("archive mode (auto-delete from server after sync)", () => {
 		expect(beforeCount).toBe(3);
 
 		// Now run a fresh sync — Phase 3 should pick up the pending messages and delete them
-		const sync2 = makeSync(accountId);
+		const sync2 = makeSync(identityId);
 		await sync2.connect();
 		await sync2.syncAll();
 		await sync2.disconnect();

@@ -35,9 +35,9 @@ Once you confirm your recovery mnemonic is saved, Stork unlocks and you'll see t
 
 > **Every restart requires unlocking.** When the container restarts, Stork boots into a locked state. Open the web UI and enter your password to unlock. All API requests return `423 Locked` until you do.
 
-## 3. Add an Email Account
+## 3. Add an Email Identity
 
-The Welcome screen prompts you to connect your first email account. You'll need your IMAP server details:
+The Welcome screen prompts you to connect your first email identity. You'll need your IMAP server details:
 
 | Field | Example (Gmail) | Example (Fastmail) |
 |-------|-----------------|-------------------|
@@ -60,7 +60,7 @@ Enter your credentials and click connect. Stork validates the connection before 
 
 ## 4. Your First Sync
 
-After adding an account, Stork immediately starts syncing your email.
+After adding an identity, Stork immediately starts syncing your email.
 
 **What happens during the initial sync:**
 
@@ -74,7 +74,7 @@ After adding an account, Stork immediately starts syncing your email.
 
 **Good to know:**
 
-- Stork **does not modify your IMAP server by default**. The sync is read-only — no messages are deleted, moved, or modified on the server. It's safe to use against a production mailbox. To use Stork as a permanent local archive (auto-delete from IMAP after sync), enable **Connector mode** in Settings > Accounts.
+- Stork **does not modify your IMAP server by default**. The sync is read-only — no messages are deleted, moved, or modified on the server. It's safe to use against a production mailbox. To use Stork as a permanent local archive (auto-delete from IMAP after sync), enable **Connector mode** in Settings > Identities.
 - Subsequent syncs are **incremental** — only new messages are fetched, so they're fast.
 - If sync fails (network issue, bad credentials), Stork uses exponential backoff and retries automatically.
 
@@ -135,8 +135,8 @@ You're up and running. Here are some things to explore:
 
 - **Keyboard shortcuts** — press `?` to see all available shortcuts.
 - **Dark mode** — toggle from the settings or theme button.
-- **Multiple accounts** — add more accounts from Settings. Each syncs independently.
-- **Compose email** — click the compose button (requires SMTP configured on the account).
+- **Multiple identities** — add more identities from Settings. Each syncs independently.
+- **Compose email** — click the compose button (requires SMTP configured on the identity).
 - **Change your password** — Settings > Security. This is instant regardless of database size.
 
 For the full reference, see the [User Guide](user-guide.md). For configuration options (data directory, port, reverse proxy), see [Configuration](configuration.md).

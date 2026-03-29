@@ -50,33 +50,19 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // Types
-export interface Account {
+export interface Identity {
 	id: number;
 	name: string;
 	email: string;
-	ingest_connector_type: IngestConnectorType;
-	send_connector_type: SendConnectorType;
 	inbound_connector_id: number | null;
 	outbound_connector_id: number | null;
-	imap_host: string | null;
-	smtp_host: string | null;
 	default_view?: string;
-	sync_delete_from_server: number;
 	created_at: string;
 }
 
-export interface AccountDetail extends Account {
+export interface IdentityDetail extends Identity {
 	inbound_connector_name: string | null;
 	outbound_connector_name: string | null;
-	imap_port: number | null;
-	imap_tls: number | null;
-	imap_user: string | null;
-	cf_email_webhook_secret: string | null;
-	smtp_port: number | null;
-	smtp_tls: number | null;
-	smtp_user: string | null;
-	ses_region: string | null;
-	ses_access_key_id: string | null;
 	updated_at: string;
 }
 
@@ -191,8 +177,8 @@ export interface MessageSummary {
 	size: number;
 	has_attachments: number;
 	preview: string | null;
-	/** Present only in unified inbox responses — identifies which account the message belongs to */
-	account_id?: number;
+	/** Present only in unified inbox responses — identifies which identity the message belongs to */
+	identity_id?: number;
 }
 
 export interface Message extends MessageSummary {
@@ -218,7 +204,7 @@ export interface Label {
 	id: number;
 	name: string;
 	color: string | null;
-	source: "imap" | "user" | "system" | "account";
+	source: "imap" | "user" | "system" | "identity";
 	created_at: string;
 	message_count: number;
 	unread_count: number;
@@ -228,7 +214,7 @@ export interface LabelSummary {
 	id: number;
 	name: string;
 	color: string | null;
-	source: "imap" | "user" | "system" | "account";
+	source: "imap" | "user" | "system" | "identity";
 }
 
 export interface SearchResult {
@@ -249,7 +235,7 @@ export interface SyncProgressStatus {
 }
 
 export interface GlobalSyncStatus {
-	[accountId: string]: {
+	[identityId: string]: {
 		running: boolean;
 		lastSync: number | null;
 		lastError: string | null;
@@ -260,7 +246,7 @@ export interface GlobalSyncStatus {
 
 export interface DraftSummary {
 	id: number;
-	account_id: number;
+	identity_id: number;
 	to_addresses: string | null;
 	subject: string | null;
 	preview: string | null;
@@ -272,7 +258,7 @@ export interface DraftSummary {
 
 export interface Draft {
 	id: number;
-	account_id: number;
+	identity_id: number;
 	to_addresses: string | null;
 	cc_addresses: string | null;
 	bcc_addresses: string | null;
@@ -298,42 +284,19 @@ export type ContainerState = "setup" | "locked" | "unlocked";
 export type IngestConnectorType = "imap" | "cloudflare-email";
 export type SendConnectorType = "smtp" | "ses";
 
-export interface CreateAccountRequest {
+export interface CreateIdentityRequest {
 	name: string;
 	email: string;
-	/** Reference an existing inbound connector by ID. If omitted, inline IMAP/CF fields are used. */
 	inbound_connector_id?: number;
-	/** Reference an existing outbound connector by ID. If omitted, inline SMTP/SES fields are used. */
 	outbound_connector_id?: number;
-	// Inline connector fields (backward-compat — auto-creates connector rows on the server)
-	ingest_connector_type?: IngestConnectorType;
-	send_connector_type?: SendConnectorType;
-	imap_host?: string;
-	imap_port?: number;
-	imap_tls?: number;
-	imap_user?: string;
-	imap_pass?: string;
-	smtp_host?: string;
-	smtp_port?: number;
-	smtp_tls?: number;
-	smtp_user?: string;
-	smtp_pass?: string;
-	cf_email_webhook_secret?: string;
-	ses_region?: string;
-	ses_access_key_id?: string;
-	ses_secret_access_key?: string;
-	sync_delete_from_server?: number;
 	default_view?: string;
 }
 
-export interface UpdateAccountRequest {
+export interface UpdateIdentityRequest {
 	name?: string;
 	email?: string;
-	/** Re-assign to a different inbound connector */
 	inbound_connector_id?: number;
-	/** Re-assign to a different outbound connector */
 	outbound_connector_id?: number;
-	sync_delete_from_server?: number;
 	default_view?: string;
 }
 
@@ -390,26 +353,29 @@ export const api = {
 			}),
 		recoveryRotationStatus: () => fetchJSON<{ pending: boolean }>("/recovery-rotation-status"),
 	},
-	accounts: {
-		list: () => fetchJSON<Account[]>("/accounts"),
-		get: (id: number) => fetchJSON<AccountDetail>(`/accounts/${id}`),
-		create: (data: CreateAccountRequest) =>
-			fetchJSON<{ id: number }>("/accounts", {
+	identities: {
+		list: () => fetchJSON<Identity[]>("/identities"),
+		get: (id: number) => fetchJSON<IdentityDetail>(`/identities/${id}`),
+		create: (data: CreateIdentityRequest) =>
+			fetchJSON<{ id: number }>("/identities", {
 				method: "POST",
 				body: JSON.stringify(data),
 			}),
-		update: (id: number, data: UpdateAccountRequest) =>
-			fetchJSON<{ ok: boolean }>(`/accounts/${id}`, {
+		update: (id: number, data: UpdateIdentityRequest) =>
+			fetchJSON<{ ok: boolean }>(`/identities/${id}`, {
 				method: "PUT",
 				body: JSON.stringify(data),
 			}),
-		delete: (id: number) => fetchJSON<{ ok: boolean }>(`/accounts/${id}`, { method: "DELETE" }),
-		syncStatus: (id: number) => fetchJSON<SyncStatus[]>(`/accounts/${id}/sync-status`),
+		delete: (id: number) => fetchJSON<{ ok: boolean }>(`/identities/${id}`, { method: "DELETE" }),
+		syncStatus: (id: number) => fetchJSON<SyncStatus[]>(`/identities/${id}/sync-status`),
 		testConnection: (data: TestConnectionRequest) =>
-			fetchJSON<{ ok: boolean; error?: string; mailboxes?: number }>("/accounts/test-connection", {
-				method: "POST",
-				body: JSON.stringify(data),
-			}),
+			fetchJSON<{ ok: boolean; error?: string; mailboxes?: number }>(
+				"/identities/test-connection",
+				{
+					method: "POST",
+					body: JSON.stringify(data),
+				},
+			),
 	},
 	connectors: {
 		inbound: {
@@ -456,10 +422,10 @@ export const api = {
 		},
 	},
 	folders: {
-		list: (accountId: number) => fetchJSON<Folder[]>(`/accounts/${accountId}/folders`),
+		list: (identityId: number) => fetchJSON<Folder[]>(`/identities/${identityId}/folders`),
 	},
 	labels: {
-		// Labels are now global (no account scoping). accountId params are ignored server-side.
+		// Labels are global (no identity scoping).
 		list: () => fetchJSON<Label[]>("/labels"),
 		create: (data: { name: string; color?: string }) =>
 			fetchJSON<{ id: number }>("/labels", {
@@ -524,32 +490,32 @@ export const api = {
 		},
 	},
 	allMessages: {
-		list: (accountId: number, opts?: { limit?: number; offset?: number }) => {
+		list: (identityId: number, opts?: { limit?: number; offset?: number }) => {
 			const params = new URLSearchParams();
 			if (opts?.limit) params.set("limit", String(opts.limit));
 			if (opts?.offset) params.set("offset", String(opts.offset));
-			return fetchJSON<MessageSummary[]>(`/accounts/${accountId}/all-messages?${params}`);
+			return fetchJSON<MessageSummary[]>(`/identities/${identityId}/all-messages?${params}`);
 		},
-		count: (accountId: number) =>
-			fetchJSON<{ total: number; unread: number }>(`/accounts/${accountId}/all-messages/count`),
+		count: (identityId: number) =>
+			fetchJSON<{ total: number; unread: number }>(`/identities/${identityId}/all-messages/count`),
 	},
 	unreadMessages: {
-		list: (accountId: number, opts?: { limit?: number; offset?: number }) => {
+		list: (identityId: number, opts?: { limit?: number; offset?: number }) => {
 			const params = new URLSearchParams();
 			if (opts?.limit) params.set("limit", String(opts.limit));
 			if (opts?.offset) params.set("offset", String(opts.offset));
-			return fetchJSON<MessageSummary[]>(`/accounts/${accountId}/unread-messages?${params}`);
+			return fetchJSON<MessageSummary[]>(`/identities/${identityId}/unread-messages?${params}`);
 		},
-		count: (accountId: number) =>
-			fetchJSON<{ total: number }>(`/accounts/${accountId}/unread-messages/count`),
+		count: (identityId: number) =>
+			fetchJSON<{ total: number }>(`/identities/${identityId}/unread-messages/count`),
 	},
 	messages: {
-		list: (accountId: number, folderId: number, opts?: { limit?: number; offset?: number }) => {
+		list: (identityId: number, folderId: number, opts?: { limit?: number; offset?: number }) => {
 			const params = new URLSearchParams();
 			if (opts?.limit) params.set("limit", String(opts.limit));
 			if (opts?.offset) params.set("offset", String(opts.offset));
 			return fetchJSON<MessageSummary[]>(
-				`/accounts/${accountId}/folders/${folderId}/messages?${params}`,
+				`/identities/${identityId}/folders/${folderId}/messages?${params}`,
 			);
 		},
 		get: (messageId: number) => fetchJSON<Message>(`/messages/${messageId}`),
@@ -588,22 +554,22 @@ export const api = {
 				body: JSON.stringify({ ids, action, ...opts }),
 			}),
 	},
-	search: (query: string, opts?: { accountId?: number; limit?: number; offset?: number }) => {
+	search: (query: string, opts?: { identityId?: number; limit?: number; offset?: number }) => {
 		const params = new URLSearchParams({ q: query });
-		if (opts?.accountId) params.set("account_id", String(opts.accountId));
+		if (opts?.identityId) params.set("identity_id", String(opts.identityId));
 		if (opts?.limit) params.set("limit", String(opts.limit));
 		if (opts?.offset) params.set("offset", String(opts.offset));
 		return fetchJSON<SearchResult[]>(`/search?${params}`);
 	},
 	sync: {
 		status: () => fetchJSON<GlobalSyncStatus>("/sync/status"),
-		trigger: (accountId: number) =>
-			fetchJSON<{ ok?: boolean; error?: string }>(`/accounts/${accountId}/sync`, {
+		trigger: (identityId: number) =>
+			fetchJSON<{ ok?: boolean; error?: string }>(`/identities/${identityId}/sync`, {
 				method: "POST",
 			}),
 	},
 	send: (data: {
-		account_id: number;
+		identity_id: number;
 		to: string[];
 		cc?: string[];
 		bcc?: string[];
@@ -630,9 +596,9 @@ export const api = {
 			body: JSON.stringify(data),
 		}),
 	drafts: {
-		list: (accountId: number) => fetchJSON<DraftSummary[]>(`/drafts?account_id=${accountId}`),
+		list: (identityId: number) => fetchJSON<DraftSummary[]>(`/drafts?identity_id=${identityId}`),
 		get: (id: number) => fetchJSON<Draft>(`/drafts/${id}`),
-		create: (data: Partial<Draft> & { account_id: number }) =>
+		create: (data: Partial<Draft> & { identity_id: number }) =>
 			fetchJSON<{ id: number }>("/drafts", {
 				method: "POST",
 				body: JSON.stringify(data),
@@ -645,19 +611,18 @@ export const api = {
 		delete: (id: number) => fetchJSON<{ ok: boolean }>(`/drafts/${id}`, { method: "DELETE" }),
 	},
 	trustedSenders: {
-		list: (accountId: number) =>
-			fetchJSON<TrustedSender[]>(`/accounts/${accountId}/trusted-senders`),
-		check: (accountId: number, sender: string) =>
+		list: () => fetchJSON<TrustedSender[]>("/trusted-senders"),
+		check: (sender: string) =>
 			fetchJSON<{ trusted: boolean }>(
-				`/accounts/${accountId}/trusted-senders/check?sender=${encodeURIComponent(sender)}`,
+				`/trusted-senders/check?sender=${encodeURIComponent(sender)}`,
 			),
-		add: (accountId: number, senderAddress: string) =>
-			fetchJSON<{ id: number }>(`/accounts/${accountId}/trusted-senders`, {
+		add: (senderAddress: string) =>
+			fetchJSON<{ id: number }>("/trusted-senders", {
 				method: "POST",
 				body: JSON.stringify({ sender_address: senderAddress }),
 			}),
-		remove: (accountId: number, senderAddress: string) =>
-			fetchJSON<{ ok: boolean }>(`/accounts/${accountId}/trusted-senders`, {
+		remove: (senderAddress: string) =>
+			fetchJSON<{ ok: boolean }>("/trusted-senders", {
 				method: "DELETE",
 				body: JSON.stringify({ sender_address: senderAddress }),
 			}),

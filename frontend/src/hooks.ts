@@ -70,7 +70,7 @@ export function useDarkMode(): [boolean, () => void] {
 }
 
 /**
- * Polls sync status and fires a callback when any account transitions
+ * Polls sync status and fires a callback when any identity transitions
  * from running → idle (i.e., a sync cycle just completed).
  */
 export function useSyncPoller(onSyncComplete: () => void): {
@@ -557,13 +557,13 @@ export function useMessageActions(opts: {
 }
 
 /**
- * Manages message list fetching and pagination for the active label/account.
+ * Manages message list fetching and pagination for the active label/identity.
  * Encapsulates all messages state, loading, error, hasMore, and loadMore logic.
  * Extracted from App.tsx to reduce component complexity.
  */
 export function useMessagePagination(opts: {
 	effectiveLabelId: number | null;
-	effectiveAccountId: number | null;
+	effectiveIdentityId: number | null;
 	isAllMail: boolean;
 	isUnread?: boolean;
 	isUnifiedInbox?: boolean;
@@ -573,7 +573,7 @@ export function useMessagePagination(opts: {
 }) {
 	const {
 		effectiveLabelId,
-		effectiveAccountId,
+		effectiveIdentityId,
 		isAllMail,
 		isUnread,
 		isUnifiedInbox,
@@ -608,11 +608,11 @@ export function useMessagePagination(opts: {
 			if (isUnifiedUnread) {
 				return api.inbox.unreadMessages.list(paginationOpts);
 			}
-			if (isUnread && effectiveAccountId) {
-				return api.unreadMessages.list(effectiveAccountId, paginationOpts);
+			if (isUnread && effectiveIdentityId) {
+				return api.unreadMessages.list(effectiveIdentityId, paginationOpts);
 			}
-			if (isAllMail && effectiveAccountId) {
-				return api.allMessages.list(effectiveAccountId, paginationOpts);
+			if (isAllMail && effectiveIdentityId) {
+				return api.allMessages.list(effectiveIdentityId, paginationOpts);
 			}
 			if (effectiveLabelId && effectiveLabelId > 0) {
 				return api.labels.messages(effectiveLabelId, paginationOpts);
@@ -627,7 +627,7 @@ export function useMessagePagination(opts: {
 			isUnifiedUnread,
 			isUnread,
 			isAllMail,
-			effectiveAccountId,
+			effectiveIdentityId,
 			effectiveLabelId,
 		],
 	);
@@ -652,7 +652,7 @@ export function useMessagePagination(opts: {
 				return msgs;
 			});
 		}
-		if ((!effectiveLabelId && !needsAccount) || (needsAccount && !effectiveAccountId)) {
+		if ((!effectiveLabelId && !needsAccount) || (needsAccount && !effectiveIdentityId)) {
 			setAllMessages([]);
 			setHasMore(false);
 			return Promise.resolve([]);
@@ -669,7 +669,7 @@ export function useMessagePagination(opts: {
 		isAnyUnified,
 		isMultiFilter,
 		filterKey,
-		effectiveAccountId,
+		effectiveIdentityId,
 		getFetchFn,
 	]);
 
@@ -678,7 +678,7 @@ export function useMessagePagination(opts: {
 		if (!isMultiFilter) {
 			const needsAccount = isAllMail || isUnread;
 			if (!isAnyUnified && !effectiveLabelId && !needsAccount) return;
-			if (!isAnyUnified && needsAccount && !effectiveAccountId) return;
+			if (!isAnyUnified && needsAccount && !effectiveIdentityId) return;
 		}
 		setLoadingMore(true);
 		getFetchFn({ limit: getPageSize(), offset: allMessages.length })
@@ -696,7 +696,7 @@ export function useMessagePagination(opts: {
 		isUnread,
 		isAnyUnified,
 		isMultiFilter,
-		effectiveAccountId,
+		effectiveIdentityId,
 		allMessages.length,
 		loadingMore,
 		getFetchFn,
@@ -718,24 +718,24 @@ export function useMessagePagination(opts: {
  * Navigation state tracked in browser history. Enables back/forward buttons.
  */
 interface NavState {
-	accountId: number | null;
+	identityId: number | null;
 	labelId: number | null;
 	messageId: number | null;
 	searchActive?: boolean;
 }
 
 /**
- * Syncs navigation state (account, label, message) with the browser history API.
+ * Syncs navigation state (identity, label, message) with the browser history API.
  * Pushes state on navigation changes, restores state on back/forward (popstate).
  */
 export function useHistoryNavigation(opts: {
-	accountId: number | null;
+	identityId: number | null;
 	labelId: number | null;
 	messageId: number | null;
 	searchActive?: boolean;
 	onNavigate: (state: NavState) => void;
 }) {
-	const { accountId, labelId, messageId, searchActive, onNavigate } = opts;
+	const { identityId, labelId, messageId, searchActive, onNavigate } = opts;
 	const isPopstateRef = useRef(false);
 	const initializedRef = useRef(false);
 	const onNavigateRef = useRef(onNavigate);
@@ -744,11 +744,11 @@ export function useHistoryNavigation(opts: {
 	// Replace the initial history entry with the current state
 	useEffect(() => {
 		if (initializedRef.current) return;
-		if (accountId === null) return; // Wait until accounts are loaded
+		if (identityId === null) return; // Wait until identities are loaded
 		initializedRef.current = true;
-		const state: NavState = { accountId, labelId, messageId, searchActive };
+		const state: NavState = { identityId, labelId, messageId, searchActive };
 		history.replaceState(state, "");
-	}, [accountId, labelId, messageId, searchActive]);
+	}, [identityId, labelId, messageId, searchActive]);
 
 	// Push state when navigation changes (but not when handling popstate)
 	useEffect(() => {
@@ -757,12 +757,12 @@ export function useHistoryNavigation(opts: {
 			isPopstateRef.current = false;
 			return;
 		}
-		const state: NavState = { accountId, labelId, messageId, searchActive };
+		const state: NavState = { identityId, labelId, messageId, searchActive };
 		const current = history.state as NavState | null;
 		// Don't push if the state hasn't actually changed
 		if (
 			current &&
-			current.accountId === state.accountId &&
+			current.identityId === state.identityId &&
 			current.labelId === state.labelId &&
 			current.messageId === state.messageId &&
 			(current.searchActive ?? false) === (state.searchActive ?? false)
@@ -770,7 +770,7 @@ export function useHistoryNavigation(opts: {
 			return;
 		}
 		history.pushState(state, "");
-	}, [accountId, labelId, messageId, searchActive]);
+	}, [identityId, labelId, messageId, searchActive]);
 
 	// Listen for popstate (back/forward) and restore navigation state
 	useEffect(() => {

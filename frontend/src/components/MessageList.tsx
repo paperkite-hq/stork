@@ -1,5 +1,5 @@
 import { type RefObject, memo, useEffect, useRef } from "react";
-import type { Account, Folder, LabelSummary, MessageSummary } from "../api";
+import type { Folder, Identity, LabelSummary, MessageSummary } from "../api";
 import { isFlagged, isUnread } from "../utils";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { AlertCircleIcon, InboxEmptyIcon, PaperclipIcon, RefreshIcon, StarIcon } from "./Icons";
@@ -68,8 +68,8 @@ interface MessageListItemProps {
 	onToggleStar?: (id: number) => void;
 	onToggleSelect?: (id: number) => void;
 	selectedRef?: RefObject<HTMLButtonElement | null>;
-	/** Account email shown as a badge — passed when viewing unified inbox */
-	accountLabel?: string;
+	/** Identity email shown as a badge — passed when viewing unified inbox */
+	identityLabel?: string;
 }
 
 /** Memoized message row — skips re-render when props haven't changed,
@@ -85,7 +85,7 @@ const MessageListItem = memo(function MessageListItem({
 	onToggleStar,
 	onToggleSelect,
 	selectedRef,
-	accountLabel,
+	identityLabel,
 }: MessageListItemProps) {
 	const unread = isUnread(msg.flags);
 	const starred = isFlagged(msg.flags);
@@ -223,17 +223,17 @@ const MessageListItem = memo(function MessageListItem({
 								<PaperclipIcon className="w-3 h-3 text-gray-400 flex-shrink-0" />
 							)}
 						</div>
-						{accountLabel && (
+						{identityLabel && (
 							<div className="text-xs text-stork-500 dark:text-stork-400 truncate mt-0.5">
-								{accountLabel}
+								{identityLabel}
 							</div>
 						)}
-						{!accountLabel && msg.preview && (
+						{!identityLabel && msg.preview && (
 							<div className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">
 								{msg.preview.replace(/\s+/g, " ").trim()}
 							</div>
 						)}
-						{accountLabel && msg.preview && (
+						{identityLabel && msg.preview && (
 							<div className="text-xs text-gray-400 dark:text-gray-500 truncate">
 								{msg.preview.replace(/\s+/g, " ").trim()}
 							</div>
@@ -259,8 +259,8 @@ interface MessageListProps {
 	loadingMore?: boolean;
 	totalCount?: number;
 	onToggleStar?: (id: number) => void;
-	/** Pass accounts to show per-account labels in unified inbox view */
-	accounts?: Account[];
+	/** Pass identities to show per-identity labels in unified inbox view */
+	identities?: Identity[];
 	// Bulk selection
 	selectedIds?: Set<number>;
 	onToggleSelect?: (id: number) => void;
@@ -290,7 +290,7 @@ export function MessageList({
 	onLoadMore,
 	loadingMore,
 	onToggleStar,
-	accounts,
+	identities,
 	selectedIds,
 	onToggleSelect,
 	onSelectAll,
@@ -442,8 +442,10 @@ export function MessageList({
 					</div>
 				)}
 				{messages.map((msg, idx) => {
-					const account =
-						accounts && msg.account_id ? accounts.find((a) => a.id === msg.account_id) : undefined;
+					const identity =
+						identities && msg.identity_id
+							? identities.find((a) => a.id === msg.identity_id)
+							: undefined;
 					return (
 						<MessageListItem
 							key={msg.id}
@@ -457,7 +459,7 @@ export function MessageList({
 							onToggleStar={onToggleStar}
 							onToggleSelect={onToggleSelect}
 							selectedRef={msg.id === selectedId ? selectedRef : undefined}
-							accountLabel={account ? account.name || account.email : undefined}
+							identityLabel={identity ? identity.name || identity.email : undefined}
 						/>
 					);
 				})}

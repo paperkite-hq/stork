@@ -22,7 +22,7 @@ interface SeedMessage {
 	has_attachments?: number;
 }
 
-const DEMO_ACCOUNT = {
+const DEMO_IDENTITY = {
 	name: "Alex Demo",
 	email: "alex@example.com",
 	imap_host: "demo.example.com",
@@ -447,9 +447,9 @@ If you don't recognize this device, you can remove it from your admin console.
 	},
 ];
 
-// ─── Second demo account (work email) ────────────────────────────────────────
+// ─── Second demo identity (work email) ────────────────────────────────────────
 
-const DEMO_ACCOUNT_2 = {
+const DEMO_IDENTITY_2 = {
 	name: "Alex (Work)",
 	email: "a.demo@acme-corp.com",
 	imap_host: "mail.acme-corp.com",
@@ -584,12 +584,12 @@ export function seedDemoData(db: Database.Database): void {
 		 VALUES (?, 'imap', ?, ?, ?, ?, ?, 1)`,
 		)
 		.run(
-			`${DEMO_ACCOUNT.name} (Inbound)`,
-			DEMO_ACCOUNT.imap_host,
-			DEMO_ACCOUNT.imap_port,
-			DEMO_ACCOUNT.imap_tls,
-			DEMO_ACCOUNT.imap_user,
-			DEMO_ACCOUNT.imap_pass,
+			`${DEMO_IDENTITY.name} (Inbound)`,
+			DEMO_IDENTITY.imap_host,
+			DEMO_IDENTITY.imap_port,
+			DEMO_IDENTITY.imap_tls,
+			DEMO_IDENTITY.imap_user,
+			DEMO_IDENTITY.imap_pass,
 		);
 	const inboundId1 = inbound1Result.lastInsertRowid as number;
 
@@ -599,57 +599,47 @@ export function seedDemoData(db: Database.Database): void {
 			`INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
 		 VALUES (?, 'smtp', ?, 587, 1, ?, 'demo-not-real')`,
 		)
-		.run(`${DEMO_ACCOUNT.name} (Outbound)`, DEMO_ACCOUNT.imap_host, DEMO_ACCOUNT.email);
+		.run(`${DEMO_IDENTITY.name} (Outbound)`, DEMO_IDENTITY.imap_host, DEMO_IDENTITY.email);
 	const outboundId1 = outbound1Result.lastInsertRowid as number;
 
-	// Insert demo account linked to connectors
-	const accountResult = db
+	// Insert demo identity linked to connectors
+	const identityResult = db
 		.prepare(
-			`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server, inbound_connector_id, outbound_connector_id)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+			`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+		 VALUES (?, ?, ?, ?)`,
 		)
-		.run(
-			DEMO_ACCOUNT.name,
-			DEMO_ACCOUNT.email,
-			DEMO_ACCOUNT.imap_host,
-			DEMO_ACCOUNT.imap_port,
-			DEMO_ACCOUNT.imap_tls,
-			DEMO_ACCOUNT.imap_user,
-			DEMO_ACCOUNT.imap_pass,
-			inboundId1,
-			outboundId1,
-		);
-	const accountId = accountResult.lastInsertRowid as number;
+		.run(DEMO_IDENTITY.name, DEMO_IDENTITY.email, inboundId1, outboundId1);
+	const identityId = identityResult.lastInsertRowid as number;
 
 	// Insert INBOX folder
 	const folderResult = db
 		.prepare(
-			`INSERT INTO folders (account_id, path, name, special_use, uid_validity, uid_next, message_count, unread_count)
+			`INSERT INTO folders (identity_id, path, name, special_use, uid_validity, uid_next, message_count, unread_count)
 		 VALUES (?, 'INBOX', 'Inbox', '\\\\Inbox', 1, ?, ?, ?)`,
 		)
-		.run(accountId, DEMO_MESSAGES.length + 1, DEMO_MESSAGES.length, 5);
+		.run(identityId, DEMO_MESSAGES.length + 1, DEMO_MESSAGES.length, 5);
 	const folderId = folderResult.lastInsertRowid as number;
 
-	// Insert labels (including account label for this account)
+	// Insert labels (including identity label for this identity)
 	const labelMap = new Map<string, number>();
 	const insertLabel = db.prepare(
 		"INSERT OR IGNORE INTO labels (name, color, source) VALUES (?, ?, ?)",
 	);
 	const lookupLabel = db.prepare("SELECT id FROM labels WHERE name = ?");
-	// Create account label
-	insertLabel.run(DEMO_ACCOUNT.name, "#3b82f6", "account");
+	// Create identity label
+	insertLabel.run(DEMO_IDENTITY.name, "#3b82f6", "identity");
 	for (const label of DEMO_LABELS) {
 		insertLabel.run(label.name, label.color, label.source);
 		const row = lookupLabel.get(label.name) as { id: number };
 		labelMap.set(label.name, row.id);
 	}
-	// Look up account label ID
-	const accountLabelRow = lookupLabel.get(DEMO_ACCOUNT.name) as { id: number };
-	const accountLabelId = accountLabelRow.id;
+	// Look up identity label ID
+	const identityLabelRow = lookupLabel.get(DEMO_IDENTITY.name) as { id: number };
+	const identityLabelId = identityLabelRow.id;
 
 	// Insert messages
 	const insertMessage = db.prepare(`
-		INSERT INTO messages (account_id, folder_id, uid, message_id, in_reply_to, "references",
+		INSERT INTO messages (identity_id, folder_id, uid, message_id, in_reply_to, "references",
 			subject, from_address, from_name, to_addresses, cc_addresses, date,
 			text_body, html_body, flags, has_attachments, size)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -664,7 +654,7 @@ export function seedDemoData(db: Database.Database): void {
 			const msg = DEMO_MESSAGES[i];
 			const size = msg.text_body.length + (msg.html_body?.length ?? 0);
 			const result = insertMessage.run(
-				accountId,
+				identityId,
 				folderId,
 				i + 1, // UID
 				msg.message_id,
@@ -683,9 +673,9 @@ export function seedDemoData(db: Database.Database): void {
 				size,
 			);
 
-			// Assign labels (including account label)
+			// Assign labels (including identity label)
 			const messageId = result.lastInsertRowid as number;
-			insertMessageLabel.run(messageId, accountLabelId);
+			insertMessageLabel.run(messageId, identityLabelId);
 			const labels = MESSAGE_LABELS[i] ?? [];
 			for (const labelName of labels) {
 				const labelId = labelMap.get(labelName);
@@ -698,8 +688,8 @@ export function seedDemoData(db: Database.Database): void {
 
 	insertAll();
 
-	// Refresh cached label and account counts so the UI shows correct badges immediately.
-	// (These columns are normally maintained by refreshLabelCounts/refreshAccountCounts at
+	// Refresh cached label counts so the UI shows correct badges immediately.
+	// (These columns are normally maintained by refreshLabelCounts/refreshIdentityCounts at
 	// the end of each sync cycle, but the demo DB has no sync — seed them directly.)
 	db.prepare(`
 		UPDATE labels
@@ -713,19 +703,7 @@ export function seedDemoData(db: Database.Database): void {
 			)
 	`).run();
 
-	db.prepare(`
-		UPDATE accounts
-		SET
-			cached_message_count = (SELECT COUNT(*) FROM messages WHERE account_id = ?),
-			cached_unread_count = (
-				SELECT COUNT(*) FROM messages
-				WHERE account_id = ?
-				AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')
-			)
-		WHERE id = ?
-	`).run(accountId, accountId, accountId);
-
-	// ── Second account ──────────────────────────────────────────────────────
+	// ── Second identity ──────────────────────────────────────────────────────
 
 	const inbound2Result = db
 		.prepare(
@@ -733,12 +711,12 @@ export function seedDemoData(db: Database.Database): void {
 		 VALUES (?, 'imap', ?, ?, ?, ?, ?, 1)`,
 		)
 		.run(
-			`${DEMO_ACCOUNT_2.name} (Inbound)`,
-			DEMO_ACCOUNT_2.imap_host,
-			DEMO_ACCOUNT_2.imap_port,
-			DEMO_ACCOUNT_2.imap_tls,
-			DEMO_ACCOUNT_2.imap_user,
-			DEMO_ACCOUNT_2.imap_pass,
+			`${DEMO_IDENTITY_2.name} (Inbound)`,
+			DEMO_IDENTITY_2.imap_host,
+			DEMO_IDENTITY_2.imap_port,
+			DEMO_IDENTITY_2.imap_tls,
+			DEMO_IDENTITY_2.imap_user,
+			DEMO_IDENTITY_2.imap_pass,
 		);
 	const inboundId2 = inbound2Result.lastInsertRowid as number;
 
@@ -747,39 +725,29 @@ export function seedDemoData(db: Database.Database): void {
 			`INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
 		 VALUES (?, 'smtp', ?, 587, 1, ?, 'demo-not-real')`,
 		)
-		.run(`${DEMO_ACCOUNT_2.name} (Outbound)`, DEMO_ACCOUNT_2.imap_host, DEMO_ACCOUNT_2.email);
+		.run(`${DEMO_IDENTITY_2.name} (Outbound)`, DEMO_IDENTITY_2.imap_host, DEMO_IDENTITY_2.email);
 	const outboundId2 = outbound2Result.lastInsertRowid as number;
 
-	const account2Result = db
+	const identity2Result = db
 		.prepare(
-			`INSERT INTO accounts (name, email, imap_host, imap_port, imap_tls, imap_user, imap_pass, sync_delete_from_server, inbound_connector_id, outbound_connector_id)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+			`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
+		 VALUES (?, ?, ?, ?)`,
 		)
-		.run(
-			DEMO_ACCOUNT_2.name,
-			DEMO_ACCOUNT_2.email,
-			DEMO_ACCOUNT_2.imap_host,
-			DEMO_ACCOUNT_2.imap_port,
-			DEMO_ACCOUNT_2.imap_tls,
-			DEMO_ACCOUNT_2.imap_user,
-			DEMO_ACCOUNT_2.imap_pass,
-			inboundId2,
-			outboundId2,
-		);
-	const accountId2 = account2Result.lastInsertRowid as number;
+		.run(DEMO_IDENTITY_2.name, DEMO_IDENTITY_2.email, inboundId2, outboundId2);
+	const identityId2 = identity2Result.lastInsertRowid as number;
 
 	const folder2Result = db
 		.prepare(
-			`INSERT INTO folders (account_id, path, name, special_use, uid_validity, uid_next, message_count, unread_count)
+			`INSERT INTO folders (identity_id, path, name, special_use, uid_validity, uid_next, message_count, unread_count)
 		 VALUES (?, 'INBOX', 'Inbox', '\\\\Inbox', 1, ?, ?, ?)`,
 		)
-		.run(accountId2, DEMO_MESSAGES_2.length + 1, DEMO_MESSAGES_2.length, 2);
+		.run(identityId2, DEMO_MESSAGES_2.length + 1, DEMO_MESSAGES_2.length, 2);
 	const folderId2 = folder2Result.lastInsertRowid as number;
 
-	// Create account label for second account
-	insertLabel.run(DEMO_ACCOUNT_2.name, "#10b981", "account");
-	const accountLabel2Row = lookupLabel.get(DEMO_ACCOUNT_2.name) as { id: number };
-	const accountLabel2Id = accountLabel2Row.id;
+	// Create identity label for second identity
+	insertLabel.run(DEMO_IDENTITY_2.name, "#10b981", "identity");
+	const identityLabel2Row = lookupLabel.get(DEMO_IDENTITY_2.name) as { id: number };
+	const identityLabel2Id = identityLabel2Row.id;
 
 	const labelMap2 = new Map<string, number>();
 	for (const label of DEMO_LABELS_2) {
@@ -793,7 +761,7 @@ export function seedDemoData(db: Database.Database): void {
 			const msg = DEMO_MESSAGES_2[i];
 			const size = msg.text_body.length + (msg.html_body?.length ?? 0);
 			const result = insertMessage.run(
-				accountId2,
+				identityId2,
 				folderId2,
 				i + 1,
 				msg.message_id,
@@ -812,7 +780,7 @@ export function seedDemoData(db: Database.Database): void {
 				size,
 			);
 			const messageId2 = result.lastInsertRowid as number;
-			insertMessageLabel.run(messageId2, accountLabel2Id);
+			insertMessageLabel.run(messageId2, identityLabel2Id);
 			const labels2 = MESSAGE_LABELS_2[i] ?? [];
 			for (const labelName of labels2) {
 				const labelId = labelMap2.get(labelName);
@@ -836,16 +804,4 @@ export function seedDemoData(db: Database.Database): void {
 				AND (m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%')
 			)
 	`).run();
-
-	db.prepare(`
-		UPDATE accounts
-		SET
-			cached_message_count = (SELECT COUNT(*) FROM messages WHERE account_id = ?),
-			cached_unread_count = (
-				SELECT COUNT(*) FROM messages
-				WHERE account_id = ?
-				AND (flags IS NULL OR flags NOT LIKE '%\\Seen%')
-			)
-		WHERE id = ?
-	`).run(accountId2, accountId2, accountId2);
 }

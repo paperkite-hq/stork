@@ -3,10 +3,10 @@ import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../api/server.js";
 import {
-	createTestAccount,
 	createTestContext,
 	createTestDb,
 	createTestFolder,
+	createTestIdentity,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
 
@@ -37,13 +37,13 @@ describe("Search API", () => {
 
 	describe("GET /api/search", () => {
 		test("returns matching results", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
-			createTestMessage(db, accountId, folderId, 1, {
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
+			createTestMessage(db, identityId, folderId, 1, {
 				subject: "Quarterly report",
 				textBody: "Here is the Q4 quarterly report with budget data.",
 			});
-			createTestMessage(db, accountId, folderId, 2, {
+			createTestMessage(db, identityId, folderId, 2, {
 				subject: "Lunch plans",
 				textBody: "Let's get pizza tomorrow.",
 			});
@@ -65,10 +65,10 @@ describe("Search API", () => {
 		});
 
 		test("respects limit parameter", async () => {
-			const accountId = createTestAccount(db);
-			const folderId = createTestFolder(db, accountId, "INBOX");
+			const identityId = createTestIdentity(db);
+			const folderId = createTestFolder(db, identityId, "INBOX");
 			for (let i = 1; i <= 5; i++) {
-				createTestMessage(db, accountId, folderId, i, {
+				createTestMessage(db, identityId, folderId, i, {
 					subject: `Test message ${i}`,
 					textBody: "common keyword in all messages",
 				});
@@ -78,17 +78,17 @@ describe("Search API", () => {
 			expect(body).toHaveLength(2);
 		});
 
-		test("supports account_id filter", async () => {
-			const account1 = createTestAccount(db, { name: "A", email: "a@test.com" });
-			const account2 = createTestAccount(db, { name: "B", email: "b@test.com" });
-			const folder1 = createTestFolder(db, account1, "INBOX");
-			const folder2 = createTestFolder(db, account2, "INBOX");
+		test("supports identity_id filter", async () => {
+			const identity1 = createTestIdentity(db, { name: "A", email: "a@test.com" });
+			const identity2 = createTestIdentity(db, { name: "B", email: "b@test.com" });
+			const folder1 = createTestFolder(db, identity1, "INBOX");
+			const folder2 = createTestFolder(db, identity2, "INBOX");
 
-			createTestMessage(db, account1, folder1, 1, {
+			createTestMessage(db, identity1, folder1, 1, {
 				subject: "UniqueSearchWord in A",
 				textBody: "Test body",
 			});
-			createTestMessage(db, account2, folder2, 1, {
+			createTestMessage(db, identity2, folder2, 1, {
 				subject: "UniqueSearchWord in B",
 				textBody: "Test body",
 			});
@@ -97,7 +97,7 @@ describe("Search API", () => {
 			expect(all).toHaveLength(2);
 
 			const { body: filtered } = await jsonRequest(
-				`/api/search?q=UniqueSearchWord&account_id=${account1}`,
+				`/api/search?q=UniqueSearchWord&identity_id=${identity1}`,
 			);
 			expect(filtered).toHaveLength(1);
 			expect(filtered[0].subject).toContain("in A");

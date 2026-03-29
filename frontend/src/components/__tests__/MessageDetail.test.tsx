@@ -758,7 +758,7 @@ describe("MessageDetail — Delete error handling", () => {
 
 		const msg = makeMessage({ id: 42 });
 		render(
-			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} accountId={1} />,
+			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} identityId={1} />,
 		);
 
 		// Click delete button
@@ -793,7 +793,7 @@ describe("MessageDetail — Trust sender", () => {
 			html_body: '<img src="https://newsletter.example.com/banner.png" width="600" height="200">',
 		});
 		render(
-			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} accountId={1} />,
+			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} identityId={1} />,
 		);
 
 		// The remote images banner should be shown
@@ -806,7 +806,7 @@ describe("MessageDetail — Trust sender", () => {
 		await userEvent.click(trustBtn);
 
 		await waitFor(() => {
-			expect(api.trustedSenders.add).toHaveBeenCalledWith(1, "alice@test.com");
+			expect(api.trustedSenders.add).toHaveBeenCalledWith("alice@test.com");
 		});
 	});
 
@@ -823,13 +823,13 @@ describe("MessageDetail — Trust sender", () => {
 			html_body: '<img src="https://newsletter.example.com/banner.png" width="600" height="200">',
 		});
 		render(
-			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} accountId={1} />,
+			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} identityId={1} />,
 		);
 
 		// Banner should NOT show since sender is trusted
 		await waitFor(() => {
 			// Give the trusted senders list time to load
-			expect(api.trustedSenders.list).toHaveBeenCalledWith(1);
+			expect(api.trustedSenders.list).toHaveBeenCalledWith();
 		});
 		expect(screen.queryByText(/Remote images are hidden/i)).not.toBeInTheDocument();
 	});
@@ -896,7 +896,7 @@ describe("MessageDetail — Trust sender", () => {
 			html_body: '<img src="https://cdn.example.com/image.jpg" width="800" height="400">',
 		});
 		render(
-			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} accountId={1} />,
+			<MessageDetail {...defaultProps} message={msg} thread={[msg]} folders={[]} identityId={1} />,
 		);
 
 		await waitFor(() => {

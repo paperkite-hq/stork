@@ -2,13 +2,14 @@
 
 ## Unreleased
 
-- **Cloudflare Email webhook endpoint** — `POST /api/webhook/cloudflare-email/:connectorId` receives push-based mail from a Cloudflare Email Worker, validates the bearer secret, parses the RFC 5322 payload, and stores it in the INBOX for all accounts linked to the connector. Deduplication by Message-ID prevents double-delivery from Cloudflare's at-least-once semantics.
-- **Unified-first navigation** — the sidebar account selector dropdown is removed. In multi-account mode, the primary "Inbox", "Unread", and "All Mail" navigation items are now cross-account by default (unified views). A new "Accounts" section at the bottom of the nav lists individual accounts for drilling into a single account's inbox. Single-account mode is unchanged.
-- **Unified label store** — labels are now global across all accounts rather than per-account, so you can apply labels like "Needs reply" consistently across a multi-account setup. Schema migration merges any duplicate label names automatically on upgrade.
-- **Connector-first account model** — accounts are now pure identities (name + email) that reference independently-configured inbound and outbound connectors. IMAP settings and SMTP settings live in the Connectors tab, not in the account form. This lets you mix connectors freely: e.g., receive via Cloudflare Email, send via AWS SES.
-- **Connector mode rename** — "Vault mode" is now "Connector mode" throughout the UI and docs. The name better reflects that this is a property of the inbound connector, not the account.
-- **All Unread + All Mail** — the "All Accounts" sidebar section now includes All Unread and All Mail views in addition to All Inboxes, all spanning every connected account.
-- **Onboarding philosophy callout** — restored the "Two minutes to understand how Stork thinks about email" intro on the add-account screen, updated with Connector mode language.
+- **Accounts → Identities rename** — the "accounts" concept is now "identities" throughout. API endpoints moved from `/api/accounts` to `/api/identities`, `account_id` fields renamed to `identity_id`. Identities are pure name + email pairs that reference connectors. Trusted senders are now global (not per-identity). Label source type `"account"` renamed to `"identity"`.
+- **Cloudflare Email webhook endpoint** — `POST /api/webhook/cloudflare-email/:connectorId` receives push-based mail from a Cloudflare Email Worker, validates the bearer secret, parses the RFC 5322 payload, and stores it in the INBOX for all identities linked to the connector. Deduplication by Message-ID prevents double-delivery from Cloudflare's at-least-once semantics.
+- **Unified-first navigation** — the sidebar identity selector dropdown is removed. In multi-identity mode, the primary "Inbox", "Unread", and "All Mail" navigation items are now cross-identity by default (unified views). Identity labels in the sidebar let you drill into a single identity's messages. Single-identity mode is unchanged.
+- **Unified label store** — labels are now global across all identities rather than per-identity, so you can apply labels like "Needs reply" consistently across a multi-identity setup. Schema migration merges any duplicate label names automatically on upgrade.
+- **Connector-first identity model** — identities are pure name + email pairs that reference independently-configured inbound and outbound connectors. IMAP settings and SMTP settings live in the Connectors tab, not in the identity form. This lets you mix connectors freely: e.g., receive via Cloudflare Email, send via AWS SES.
+- **Connector mode rename** — "Vault mode" is now "Connector mode" throughout the UI and docs. The name better reflects that this is a property of the inbound connector, not the identity.
+- **All Unread + All Mail** — the sidebar now includes All Unread and All Mail views in addition to All Inboxes, all spanning every connected identity.
+- **Onboarding philosophy callout** — restored the "Two minutes to understand how Stork thinks about email" intro on the add-email screen, updated with Connector mode language.
 
 ## v0.5.0 (2026-03-26)
 

@@ -4,12 +4,12 @@ import { WELL_KNOWN_PROVIDERS } from "../utils";
 import { MoonIcon, SunIcon } from "./Icons";
 
 interface WelcomeProps {
-	onAccountCreated: () => void;
+	onIdentityCreated: () => void;
 	dark: boolean;
 	onToggleDark: () => void;
 }
 
-interface AccountFormData {
+interface SetupFormData {
 	name: string;
 	email: string;
 	imap_host: string;
@@ -24,9 +24,9 @@ interface AccountFormData {
 	smtp_pass: string;
 }
 
-export function Welcome({ onAccountCreated, dark, onToggleDark }: WelcomeProps) {
+export function Welcome({ onIdentityCreated, dark, onToggleDark }: WelcomeProps) {
 	const [step, setStep] = useState<"intro" | "form">("intro");
-	const [form, setForm] = useState<AccountFormData>({
+	const [form, setForm] = useState<SetupFormData>({
 		name: "",
 		email: "",
 		imap_host: "",
@@ -44,7 +44,7 @@ export function Welcome({ onAccountCreated, dark, onToggleDark }: WelcomeProps) 
 	const [error, setError] = useState<string | null>(null);
 	const [showAdvanced, setShowAdvanced] = useState(false);
 
-	const setField = <K extends keyof AccountFormData>(key: K, value: AccountFormData[K]) =>
+	const setField = <K extends keyof SetupFormData>(key: K, value: SetupFormData[K]) =>
 		setForm((f) => ({ ...f, [key]: value }));
 
 	// Auto-fill server settings when email domain is recognized.
@@ -92,11 +92,11 @@ export function Welcome({ onAccountCreated, dark, onToggleDark }: WelcomeProps) 
 		setError(null);
 
 		try {
-			await api.accounts.create({
-				...form,
-				sync_delete_from_server: 0,
+			await api.identities.create({
+				name: form.name,
+				email: form.email,
 			});
-			onAccountCreated();
+			onIdentityCreated();
 		} catch (err) {
 			setError((err as Error).message);
 		} finally {
@@ -142,7 +142,7 @@ export function Welcome({ onAccountCreated, dark, onToggleDark }: WelcomeProps) 
 						onClick={() => setStep("form")}
 						className="px-6 py-2.5 bg-stork-600 hover:bg-stork-700 text-white rounded-lg font-medium transition-colors shadow-sm"
 					>
-						Add Your Email Account
+						Add Your Email
 					</button>
 					<p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
 						Stork connects via IMAP and does not delete mail from your server by default.
@@ -306,7 +306,7 @@ export function Welcome({ onAccountCreated, dark, onToggleDark }: WelcomeProps) 
 								disabled={loading}
 								className="px-5 py-2 bg-stork-600 hover:bg-stork-700 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-colors"
 							>
-								{loading ? "Connecting..." : "Connect Account"}
+								{loading ? "Connecting..." : "Connect Email"}
 							</button>
 						</div>
 

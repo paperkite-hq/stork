@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 18;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -271,7 +271,7 @@ UPDATE labels SET unread_count = (
 	// The GET /accounts/:id/all-messages/count and GET /accounts/:id/unread-messages/count
 	// endpoints previously did a full messages table scan with a LIKE flags filter on every
 	// request. On a 15 GB database this blocked the event loop for 10-30 seconds.
-	// These columns are maintained by refreshAccountCounts() at the end of each sync cycle.
+	// These columns are maintained by refreshIdentityCounts() at the end of each sync cycle.
 	// NULL means "not yet computed" — the endpoint falls back to a live query once, then
 	// stores the result. Subsequent requests return the cached value instantly.
 	`
@@ -518,5 +518,229 @@ ALTER TABLE inbound_connectors ADD COLUMN cf_r2_access_key_id TEXT;
 ALTER TABLE inbound_connectors ADD COLUMN cf_r2_secret_access_key TEXT;
 ALTER TABLE inbound_connectors ADD COLUMN cf_r2_prefix TEXT NOT NULL DEFAULT 'pending/';
 ALTER TABLE inbound_connectors ADD COLUMN cf_r2_poll_interval_ms INTEGER;
+`,
+	// Version 18: Eliminate "accounts" concept — replace with "identities".
+	//
+	// Accounts were originally IMAP-centric (one account = one mailbox with inline
+	// credentials). After v13 decoupled connectors into separate tables, the accounts
+	// table became a thin identity layer holding only name, email, and connector
+	// references — but still carried ~20 legacy columns (imap_*, smtp_*, ses_*, etc.)
+	// that are now redundant with the connector tables.
+	//
+	// This migration:
+	//   1. Creates a clean `identities` table with only: id, name, email,
+	//      inbound_connector_id, outbound_connector_id, default_view, timestamps.
+	//   2. Renames account_id → identity_id in all child tables: messages, folders,
+	//      sync_state, sync_errors, drafts.
+	//   3. Makes image_trusted_senders global (removes account_id, uses
+	//      UNIQUE(sender_address)) — trust decisions apply across all identities.
+	//   4. Recreates all affected indexes with the new column names.
+	//   5. Drops the accounts table.
+	//
+	// The messages FTS triggers (messages_ai, messages_ad, messages_au) are dropped
+	// and recreated because they reference the messages table which is recreated.
+	`
+PRAGMA foreign_keys = OFF;
+BEGIN;
+
+-- Step 1: Create identities table from accounts (only keeping relevant columns)
+CREATE TABLE identities (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	email TEXT NOT NULL,
+	inbound_connector_id INTEGER REFERENCES inbound_connectors(id),
+	outbound_connector_id INTEGER REFERENCES outbound_connectors(id),
+	default_view TEXT NOT NULL DEFAULT 'inbox',
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT INTO identities (id, name, email, inbound_connector_id, outbound_connector_id, default_view, created_at, updated_at)
+SELECT id, name, email, inbound_connector_id, outbound_connector_id, default_view, created_at, updated_at
+FROM accounts;
+
+-- Step 2: Recreate folders with identity_id instead of account_id
+CREATE TABLE folders_v18 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	identity_id INTEGER NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
+	path TEXT NOT NULL,
+	name TEXT NOT NULL,
+	delimiter TEXT,
+	flags TEXT,
+	uid_validity INTEGER,
+	uid_next INTEGER,
+	message_count INTEGER DEFAULT 0,
+	unread_count INTEGER DEFAULT 0,
+	last_synced_at TEXT,
+	special_use TEXT,
+	UNIQUE(identity_id, path)
+);
+
+INSERT INTO folders_v18 (id, identity_id, path, name, delimiter, flags, uid_validity, uid_next, message_count, unread_count, last_synced_at, special_use)
+SELECT id, account_id, path, name, delimiter, flags, uid_validity, uid_next, message_count, unread_count, last_synced_at, special_use
+FROM folders;
+
+DROP TABLE folders;
+ALTER TABLE folders_v18 RENAME TO folders;
+
+-- Step 3: Drop FTS triggers before recreating messages table
+DROP TRIGGER IF EXISTS messages_ai;
+DROP TRIGGER IF EXISTS messages_ad;
+DROP TRIGGER IF EXISTS messages_au;
+
+-- Step 4: Recreate messages with identity_id instead of account_id
+CREATE TABLE messages_v18 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	identity_id INTEGER NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
+	folder_id INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+	uid INTEGER NOT NULL,
+	message_id TEXT,
+	in_reply_to TEXT,
+	"references" TEXT,
+	subject TEXT,
+	from_address TEXT,
+	from_name TEXT,
+	to_addresses TEXT,
+	cc_addresses TEXT,
+	bcc_addresses TEXT,
+	date TEXT,
+	text_body TEXT,
+	html_body TEXT,
+	flags TEXT,
+	size INTEGER,
+	has_attachments INTEGER DEFAULT 0,
+	raw_headers TEXT,
+	deleted_from_server INTEGER DEFAULT 0,
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	pending_archive INTEGER NOT NULL DEFAULT 0,
+	UNIQUE(folder_id, uid)
+);
+
+INSERT INTO messages_v18 (id, identity_id, folder_id, uid, message_id, in_reply_to, "references", subject, from_address, from_name, to_addresses, cc_addresses, bcc_addresses, date, text_body, html_body, flags, size, has_attachments, raw_headers, deleted_from_server, created_at, pending_archive)
+SELECT id, account_id, folder_id, uid, message_id, in_reply_to, "references", subject, from_address, from_name, to_addresses, cc_addresses, bcc_addresses, date, text_body, html_body, flags, size, has_attachments, raw_headers, deleted_from_server, created_at, pending_archive
+FROM messages;
+
+DROP TABLE messages;
+ALTER TABLE messages_v18 RENAME TO messages;
+
+-- Recreate messages indexes
+CREATE INDEX idx_messages_identity ON messages(identity_id);
+CREATE INDEX idx_messages_folder ON messages(folder_id);
+CREATE INDEX idx_messages_date ON messages(date DESC);
+CREATE INDEX idx_messages_message_id ON messages(message_id);
+CREATE INDEX idx_messages_in_reply_to ON messages(in_reply_to);
+CREATE INDEX idx_messages_identity_date ON messages(identity_id, date DESC);
+CREATE INDEX idx_messages_pending_archive ON messages(folder_id, pending_archive);
+
+-- Recreate FTS triggers
+CREATE TRIGGER messages_ai AFTER INSERT ON messages BEGIN
+	INSERT INTO messages_fts(rowid, subject, from_address, from_name, to_addresses, text_body)
+	VALUES (new.id, new.subject, new.from_address, new.from_name, new.to_addresses, new.text_body);
+END;
+
+CREATE TRIGGER messages_ad AFTER DELETE ON messages BEGIN
+	INSERT INTO messages_fts(messages_fts, rowid, subject, from_address, from_name, to_addresses, text_body)
+	VALUES ('delete', old.id, old.subject, old.from_address, old.from_name, old.to_addresses, old.text_body);
+END;
+
+CREATE TRIGGER messages_au AFTER UPDATE ON messages BEGIN
+	INSERT INTO messages_fts(messages_fts, rowid, subject, from_address, from_name, to_addresses, text_body)
+	VALUES ('delete', old.id, old.subject, old.from_address, old.from_name, old.to_addresses, old.text_body);
+	INSERT INTO messages_fts(rowid, subject, from_address, from_name, to_addresses, text_body)
+	VALUES (new.id, new.subject, new.from_address, new.from_name, new.to_addresses, new.text_body);
+END;
+
+-- Step 5: Recreate sync_state with identity_id instead of account_id
+CREATE TABLE sync_state_v18 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	identity_id INTEGER NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
+	folder_id INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+	last_uid INTEGER DEFAULT 0,
+	last_synced_at TEXT,
+	UNIQUE(identity_id, folder_id)
+);
+
+INSERT INTO sync_state_v18 (id, identity_id, folder_id, last_uid, last_synced_at)
+SELECT id, account_id, folder_id, last_uid, last_synced_at
+FROM sync_state;
+
+DROP TABLE sync_state;
+ALTER TABLE sync_state_v18 RENAME TO sync_state;
+
+-- Step 6: Recreate sync_errors with identity_id instead of account_id
+CREATE TABLE sync_errors_v18 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	identity_id INTEGER NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
+	folder_path TEXT,
+	uid INTEGER,
+	error_type TEXT NOT NULL,
+	message TEXT NOT NULL,
+	retriable INTEGER NOT NULL DEFAULT 1,
+	resolved INTEGER NOT NULL DEFAULT 0,
+	retry_count INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	resolved_at TEXT
+);
+
+INSERT INTO sync_errors_v18 (id, identity_id, folder_path, uid, error_type, message, retriable, resolved, retry_count, created_at, resolved_at)
+SELECT id, account_id, folder_path, uid, error_type, message, retriable, resolved, retry_count, created_at, resolved_at
+FROM sync_errors;
+
+DROP TABLE sync_errors;
+ALTER TABLE sync_errors_v18 RENAME TO sync_errors;
+
+CREATE INDEX idx_sync_errors_identity ON sync_errors(identity_id);
+CREATE INDEX idx_sync_errors_unresolved ON sync_errors(identity_id, resolved);
+
+-- Step 7: Recreate drafts with identity_id instead of account_id
+CREATE TABLE drafts_v18 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	identity_id INTEGER NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
+	to_addresses TEXT,
+	cc_addresses TEXT,
+	bcc_addresses TEXT,
+	subject TEXT,
+	text_body TEXT,
+	html_body TEXT,
+	in_reply_to TEXT,
+	"references" TEXT,
+	original_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+	compose_mode TEXT NOT NULL DEFAULT 'new',
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT INTO drafts_v18 (id, identity_id, to_addresses, cc_addresses, bcc_addresses, subject, text_body, html_body, in_reply_to, "references", original_message_id, compose_mode, created_at, updated_at)
+SELECT id, account_id, to_addresses, cc_addresses, bcc_addresses, subject, text_body, html_body, in_reply_to, "references", original_message_id, compose_mode, created_at, updated_at
+FROM drafts;
+
+DROP TABLE drafts;
+ALTER TABLE drafts_v18 RENAME TO drafts;
+
+CREATE INDEX idx_drafts_identity ON drafts(identity_id);
+
+-- Step 8: Recreate image_trusted_senders as global (no account_id)
+CREATE TABLE image_trusted_senders_v18 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	sender_address TEXT NOT NULL,
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	UNIQUE(sender_address)
+);
+
+INSERT OR IGNORE INTO image_trusted_senders_v18 (sender_address, created_at)
+SELECT sender_address, MIN(created_at)
+FROM image_trusted_senders
+GROUP BY sender_address;
+
+DROP TABLE image_trusted_senders;
+ALTER TABLE image_trusted_senders_v18 RENAME TO image_trusted_senders;
+
+CREATE INDEX idx_image_trusted_senders_lookup ON image_trusted_senders(sender_address);
+
+-- Step 9: Drop the accounts table
+DROP TABLE accounts;
+
+COMMIT;
+PRAGMA foreign_keys = ON;
 `,
 ];

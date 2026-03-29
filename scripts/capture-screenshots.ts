@@ -11,10 +11,10 @@ import { chromium } from "playwright";
 import { createApp } from "../src/api/server.js";
 import {
 	addMessageLabel,
-	createTestAccount,
 	createTestContext,
 	createTestDb,
 	createTestFolder,
+	createTestIdentity,
 	createTestLabel,
 	createTestMessage,
 } from "../src/test-helpers/test-db.js";
@@ -26,7 +26,7 @@ const OUTPUT_DIR = join(import.meta.dirname, "..", "docs", "screenshots");
 function seedData() {
 	const db = createTestDb();
 
-	const accountId = createTestAccount(db, {
+	const identityId = createTestIdentity(db, {
 		name: "Alex Chen",
 		email: "alex@stork.email",
 		imapHost: "127.0.0.1",
@@ -35,27 +35,27 @@ function seedData() {
 		smtpPort: 9587,
 	});
 
-	const inboxId = createTestFolder(db, accountId, "INBOX", {
+	const inboxId = createTestFolder(db, identityId, "INBOX", {
 		name: "INBOX",
 		specialUse: "\\Inbox",
 	});
-	const sentId = createTestFolder(db, accountId, "Sent", {
+	const sentId = createTestFolder(db, identityId, "Sent", {
 		name: "Sent",
 		specialUse: "\\Sent",
 	});
-	createTestFolder(db, accountId, "Drafts", {
+	createTestFolder(db, identityId, "Drafts", {
 		name: "Drafts",
 		specialUse: "\\Drafts",
 	});
-	createTestFolder(db, accountId, "Trash", {
+	createTestFolder(db, identityId, "Trash", {
 		name: "Trash",
 		specialUse: "\\Trash",
 	});
 
-	const inboxLabelId = createTestLabel(db, accountId, "INBOX", { source: "imap" });
-	const sentLabelId = createTestLabel(db, accountId, "Sent", { source: "imap" });
-	createTestLabel(db, accountId, "Drafts", { source: "imap" });
-	createTestLabel(db, accountId, "Trash", { source: "imap" });
+	const inboxLabelId = createTestLabel(db, "INBOX", { source: "imap" });
+	const sentLabelId = createTestLabel(db, "Sent", { source: "imap" });
+	createTestLabel(db, "Drafts", { source: "imap" });
+	createTestLabel(db, "Trash", { source: "imap" });
 
 	const now = new Date();
 	const inboxMsgIds: number[] = [];
@@ -174,7 +174,7 @@ function seedData() {
 	for (let i = 0; i < emails.length; i++) {
 		const e = emails[i];
 		const date = new Date(now.getTime() - e.hoursAgo * 3600_000);
-		const msgId = createTestMessage(db, accountId, inboxId, i + 1, {
+		const msgId = createTestMessage(db, identityId, inboxId, i + 1, {
 			subject: e.subject,
 			fromAddress: e.fromAddress,
 			fromName: e.fromName,
@@ -192,7 +192,7 @@ function seedData() {
 	const threadId2 = "<deploy-2@company.com>";
 	const threadId3 = "<deploy-3@company.com>";
 
-	const t1 = createTestMessage(db, accountId, inboxId, 20, {
+	const t1 = createTestMessage(db, identityId, inboxId, 20, {
 		messageId: threadId1,
 		subject: "Re: Production deploy checklist",
 		fromAddress: "sarah.kim@company.com",
@@ -207,7 +207,7 @@ function seedData() {
 	});
 	inboxMsgIds.push(t1);
 
-	const t2 = createTestMessage(db, accountId, inboxId, 21, {
+	const t2 = createTestMessage(db, identityId, inboxId, 21, {
 		messageId: threadId2,
 		subject: "Re: Production deploy checklist",
 		fromAddress: "alex@stork.email",
@@ -224,7 +224,7 @@ function seedData() {
 	});
 	inboxMsgIds.push(t2);
 
-	const t3 = createTestMessage(db, accountId, inboxId, 22, {
+	const t3 = createTestMessage(db, identityId, inboxId, 22, {
 		messageId: threadId3,
 		subject: "Re: Production deploy checklist",
 		fromAddress: "sarah.kim@company.com",
@@ -242,7 +242,7 @@ function seedData() {
 	inboxMsgIds.push(t3);
 
 	// Sent message
-	const sentMsgId = createTestMessage(db, accountId, sentId, 1, {
+	const sentMsgId = createTestMessage(db, identityId, sentId, 1, {
 		subject: "Updated deployment runbook",
 		fromAddress: "alex@stork.email",
 		fromName: "Alex Chen",

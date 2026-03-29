@@ -176,15 +176,17 @@ Always accessible regardless of container state. Use for Docker health checks an
 { "status": "ok", "version": "0.1.0" }
 ```
 
-## Accounts
+## Identities
 
-### List accounts
+An identity represents an email address you send and receive as (name + email). Identities reference inbound and outbound connectors for mail transport.
+
+### List identities
 
 ```
-GET /api/accounts
+GET /api/identities
 ```
 
-Returns all configured email accounts (passwords excluded).
+Returns all configured email identities.
 
 **Response**: `200 OK`
 ```json
@@ -193,35 +195,31 @@ Returns all configured email accounts (passwords excluded).
     "id": 1,
     "name": "Work",
     "email": "user@example.com",
-    "imap_host": "imap.example.com",
-    "smtp_host": "smtp.example.com",
+    "inbound_connector_id": 1,
+    "outbound_connector_id": 2,
     "created_at": "2026-01-15T10:30:00.000Z"
   }
 ]
 ```
 
-### Create account
+### Create identity
 
 ```
-POST /api/accounts
+POST /api/identities
 Content-Type: application/json
 ```
 
-**Required fields**: `name`, `email`, `imap_host`, `imap_user`, `imap_pass`
+**Required fields**: `name`, `email`
 
-**Optional fields**: `imap_port` (default: 993), `imap_tls` (default: 1), `smtp_host`, `smtp_port` (default: 587), `smtp_tls` (default: 1), `smtp_user`, `smtp_pass`, `sync_delete_from_server` (default: 0, enables connector mode — auto-deletes messages from the IMAP server after syncing them locally)
+**Optional fields**: `inbound_connector_id`, `outbound_connector_id`, `default_view`
 
 **Request body**:
 ```json
 {
   "name": "Work",
   "email": "user@example.com",
-  "imap_host": "imap.example.com",
-  "imap_user": "user@example.com",
-  "imap_pass": "app-password-here",
-  "smtp_host": "smtp.example.com",
-  "smtp_user": "user@example.com",
-  "smtp_pass": "app-password-here"
+  "inbound_connector_id": 1,
+  "outbound_connector_id": 2
 }
 ```
 
@@ -230,22 +228,22 @@ Content-Type: application/json
 { "id": 1 }
 ```
 
-The new account is automatically registered with the sync scheduler and begins syncing immediately.
+The new identity is automatically registered with the sync scheduler and begins syncing immediately (if an inbound connector is assigned).
 
-### Get account
+### Get identity
 
 ```
-GET /api/accounts/:accountId
+GET /api/identities/:identityId
 ```
 
-Returns a single account with all fields except passwords.
+Returns a single identity with connector names.
 
 **Response**: `200 OK` | `404 Not Found`
 
-### Update account
+### Update identity
 
 ```
-PUT /api/accounts/:accountId
+PUT /api/identities/:identityId
 Content-Type: application/json
 ```
 
@@ -254,64 +252,31 @@ Partial update — only include fields you want to change.
 **Request body**:
 ```json
 {
-  "name": "Personal",
-  "smtp_host": "smtp.newserver.com"
+  "name": "Personal"
 }
 ```
 
 **Response**: `200 OK` | `400 Bad Request` (no fields provided)
 
-### Delete account
+### Delete identity
 
 ```
-DELETE /api/accounts/:accountId
+DELETE /api/identities/:identityId
 ```
 
-Deletes the account and all associated folders, messages, and attachments (cascading delete).
+Deletes the identity and all associated folders, messages, and attachments (cascading delete).
 
 **Response**: `200 OK` | `404 Not Found`
-
-### Test IMAP connection
-
-```
-POST /api/accounts/test-connection
-Content-Type: application/json
-```
-
-Verifies IMAP credentials by connecting to the server and listing mailboxes. Use during account setup before saving.
-
-**Required fields**: `imap_host`, `imap_user`, `imap_pass`
-
-**Optional fields**: `imap_port` (default: 993), `imap_tls` (default: 1)
-
-**Request body**:
-```json
-{
-  "imap_host": "imap.example.com",
-  "imap_user": "user@example.com",
-  "imap_pass": "app-password"
-}
-```
-
-**Response**: `200 OK`
-```json
-{ "ok": true, "mailboxes": 12 }
-```
-
-**Response**: `200 OK` (connection failed)
-```json
-{ "ok": false, "error": "Connection timed out" }
-```
 
 ## Folders
 
 ### List folders
 
 ```
-GET /api/accounts/:accountId/folders
+GET /api/identities/:identityId/folders
 ```
 
-Returns all synced folders for an account.
+Returns all synced folders for an identity.
 
 **Response**: `200 OK`
 ```json
@@ -337,10 +302,10 @@ Stork uses labels (not folders) as the primary organizational model. IMAP folder
 ### List labels
 
 ```
-GET /api/accounts/:accountId/labels
+GET /api/labels
 ```
 
-Returns all labels for an account with message and unread counts.
+Returns all labels with message and unread counts.
 
 **Response**: `200 OK`
 ```json
@@ -366,12 +331,12 @@ Returns all labels for an account with message and unread counts.
 ]
 ```
 
-The `source` field indicates how the label was created: `imap` for labels auto-created from IMAP folder names, `user` for manually created labels.
+The `source` field indicates how the label was created: `imap` for labels auto-created from IMAP folder names, `user` for manually created labels, `identity` for auto-created identity labels, `system` for system labels.
 
 ### Create label
 
 ```
-POST /api/accounts/:accountId/labels
+POST /api/labels
 Content-Type: application/json
 ```
 
@@ -392,7 +357,7 @@ Content-Type: application/json
 { "id": 5 }
 ```
 
-**Response**: `409 Conflict` (if label name already exists for this account)
+**Response**: `409 Conflict` (if label name already exists)
 
 ### Update label
 
@@ -479,7 +444,7 @@ DELETE /api/messages/:messageId/labels/:labelId
 
 ## Unified Inbox
 
-Cross-account inbox views. These endpoints aggregate messages across all configured accounts' Inbox labels, letting multi-account setups see all incoming mail in one place.
+Cross-identity inbox views. These endpoints aggregate messages across all configured identities' Inbox labels, letting multi-identity setups see all incoming mail in one place.
 
 ### Get unified inbox messages
 
@@ -487,7 +452,7 @@ Cross-account inbox views. These endpoints aggregate messages across all configu
 GET /api/inbox/unified?limit=50&offset=0
 ```
 
-Returns inbox messages across all accounts, sorted by date (newest first). Each message includes the `account_id` field so the UI can show which account each message belongs to.
+Returns inbox messages across all identities, sorted by date (newest first). Each message includes the `identity_id` field so the UI can show which identity each message belongs to.
 
 **Query parameters**:
 - `limit` (default: 50) — number of messages to return
@@ -509,12 +474,12 @@ Returns inbox messages across all accounts, sorted by date (newest first). Each 
     "size": 4096,
     "has_attachments": 0,
     "preview": "Hi team, here are this week's numbers...",
-    "account_id": 1
+    "identity_id": 1
   }
 ]
 ```
 
-Messages from all accounts' Inbox labels are merged and sorted by date. Accounts without an "Inbox" label are excluded. Available once the container is unlocked — returns `423 Locked` otherwise.
+Messages from all identities' Inbox labels are merged and sorted by date. Identities without an "Inbox" label are excluded. Available once the container is unlocked — returns `423 Locked` otherwise.
 
 ### Get unified inbox count
 
@@ -522,7 +487,7 @@ Messages from all accounts' Inbox labels are merged and sorted by date. Accounts
 GET /api/inbox/unified/count
 ```
 
-Returns aggregate total and unread message counts across all accounts' Inbox labels. Used to display the unified inbox badge count in the sidebar.
+Returns aggregate total and unread message counts across all identities' Inbox labels. Used to display the unified inbox badge count in the sidebar.
 
 **Response**: `200 OK`
 ```json
@@ -534,7 +499,7 @@ Returns aggregate total and unread message counts across all accounts' Inbox lab
 ### List messages in a folder
 
 ```
-GET /api/accounts/:accountId/folders/:folderId/messages?limit=50&offset=0
+GET /api/identities/:identityId/folders/:folderId/messages?limit=50&offset=0
 ```
 
 Returns messages sorted by date (newest first). Each message includes a 200-character body preview.
@@ -647,9 +612,9 @@ POST /api/send
 Content-Type: application/json
 ```
 
-Sends an email via the account's configured SMTP server and saves it to the local Sent folder.
+Sends an email via the identity's configured outbound connector and saves it to the local Sent folder.
 
-**Required fields**: `account_id`, `to` (array of email addresses)
+**Required fields**: `identity_id`, `to` (array of email addresses)
 
 At least one of `subject`, `text_body`, or `html_body` must be provided.
 
@@ -658,7 +623,7 @@ At least one of `subject`, `text_body`, or `html_body` must be provided.
 **Request body**:
 ```json
 {
-  "account_id": 1,
+  "identity_id": 1,
   "to": ["recipient@example.com"],
   "cc": ["cc@example.com"],
   "subject": "Hello from Stork",
@@ -687,9 +652,9 @@ At least one of `subject`, `text_body`, or `html_body` must be provided.
 }
 ```
 
-The sent message is automatically stored in the account's Sent folder (created if it doesn't exist) with the `\Seen` flag. Attachments are also saved locally.
+The sent message is automatically stored in the identity's Sent folder (created if it doesn't exist) with the `\Seen` flag. Attachments are also saved locally.
 
-**Response**: `400 Bad Request` (missing fields or SMTP not configured) | `404 Not Found` (invalid account) | `500 Internal Server Error` (SMTP failure)
+**Response**: `400 Bad Request` (missing fields or SMTP not configured) | `404 Not Found` (invalid identity) | `500 Internal Server Error` (SMTP failure)
 
 ### Test SMTP connection
 
@@ -698,7 +663,7 @@ POST /api/send/test-smtp
 Content-Type: application/json
 ```
 
-Verifies SMTP credentials without sending a message. Use this during account setup to validate the SMTP configuration.
+Verifies SMTP credentials without sending a message. Use this during connector setup to validate the SMTP configuration.
 
 **Required fields**: `smtp_host`, `smtp_user`, `smtp_pass`
 
@@ -732,20 +697,20 @@ Drafts persist compose state server-side so work is preserved across browser ref
 ### List drafts
 
 ```
-GET /api/drafts?account_id=1
+GET /api/drafts?identity_id=1
 ```
 
-Returns all drafts for an account, sorted by last updated (newest first). Body content is truncated to a 200-character preview.
+Returns all drafts for an identity, sorted by last updated (newest first). Body content is truncated to a 200-character preview.
 
 **Query parameters**:
-- `account_id` (required)
+- `identity_id` (required)
 
 **Response**: `200 OK`
 ```json
 [
   {
     "id": 1,
-    "account_id": 1,
+    "identity_id": 1,
     "to_addresses": "alice@example.com",
     "subject": "Draft subject",
     "preview": "First 200 characters of body...",
@@ -774,14 +739,14 @@ POST /api/drafts
 Content-Type: application/json
 ```
 
-**Required fields**: `account_id`
+**Required fields**: `identity_id`
 
 **Optional fields**: `to_addresses`, `cc_addresses`, `bcc_addresses`, `subject`, `text_body`, `html_body`, `in_reply_to`, `references`, `original_message_id` (links to the message being replied to/forwarded), `compose_mode` (`new`, `reply`, `reply-all`, `forward` — default: `new`)
 
 **Request body**:
 ```json
 {
-  "account_id": 1,
+  "identity_id": 1,
   "to_addresses": "recipient@example.com",
   "subject": "Work in progress",
   "text_body": "Partial draft...",
@@ -849,7 +814,7 @@ Returns the raw attachment data with appropriate `Content-Type` and `Content-Dis
 ### Search messages
 
 ```
-GET /api/search?q=quarterly+report&account_id=1&limit=20&offset=0
+GET /api/search?q=quarterly+report&identity_id=1&limit=20&offset=0
 ```
 
 Full-text search across all synced messages using SQLite FTS5.
@@ -860,7 +825,7 @@ Full-text search across all synced messages using SQLite FTS5.
   - `"quarterly report"` — phrase match (exact sequence)
   - `quarterly OR annual` — matches either word
   - `quarterly NOT draft` — excludes messages containing "draft"
-- `account_id` (optional) — filter results to a specific account
+- `identity_id` (optional) — filter results to a specific identity
 - `limit` (default: 50) — number of results to return
 - `offset` (default: 0) — pagination offset
 
@@ -887,10 +852,10 @@ Snippets include `<mark>` tags around matching terms for highlighting.
 ### Trigger sync
 
 ```
-POST /api/accounts/:accountId/sync
+POST /api/identities/:identityId/sync
 ```
 
-Triggers an immediate sync for the specified account. Returns the sync result.
+Triggers an immediate sync for the specified identity. Returns the sync result.
 
 **Response**: `200 OK`
 ```json
@@ -918,7 +883,7 @@ Triggers an immediate sync for the specified account. Returns the sync result.
 GET /api/sync/status
 ```
 
-Returns the sync status for all accounts.
+Returns the sync status for all identities.
 
 **Response**: `200 OK`
 ```json
@@ -935,7 +900,7 @@ Returns the sync status for all accounts.
 ### Get folder sync status
 
 ```
-GET /api/accounts/:accountId/sync-status
+GET /api/identities/:identityId/sync-status
 ```
 
 Returns per-folder sync details including last synced UID.

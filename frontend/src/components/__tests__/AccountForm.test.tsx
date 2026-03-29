@@ -40,7 +40,7 @@ vi.mock("../../api", () => ({
 			inbound: { list: vi.fn() },
 			outbound: { list: vi.fn() },
 		},
-		accounts: {
+		identities: {
 			get: vi.fn(),
 			create: vi.fn(),
 			update: vi.fn(),
@@ -54,7 +54,7 @@ const mockApi = api as unknown as {
 		inbound: { list: ReturnType<typeof vi.fn> };
 		outbound: { list: ReturnType<typeof vi.fn> };
 	};
-	accounts: {
+	identities: {
 		get: ReturnType<typeof vi.fn>;
 		create: ReturnType<typeof vi.fn>;
 		update: ReturnType<typeof vi.fn>;
@@ -71,24 +71,24 @@ describe("AccountForm", () => {
 		mockApi.connectors.outbound.list.mockResolvedValue(mockOutbound);
 	});
 
-	it("renders Add Account heading for new account", async () => {
-		render(<AccountForm accountId={null} onCancel={onCancel} onSaved={onSaved} />);
+	it("renders Add Identity heading for new identity", async () => {
+		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
 		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: /Add Account/i })).toBeInTheDocument(),
+			expect(screen.getByRole("heading", { name: /Add Email Identity/i })).toBeInTheDocument(),
 		);
 		expect(screen.getByPlaceholderText("Work Email")).toBeInTheDocument();
 		expect(screen.getByPlaceholderText("you@example.com")).toBeInTheDocument();
 	});
 
 	it("shows connector labels in select options", async () => {
-		render(<AccountForm accountId={null} onCancel={onCancel} onSaved={onSaved} />);
+		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
 		await waitFor(() => expect(screen.getByText(/My IMAP — IMAP/i)).toBeInTheDocument());
 		expect(screen.getByText(/My SMTP — SMTP/i)).toBeInTheDocument();
 	});
 
 	it("shows warning when no inbound connectors are configured", async () => {
 		mockApi.connectors.inbound.list.mockResolvedValue([]);
-		render(<AccountForm accountId={null} onCancel={onCancel} onSaved={onSaved} />);
+		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
 		await waitFor(() =>
 			expect(screen.getByText(/No inbound connectors configured/i)).toBeInTheDocument(),
 		);
@@ -96,7 +96,7 @@ describe("AccountForm", () => {
 
 	it("shows message when no outbound connectors are configured", async () => {
 		mockApi.connectors.outbound.list.mockResolvedValue([]);
-		render(<AccountForm accountId={null} onCancel={onCancel} onSaved={onSaved} />);
+		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
 		await waitFor(() =>
 			expect(screen.getByText(/No outbound connectors configured/i)).toBeInTheDocument(),
 		);
@@ -106,7 +106,7 @@ describe("AccountForm", () => {
 		mockApi.connectors.inbound.list.mockResolvedValue([]);
 		mockApi.connectors.outbound.list.mockResolvedValue([]);
 		const { container } = render(
-			<AccountForm accountId={null} onCancel={onCancel} onSaved={onSaved} />,
+			<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />,
 		);
 		await waitFor(() =>
 			expect(screen.getByText(/No inbound connectors configured/i)).toBeInTheDocument(),
@@ -119,10 +119,10 @@ describe("AccountForm", () => {
 		);
 	});
 
-	it("calls api.accounts.create and onSaved on successful new account submit", async () => {
-		mockApi.accounts.create.mockResolvedValue({ id: 99 });
+	it("calls api.identities.create and onSaved on successful new identity submit", async () => {
+		mockApi.identities.create.mockResolvedValue({ id: 99 });
 		const { container } = render(
-			<AccountForm accountId={null} onCancel={onCancel} onSaved={onSaved} />,
+			<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />,
 		);
 		await waitFor(() => expect(screen.getByPlaceholderText("Work Email")).toBeInTheDocument());
 		fireEvent.change(screen.getByPlaceholderText("Work Email"), {
@@ -133,14 +133,14 @@ describe("AccountForm", () => {
 		});
 		const form = container.querySelector("form");
 		if (form) fireEvent.submit(form);
-		await waitFor(() => expect(mockApi.accounts.create).toHaveBeenCalled());
+		await waitFor(() => expect(mockApi.identities.create).toHaveBeenCalled());
 		await waitFor(() => expect(onSaved).toHaveBeenCalled());
 	});
 
 	it("shows error message when create fails", async () => {
-		mockApi.accounts.create.mockRejectedValue(new Error("Server error"));
+		mockApi.identities.create.mockRejectedValue(new Error("Server error"));
 		const { container } = render(
-			<AccountForm accountId={null} onCancel={onCancel} onSaved={onSaved} />,
+			<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />,
 		);
 		// Wait for inbound connector to auto-select before submitting
 		await waitFor(() => expect(screen.getByDisplayValue(/My IMAP/i)).toBeInTheDocument());
@@ -150,45 +150,45 @@ describe("AccountForm", () => {
 	});
 
 	it("calls onCancel when Cancel button clicked", async () => {
-		render(<AccountForm accountId={null} onCancel={onCancel} onSaved={onSaved} />);
+		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
 		await waitFor(() => expect(screen.getByText("Cancel")).toBeInTheDocument());
 		fireEvent.click(screen.getByText("Cancel"));
 		expect(onCancel).toHaveBeenCalled();
 	});
 
-	it("loads existing account data for edit mode", async () => {
-		mockApi.accounts.get.mockResolvedValue({
+	it("loads existing identity data for edit mode", async () => {
+		mockApi.identities.get.mockResolvedValue({
 			id: 5,
-			name: "Existing Account",
+			name: "Existing Identity",
 			email: "existing@example.com",
 			inbound_connector_id: 1,
 			outbound_connector_id: 2,
 			sync_delete_from_server: 0,
 			default_view: "inbox",
 		});
-		render(<AccountForm accountId={5} onCancel={onCancel} onSaved={onSaved} />);
-		await waitFor(() => expect(screen.getByDisplayValue("Existing Account")).toBeInTheDocument());
+		render(<AccountForm identityId={5} onCancel={onCancel} onSaved={onSaved} />);
+		await waitFor(() => expect(screen.getByDisplayValue("Existing Identity")).toBeInTheDocument());
 		expect(screen.getByDisplayValue("existing@example.com")).toBeInTheDocument();
 		expect(screen.getByText("Save Changes")).toBeInTheDocument();
 	});
 
-	it("shows loading state while fetching existing account", () => {
-		mockApi.accounts.get.mockReturnValue(new Promise(() => {}));
-		render(<AccountForm accountId={5} onCancel={onCancel} onSaved={onSaved} />);
+	it("shows loading state while fetching existing identity", () => {
+		mockApi.identities.get.mockReturnValue(new Promise(() => {}));
+		render(<AccountForm identityId={5} onCancel={onCancel} onSaved={onSaved} />);
 		expect(screen.getByText("Loading...")).toBeInTheDocument();
 	});
 
-	it("stays in loading state when account load fails (error is set but not displayed)", async () => {
-		// When loadAccount throws, the component sets error state but loaded stays false,
+	it("stays in loading state when identity load fails (error is set but not displayed)", async () => {
+		// When loadIdentity throws, the component sets error state but loaded stays false,
 		// so the form stays in "Loading..." state — error is not surfaced to user (known behavior)
-		mockApi.accounts.get.mockRejectedValue(new Error("Not found"));
-		render(<AccountForm accountId={5} onCancel={onCancel} onSaved={onSaved} />);
+		mockApi.identities.get.mockRejectedValue(new Error("Not found"));
+		render(<AccountForm identityId={5} onCancel={onCancel} onSaved={onSaved} />);
 		// Should not crash; stays showing loading
-		await waitFor(() => expect(mockApi.accounts.get).toHaveBeenCalledWith(5));
+		await waitFor(() => expect(mockApi.identities.get).toHaveBeenCalledWith(5));
 	});
 
-	it("calls api.accounts.update on edit submit", async () => {
-		mockApi.accounts.get.mockResolvedValue({
+	it("calls api.identities.update on edit submit", async () => {
+		mockApi.identities.get.mockResolvedValue({
 			id: 5,
 			name: "Old Name",
 			email: "old@example.com",
@@ -197,15 +197,15 @@ describe("AccountForm", () => {
 			sync_delete_from_server: 0,
 			default_view: "inbox",
 		});
-		mockApi.accounts.update.mockResolvedValue({ ok: true });
+		mockApi.identities.update.mockResolvedValue({ ok: true });
 		const { container } = render(
-			<AccountForm accountId={5} onCancel={onCancel} onSaved={onSaved} />,
+			<AccountForm identityId={5} onCancel={onCancel} onSaved={onSaved} />,
 		);
 		await waitFor(() => expect(screen.getByDisplayValue("Old Name")).toBeInTheDocument());
 		const form = container.querySelector("form");
 		if (form) fireEvent.submit(form);
 		await waitFor(() =>
-			expect(mockApi.accounts.update).toHaveBeenCalledWith(5, expect.any(Object)),
+			expect(mockApi.identities.update).toHaveBeenCalledWith(5, expect.any(Object)),
 		);
 		await waitFor(() => expect(onSaved).toHaveBeenCalled());
 	});
@@ -226,7 +226,7 @@ describe("AccountForm", () => {
 				updated_at: "",
 			},
 		]);
-		render(<AccountForm accountId={null} onCancel={onCancel} onSaved={onSaved} />);
+		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
 		await waitFor(() =>
 			expect(screen.getByText(/CF Email — Cloudflare Email/i)).toBeInTheDocument(),
 		);
@@ -248,7 +248,7 @@ describe("AccountForm", () => {
 				updated_at: "",
 			},
 		]);
-		render(<AccountForm accountId={null} onCancel={onCancel} onSaved={onSaved} />);
+		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
 		await waitFor(() => expect(screen.getByText(/My SES — AWS SES/i)).toBeInTheDocument());
 	});
 });

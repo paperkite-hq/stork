@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import {
-	type Account,
 	type CreateInboundConnectorRequest,
 	type CreateOutboundConnectorRequest,
+	type Identity,
 	type InboundConnector,
 	type OutboundConnector,
 	api,
@@ -602,13 +602,13 @@ function OutboundConnectorForm({
 
 function IdentityForm({
 	outboundConnectorId,
-	accountId,
+	identityId,
 	inboundConnectors,
 	onSave,
 	onCancel,
 }: {
 	outboundConnectorId: number;
-	accountId: number | null;
+	identityId: number | null;
 	inboundConnectors: InboundConnector[];
 	onSave: () => void;
 	onCancel: () => void;
@@ -620,13 +620,13 @@ function IdentityForm({
 	);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [loaded, setLoaded] = useState(accountId === null);
+	const [loaded, setLoaded] = useState(identityId === null);
 
-	// Load existing account data when editing
+	// Load existing identity data when editing
 	useEffect(() => {
-		if (accountId === null) return;
-		api.accounts
-			.get(accountId)
+		if (identityId === null) return;
+		api.identities
+			.get(identityId)
 			.then((detail) => {
 				setName(detail.name);
 				setEmail(detail.email);
@@ -637,7 +637,7 @@ function IdentityForm({
 				setError(err instanceof Error ? err.message : String(err));
 			});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [accountId]);
+	}, [identityId]);
 
 	if (!loaded) {
 		return <div className="p-3 text-sm text-gray-400 dark:text-gray-500">Loading...</div>;
@@ -652,17 +652,16 @@ function IdentityForm({
 		setSaving(true);
 		setError(null);
 		try {
-			if (accountId === null) {
-				await api.accounts.create({
+			if (identityId === null) {
+				await api.identities.create({
 					name,
 					email,
 					inbound_connector_id: Number(inboundId),
 					outbound_connector_id: outboundConnectorId,
-					sync_delete_from_server: 0,
 					default_view: "inbox",
 				});
 			} else {
-				await api.accounts.update(accountId, {
+				await api.identities.update(identityId, {
 					name,
 					email,
 					inbound_connector_id: Number(inboundId),
@@ -802,7 +801,10 @@ export function ConnectorsTab() {
 		refetch: refetchOutbound,
 		loading: loadingOutbound,
 	} = useAsync(() => api.connectors.outbound.list(), []);
-	const { data: accounts, refetch: refetchAccounts } = useAsync(() => api.accounts.list(), []);
+	const { data: identities, refetch: refetchIdentities } = useAsync(
+		() => api.identities.list(),
+		[],
+	);
 
 	const [showWizard, setShowWizard] = useState(false);
 	const [editingInbound, setEditingInbound] = useState<number | "new" | null>(null);
@@ -815,11 +817,11 @@ export function ConnectorsTab() {
 	} | null>(null);
 	const [deleting, setDeleting] = useState<{ id: number; dir: "in" | "out" } | null>(null);
 
-	// Identity (account) editing state — keyed on outbound connector ID
+	// Identity editing state — keyed on outbound connector ID
 	const [editingIdentityFor, setEditingIdentityFor] = useState<number | null>(null);
 	const [editingIdentityId, setEditingIdentityId] = useState<number | "new" | null>(null);
 	const [syncStatusIdentityId, setSyncStatusIdentityId] = useState<number | null>(null);
-	const [deletingIdentity, setDeletingIdentity] = useState<Account | null>(null);
+	const [deletingIdentity, setDeletingIdentity] = useState<Identity | null>(null);
 
 	async function handleTestInbound(id: number) {
 		setTestResult(null);
@@ -870,9 +872,9 @@ export function ConnectorsTab() {
 
 	async function handleDeleteIdentity(id: number) {
 		try {
-			await api.accounts.delete(id);
+			await api.identities.delete(id);
 			setDeletingIdentity(null);
-			refetchAccounts();
+			refetchIdentities();
 		} catch (err) {
 			alert(err instanceof Error ? err.message : String(err));
 		}
@@ -885,12 +887,12 @@ export function ConnectorsTab() {
 
 	return (
 		<div className="space-y-8 p-4 sm:p-6">
-			{/* Add Account wizard */}
+			{/* Add Email wizard */}
 			<div className="flex items-center justify-between">
 				<div>
-					<h3 className="font-semibold text-gray-900 dark:text-gray-100">Accounts</h3>
+					<h3 className="font-semibold text-gray-900 dark:text-gray-100">Email Identities</h3>
 					<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-						Set up a new email account with inbound and outbound connectors in one flow
+						Set up a new email identity with inbound and outbound connectors in one flow
 					</p>
 				</div>
 				<button
@@ -898,7 +900,7 @@ export function ConnectorsTab() {
 					onClick={() => setShowWizard(true)}
 					className="px-3 py-1.5 text-sm bg-stork-600 hover:bg-stork-700 text-white rounded transition-colors"
 				>
-					+ Add Account
+					+ Add Email Identity
 				</button>
 			</div>
 
@@ -910,7 +912,7 @@ export function ConnectorsTab() {
 						setShowWizard(false);
 						refetchInbound();
 						refetchOutbound();
-						refetchAccounts();
+						refetchIdentities();
 					}}
 					onCancel={() => setShowWizard(false)}
 				/>
@@ -1085,7 +1087,9 @@ export function ConnectorsTab() {
 
 				<ul className="space-y-3">
 					{outbound?.map((c) => {
-						const identities = (accounts ?? []).filter((a) => a.outbound_connector_id === c.id);
+						const connectorIdentities = (identities ?? []).filter(
+							(a) => a.outbound_connector_id === c.id,
+						);
 						const isEditingIdentityHere = editingIdentityFor === c.id && editingIdentityId !== null;
 
 						return (
@@ -1171,23 +1175,23 @@ export function ConnectorsTab() {
 										Identities
 									</p>
 
-									{identities.length === 0 && !isEditingIdentityHere && (
+									{connectorIdentities.length === 0 && !isEditingIdentityHere && (
 										<p className="text-xs text-gray-400 dark:text-gray-500 italic mb-2">
 											No identities assigned to this connector.
 										</p>
 									)}
 
-									{identities.map((identity) => (
+									{connectorIdentities.map((identity) => (
 										<div key={identity.id}>
 											{editingIdentityFor === c.id && editingIdentityId === identity.id ? (
 												<IdentityForm
 													outboundConnectorId={c.id}
-													accountId={identity.id}
+													identityId={identity.id}
 													inboundConnectors={inbound ?? []}
 													onSave={() => {
 														setEditingIdentityFor(null);
 														setEditingIdentityId(null);
-														refetchAccounts();
+														refetchIdentities();
 													}}
 													onCancel={() => {
 														setEditingIdentityFor(null);
@@ -1237,7 +1241,7 @@ export function ConnectorsTab() {
 														</div>
 													</div>
 													{syncStatusIdentityId === identity.id && (
-														<SyncStatusPanel accountId={identity.id} />
+														<SyncStatusPanel identityId={identity.id} />
 													)}
 												</div>
 											)}
@@ -1247,12 +1251,12 @@ export function ConnectorsTab() {
 									{isEditingIdentityHere && editingIdentityId === "new" && (
 										<IdentityForm
 											outboundConnectorId={c.id}
-											accountId={null}
+											identityId={null}
 											inboundConnectors={inbound ?? []}
 											onSave={() => {
 												setEditingIdentityFor(null);
 												setEditingIdentityId(null);
-												refetchAccounts();
+												refetchIdentities();
 											}}
 											onCancel={() => {
 												setEditingIdentityFor(null);
@@ -1281,12 +1285,12 @@ export function ConnectorsTab() {
 
 				{/* Unassigned identities */}
 				{(() => {
-					const unassigned = (accounts ?? []).filter((a) => a.outbound_connector_id === null);
+					const unassigned = (identities ?? []).filter((a) => a.outbound_connector_id === null);
 					if (unassigned.length === 0) return null;
 					return (
 						<div className="mt-3 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
 							<p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
-								Unassigned identities: {unassigned.length} account
+								Unassigned identities: {unassigned.length} email
 								{unassigned.length !== 1 ? "s" : ""} have no outbound connector assigned. Edit them
 								below.
 							</p>
@@ -1296,12 +1300,12 @@ export function ConnectorsTab() {
 										outbound && outbound.length > 0 ? (
 											<IdentityForm
 												outboundConnectorId={outbound[0]?.id ?? 0}
-												accountId={identity.id}
+												identityId={identity.id}
 												inboundConnectors={inbound ?? []}
 												onSave={() => {
 													setEditingIdentityFor(null);
 													setEditingIdentityId(null);
-													refetchAccounts();
+													refetchIdentities();
 												}}
 												onCancel={() => {
 													setEditingIdentityFor(null);

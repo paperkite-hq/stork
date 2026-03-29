@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
-import type { Account, Label, Message, MessageSummary } from "../api";
+import type { Identity, Label, Message, MessageSummary } from "../api";
 import { useSyncPoller } from "../hooks";
 
 // ------------------------------------------------------------------
@@ -17,7 +17,7 @@ vi.mock("../api", () => ({
 			setup: vi.fn(),
 			unlock: vi.fn(),
 		},
-		accounts: {
+		identities: {
 			list: vi.fn(),
 			get: vi.fn(),
 			create: vi.fn(),
@@ -126,13 +126,13 @@ vi.mock("../hooks", async (importOriginal) => {
 // Factories
 // ------------------------------------------------------------------
 
-function makeAccount(overrides: Partial<Account> = {}): Account {
+function makeIdentity(overrides: Partial<Identity> = {}): Identity {
 	return {
 		id: 1,
-		name: "Test Account",
+		name: "Test Identity",
 		email: "test@example.com",
-		imap_host: "imap.example.com",
-		smtp_host: null,
+		inbound_connector_id: 1,
+		outbound_connector_id: null,
 		created_at: "2024-01-01T00:00:00Z",
 		...overrides,
 	};
@@ -191,7 +191,7 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
 import { api } from "../api";
 
 const mockApi = api as unknown as {
-	accounts: { list: ReturnType<typeof vi.fn> };
+	identities: { list: ReturnType<typeof vi.fn> };
 	labels: {
 		list: ReturnType<typeof vi.fn>;
 		messages: ReturnType<typeof vi.fn>;
@@ -207,12 +207,12 @@ const mockApi = api as unknown as {
 	search: ReturnType<typeof vi.fn>;
 };
 
-function setupWithAccounts(
-	accounts: Account[] = [makeAccount()],
+function setupWithIdentities(
+	identities: Identity[] = [makeIdentity()],
 	labels: Label[] = [makeLabel()],
 	messages: MessageSummary[] = [],
 ) {
-	mockApi.accounts.list.mockResolvedValue(accounts);
+	mockApi.identities.list.mockResolvedValue(identities);
 	mockApi.labels.list.mockResolvedValue(labels);
 	mockApi.labels.messages.mockResolvedValue(messages);
 	mockApi.folders.list.mockResolvedValue([]);
@@ -257,7 +257,7 @@ describe("App — Container state", () => {
 	it("proceeds to app when container state is unlocked", async () => {
 		const { api: mockApiModule } = await import("../api");
 		(mockApiModule.status as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "unlocked" });
-		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.identities.list.mockResolvedValue([makeIdentity()]);
 		mockApi.labels.list.mockResolvedValue([makeLabel()]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
@@ -273,7 +273,7 @@ describe("App — Container state", () => {
 			recoveryMnemonic:
 				"alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray",
 		});
-		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.identities.list.mockResolvedValue([makeIdentity()]);
 		mockApi.labels.list.mockResolvedValue([makeLabel()]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
@@ -288,7 +288,7 @@ describe("App — Container state", () => {
 		await userEvent.click(screen.getByRole("checkbox"));
 		await userEvent.click(screen.getByRole("button", { name: "Continue to Stork" }));
 
-		// Should now show the main app (account has one label with INBOX)
+		// Should now show the main app (identity has one label with INBOX)
 		await waitForAppLayout();
 	});
 
@@ -299,7 +299,7 @@ describe("App — Container state", () => {
 		(mockApiModule.encryption.unlock as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 			ok: true,
 		});
-		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.identities.list.mockResolvedValue([makeIdentity()]);
 		mockApi.labels.list.mockResolvedValue([makeLabel()]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
@@ -322,16 +322,16 @@ describe("App — Container state", () => {
 // ------------------------------------------------------------------
 
 describe("App — Welcome screen", () => {
-	it("shows Welcome when no accounts exist", async () => {
-		mockApi.accounts.list.mockResolvedValue([]);
+	it("shows Welcome when no identities exist", async () => {
+		mockApi.identities.list.mockResolvedValue([]);
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Welcome to Stork")).toBeInTheDocument();
 		});
 	});
 
-	it("does not show main layout when no accounts", async () => {
-		mockApi.accounts.list.mockResolvedValue([]);
+	it("does not show main layout when no identities", async () => {
+		mockApi.identities.list.mockResolvedValue([]);
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Welcome to Stork")).toBeInTheDocument();
@@ -346,45 +346,45 @@ describe("App — Welcome screen", () => {
 // ------------------------------------------------------------------
 
 describe("App — Main layout", () => {
-	it("renders sidebar and message list when accounts exist", async () => {
-		setupWithAccounts();
+	it("renders sidebar and message list when identities exist", async () => {
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 	});
 
 	it("shows Stork branding in sidebar", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		expect(screen.getByText("Stork")).toBeInTheDocument();
 	});
 
-	it("shows per-account buttons in Accounts section when multiple accounts exist", async () => {
-		setupWithAccounts(
+	it("shows per-identity buttons when multiple identities exist", async () => {
+		setupWithIdentities(
 			[
-				makeAccount({ id: 1, name: "Account One", email: "one@example.com" }),
-				makeAccount({ id: 2, name: "Account Two", email: "two@example.com" }),
+				makeIdentity({ id: 1, name: "Identity One", email: "one@example.com" }),
+				makeIdentity({ id: 2, name: "Identity Two", email: "two@example.com" }),
 			],
 			[
 				makeLabel(),
-				makeLabel({ id: 10, name: "Account One", source: "account" }),
-				makeLabel({ id: 11, name: "Account Two", source: "account" }),
+				makeLabel({ id: 10, name: "Identity One", source: "identity" }),
+				makeLabel({ id: 11, name: "Identity Two", source: "identity" }),
 			],
 		);
 		render(<App />);
 		await waitForAppLayout();
-		// Multiple accounts → Accounts section shows account label buttons.
+		// Multiple identities → identity labels show identity label buttons.
 		await waitFor(() => {
-			expect(screen.getByRole("button", { name: /Account One/ })).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: /Identity One/ })).toBeInTheDocument();
 		});
-		expect(screen.getByRole("button", { name: /Account Two/ })).toBeInTheDocument();
-		// No dropdown — account switching uses label buttons now
+		expect(screen.getByRole("button", { name: /Identity Two/ })).toBeInTheDocument();
+		// No dropdown — identity switching uses label buttons now
 		expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 	});
 
 	it("shows label names in sidebar", async () => {
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel({ id: 1, name: "inbox" }), makeLabel({ id: 2, name: "Sent Mail" })],
 		);
 		render(<App />);
@@ -396,8 +396,8 @@ describe("App — Main layout", () => {
 	});
 
 	it("renders messages in the message list", async () => {
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel()],
 			[
 				makeMessageSummary({ id: 1, subject: "Hello World" }),
@@ -412,8 +412,8 @@ describe("App — Main layout", () => {
 	});
 
 	it("auto-selects Inbox label from labels list", async () => {
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[
 				makeLabel({ id: 10, name: "Sent", message_count: 5 }),
 				makeLabel({ id: 20, name: "inbox", message_count: 3 }),
@@ -433,15 +433,15 @@ describe("App — Main layout", () => {
 
 describe("App — Document title", () => {
 	it("sets title to Stork Mail when no unread messages", async () => {
-		setupWithAccounts([makeAccount()], [makeLabel({ unread_count: 0 })]);
+		setupWithIdentities([makeIdentity()], [makeLabel({ unread_count: 0 })]);
 		render(<App />);
 		await waitForAppLayout();
 		expect(document.title).toBe("Stork Mail");
 	});
 
 	it("prepends unread count when there are unread messages", async () => {
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[
 				makeLabel({ id: 1, name: "inbox", unread_count: 5 }),
 				makeLabel({ id: 2, name: "Sent", unread_count: 2 }),
@@ -460,7 +460,7 @@ describe("App — Document title", () => {
 
 describe("App — Compose", () => {
 	it("Compose button opens compose modal", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// The Compose button's accessible name may include SVG title ("Compose Compose"),
@@ -472,7 +472,7 @@ describe("App — Compose", () => {
 	});
 
 	it("c shortcut opens compose modal", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "c" });
@@ -482,7 +482,7 @@ describe("App — Compose", () => {
 	});
 
 	it("Escape closes compose modal", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "c" });
@@ -496,7 +496,7 @@ describe("App — Compose", () => {
 	});
 
 	it("c shortcut does not open compose when already composing", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "c" });
@@ -515,7 +515,7 @@ describe("App — Compose", () => {
 
 describe("App — Search panel", () => {
 	it("/ shortcut opens search panel", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "/" });
@@ -525,7 +525,7 @@ describe("App — Search panel", () => {
 	});
 
 	it("Escape closes search panel", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "/" });
@@ -539,7 +539,7 @@ describe("App — Search panel", () => {
 	});
 
 	it("clicking search button opens search panel", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		await userEvent.click(screen.getByRole("button", { name: /search mail/i }));
@@ -549,7 +549,7 @@ describe("App — Search panel", () => {
 	});
 
 	it("SearchPanel close button calls onClose and hides the panel", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// Open search
@@ -571,7 +571,7 @@ describe("App — Search panel", () => {
 
 describe("App — Shortcuts help", () => {
 	it("? shortcut opens shortcuts help modal", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "?" });
@@ -581,7 +581,7 @@ describe("App — Shortcuts help", () => {
 	});
 
 	it("Escape closes shortcuts help modal", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "?" });
@@ -595,7 +595,7 @@ describe("App — Shortcuts help", () => {
 	});
 
 	it("? shortcut is ignored when search is open", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// Open search first
@@ -609,7 +609,7 @@ describe("App — Shortcuts help", () => {
 	});
 
 	it("? shortcut is ignored when compose is open", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// Open compose first
@@ -632,8 +632,8 @@ describe("App — Message selection", () => {
 		const msg = makeMessage({ id: 42, subject: "Click me", text_body: "Body content" });
 		mockApi.messages.get.mockResolvedValue(msg);
 		mockApi.messages.getThread.mockResolvedValue([msg]);
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel()],
 			[makeMessageSummary({ id: 42, subject: "Click me" })],
 		);
@@ -651,8 +651,8 @@ describe("App — Message selection", () => {
 		const msg = makeMessage({ id: 42, subject: "Click me" });
 		mockApi.messages.get.mockResolvedValue(msg);
 		mockApi.messages.getThread.mockResolvedValue([msg]);
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel()],
 			[makeMessageSummary({ id: 42, subject: "Click me" })],
 		);
@@ -683,7 +683,7 @@ describe("App — Keyboard navigation", () => {
 		];
 		mockApi.messages.get.mockResolvedValue(makeMessage({ id: 2 }));
 		mockApi.messages.getThread.mockResolvedValue([]);
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Message 1")).toBeInTheDocument();
@@ -702,7 +702,7 @@ describe("App — Keyboard navigation", () => {
 		];
 		mockApi.messages.get.mockResolvedValue(makeMessage({ id: 2 }));
 		mockApi.messages.getThread.mockResolvedValue([]);
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Message 1")).toBeInTheDocument();
@@ -724,7 +724,7 @@ describe("App — Keyboard navigation", () => {
 		const messages = [makeMessageSummary({ id: 99, subject: "Enter Test" })];
 		mockApi.messages.get.mockResolvedValue(makeMessage({ id: 99 }));
 		mockApi.messages.getThread.mockResolvedValue([]);
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Enter Test")).toBeInTheDocument();
@@ -742,7 +742,7 @@ describe("App — Keyboard navigation", () => {
 		];
 		mockApi.messages.get.mockResolvedValue(makeMessage({ id: 2 }));
 		mockApi.messages.getThread.mockResolvedValue([]);
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("First")).toBeInTheDocument();
@@ -760,7 +760,7 @@ describe("App — Keyboard navigation", () => {
 		];
 		mockApi.messages.get.mockResolvedValue(makeMessage({ id: 2 }));
 		mockApi.messages.getThread.mockResolvedValue([]);
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("First")).toBeInTheDocument();
@@ -782,7 +782,7 @@ describe("App — Keyboard navigation", () => {
 		const messages = [makeMessageSummary({ id: 1, subject: "Only one" })];
 		mockApi.messages.get.mockResolvedValue(makeMessage({ id: 1 }));
 		mockApi.messages.getThread.mockResolvedValue([]);
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Only one")).toBeInTheDocument();
@@ -799,8 +799,8 @@ describe("App — Keyboard navigation", () => {
 		const msg = makeMessage({ id: 42, subject: "Thread error test" });
 		mockApi.messages.get.mockResolvedValue(msg);
 		mockApi.messages.getThread.mockRejectedValueOnce(new Error("Server error"));
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel()],
 			[makeMessageSummary({ id: 42, subject: "Thread error test" })],
 		);
@@ -821,7 +821,7 @@ describe("App — Keyboard navigation", () => {
 
 describe("App — Escape key priority", () => {
 	it("Escape closes search when search is open", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "/" });
@@ -835,7 +835,7 @@ describe("App — Escape key priority", () => {
 	});
 
 	it("Escape closes shortcuts help when open", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "?" });
@@ -849,7 +849,7 @@ describe("App — Escape key priority", () => {
 	});
 
 	it("Escape closes compose when compose is open", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "c" });
@@ -871,7 +871,7 @@ describe("App — Sync indicator", () => {
 	it("shows syncing indicator when syncing is true", async () => {
 		const { useSyncPoller } = await import("../hooks");
 		vi.mocked(useSyncPoller).mockReturnValue({ syncing: true, lastError: null, syncStatus: null });
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Syncing mail…")).toBeInTheDocument();
@@ -881,7 +881,7 @@ describe("App — Sync indicator", () => {
 	});
 
 	it("does not show syncing indicator when syncing is false", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		expect(screen.queryByText("Syncing mail…")).not.toBeInTheDocument();
@@ -889,22 +889,22 @@ describe("App — Sync indicator", () => {
 });
 
 // ------------------------------------------------------------------
-// Tests: Multiple accounts
+// Tests: Multiple identities
 // ------------------------------------------------------------------
 
-describe("App — Multiple accounts", () => {
-	it("auto-selects first account when none explicitly selected", async () => {
-		const accounts = [
-			makeAccount({ id: 1, name: "Account 1" }),
-			makeAccount({ id: 2, name: "Account 2" }),
+describe("App — Multiple identities", () => {
+	it("auto-selects first identity when none explicitly selected", async () => {
+		const identities = [
+			makeIdentity({ id: 1, name: "Identity 1" }),
+			makeIdentity({ id: 2, name: "Identity 2" }),
 		];
-		mockApi.accounts.list.mockResolvedValue(accounts);
+		mockApi.identities.list.mockResolvedValue(identities);
 		mockApi.labels.list.mockResolvedValue([makeLabel()]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
 		render(<App />);
 		await waitFor(() => {
-			// labels.list is global — no account ID argument
+			// labels.list is global — no identity ID argument
 			expect(mockApi.labels.list).toHaveBeenCalled();
 		});
 	});
@@ -916,7 +916,7 @@ describe("App — Multiple accounts", () => {
 
 describe("App — Window focus refresh", () => {
 	it("refetches messages and labels when window regains focus", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		// Wait for initial API calls to complete before capturing baseline
 		await waitFor(() => {
@@ -945,7 +945,7 @@ describe("App — Window focus refresh", () => {
 describe("App — Per-message keyboard shortcuts", () => {
 	it("s shortcut calls updateFlags with add Flagged on an unstarred message", async () => {
 		const messages = [makeMessageSummary({ id: 10, subject: "Star me", flags: null })];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Star me")).toBeInTheDocument());
 		fireEvent.keyDown(window, { key: "s" });
@@ -960,7 +960,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 		const messages = [
 			makeMessageSummary({ id: 11, subject: "Unstar me", flags: "\\Flagged,\\Seen" }),
 		];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Unstar me")).toBeInTheDocument());
 		fireEvent.keyDown(window, { key: "s" });
@@ -973,7 +973,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 
 	it("u shortcut calls updateFlags with add Seen on an unread message", async () => {
 		const messages = [makeMessageSummary({ id: 20, subject: "Mark read", flags: null })];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Mark read")).toBeInTheDocument());
 		fireEvent.keyDown(window, { key: "u" });
@@ -986,7 +986,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 
 	it("u shortcut calls updateFlags with remove Seen on a read message", async () => {
 		const messages = [makeMessageSummary({ id: 21, subject: "Mark unread", flags: "\\Seen" })];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Mark unread")).toBeInTheDocument());
 		fireEvent.keyDown(window, { key: "u" });
@@ -999,7 +999,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 
 	it("d shortcut opens delete confirmation dialog", async () => {
 		const messages = [makeMessageSummary({ id: 30, subject: "Delete me" })];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Delete me")).toBeInTheDocument());
 		fireEvent.keyDown(window, { key: "d" });
@@ -1010,7 +1010,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 
 	it("d shortcut confirm calls api.messages.delete", async () => {
 		const messages = [makeMessageSummary({ id: 31, subject: "Confirm delete" })];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Confirm delete")).toBeInTheDocument());
 		fireEvent.keyDown(window, { key: "d" });
@@ -1026,7 +1026,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 
 	it("d shortcut cancel dismisses without deleting", async () => {
 		const messages = [makeMessageSummary({ id: 32, subject: "Cancel delete" })];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Cancel delete")).toBeInTheDocument());
 		fireEvent.keyDown(window, { key: "d" });
@@ -1043,7 +1043,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 
 	it("s shortcut is ignored when compose is open", async () => {
 		const messages = [makeMessageSummary({ id: 40, subject: "Guarded" })];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "c" });
@@ -1061,7 +1061,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 	it("e shortcut removes current label (label-based archive)", async () => {
 		const label = makeLabel({ id: 7 });
 		const messages = [makeMessageSummary({ id: 50, subject: "Archive me" })];
-		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.identities.list.mockResolvedValue([makeIdentity()]);
 		mockApi.labels.list.mockResolvedValue([label]);
 		mockApi.labels.messages.mockResolvedValue(messages);
 		mockApi.folders.list.mockResolvedValue([]);
@@ -1077,7 +1077,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 
 	it("e shortcut is ignored when compose is open", async () => {
 		const messages = [makeMessageSummary({ id: 51, subject: "No archive" })];
-		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.identities.list.mockResolvedValue([makeIdentity()]);
 		mockApi.labels.list.mockResolvedValue([makeLabel()]);
 		mockApi.labels.messages.mockResolvedValue(messages);
 		mockApi.folders.list.mockResolvedValue([
@@ -1108,7 +1108,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 			makeMessageSummary({ id: 60, subject: "Select me" }),
 			makeMessageSummary({ id: 61, subject: "Second message" }),
 		];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Select me")).toBeInTheDocument());
 
@@ -1128,7 +1128,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 
 	it("x shortcut is ignored when compose is open", async () => {
 		const messages = [makeMessageSummary({ id: 62, subject: "No select" })];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "c" });
@@ -1148,7 +1148,7 @@ describe("App — Per-message keyboard shortcuts", () => {
 
 describe("App — Settings modal", () => {
 	it("settings button opens settings modal", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// Settings button in the sidebar
@@ -1161,7 +1161,7 @@ describe("App — Settings modal", () => {
 	});
 
 	it("Escape closes settings modal", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		const settingsBtns = screen.getAllByTitle("Settings");
@@ -1185,8 +1185,8 @@ describe("App — Reply/Forward shortcuts", () => {
 		const msg = makeMessage({ id: 50, subject: "Reply test", text_body: "Body" });
 		mockApi.messages.get.mockResolvedValue(msg);
 		mockApi.messages.getThread.mockResolvedValue([msg]);
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel()],
 			[makeMessageSummary({ id: 50, subject: "Reply test" })],
 		);
@@ -1207,7 +1207,7 @@ describe("App — Reply/Forward shortcuts", () => {
 	});
 
 	it("r shortcut does nothing when no message selected", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "r" });
@@ -1222,7 +1222,7 @@ describe("App — Reply/Forward shortcuts", () => {
 
 describe("App — Dark mode", () => {
 	it("dark mode toggle button works", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		const toggle = screen.getByTitle("Toggle dark mode");
@@ -1236,10 +1236,10 @@ describe("App — Dark mode", () => {
 // ------------------------------------------------------------------
 
 describe("App — Error state", () => {
-	it("shows reconnecting screen when accounts fail to load", async () => {
+	it("shows reconnecting screen when identities fail to load", async () => {
 		const { api: mockApiModule } = await import("../api");
 		(mockApiModule.status as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "unlocked" });
-		mockApi.accounts.list.mockRejectedValue(new Error("Server error"));
+		mockApi.identities.list.mockRejectedValue(new Error("Server error"));
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Reconnecting to server…")).toBeInTheDocument();
@@ -1248,11 +1248,11 @@ describe("App — Error state", () => {
 
 	it("auto-recovers to unlock screen when server comes back locked", async () => {
 		const { api: mockApiModule } = await import("../api");
-		// Initial: server is unlocked but accounts fail (simulating restart mid-load)
+		// Initial: server is unlocked but identities fail (simulating restart mid-load)
 		(mockApiModule.status as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({ state: "unlocked" }) // initial status check
 			.mockResolvedValueOnce({ state: "locked" }); // probe during reconnect
-		mockApi.accounts.list.mockRejectedValue(new Error("Server error"));
+		mockApi.identities.list.mockRejectedValue(new Error("Server error"));
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Reconnecting to server…")).toBeInTheDocument();
@@ -1268,9 +1268,9 @@ describe("App — Error state", () => {
 		(mockApiModule.status as ReturnType<typeof vi.fn>)
 			.mockResolvedValueOnce({ state: "unlocked" }) // initial status check
 			.mockResolvedValueOnce({ state: "unlocked" }); // probe during reconnect
-		mockApi.accounts.list
+		mockApi.identities.list
 			.mockRejectedValueOnce(new Error("Server error"))
-			.mockResolvedValueOnce([makeAccount()]);
+			.mockResolvedValueOnce([makeIdentity()]);
 		mockApi.labels.list.mockResolvedValue([makeLabel()]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
@@ -1278,7 +1278,7 @@ describe("App — Error state", () => {
 		await waitFor(() => {
 			expect(screen.getByText("Reconnecting to server…")).toBeInTheDocument();
 		});
-		// The probe sets containerState to "unlocked" which re-triggers accounts fetch
+		// The probe sets containerState to "unlocked" which re-triggers identities fetch
 		await waitForAppLayout();
 	});
 });
@@ -1309,30 +1309,30 @@ describe("App — Loading state", () => {
 });
 
 // ------------------------------------------------------------------
-// Tests: Account switching
+// Tests: Identity switching
 // ------------------------------------------------------------------
 
-describe("App — Account switching", () => {
-	it("switching account via Accounts section selects the account label", async () => {
-		const accounts = [
-			makeAccount({ id: 1, name: "Account 1" }),
-			makeAccount({ id: 2, name: "Account 2" }),
+describe("App — Identity switching", () => {
+	it("switching identity via identity section selects the identity label", async () => {
+		const identities = [
+			makeIdentity({ id: 1, name: "Identity 1" }),
+			makeIdentity({ id: 2, name: "Identity 2" }),
 		];
-		mockApi.accounts.list.mockResolvedValue(accounts);
+		mockApi.identities.list.mockResolvedValue(identities);
 		mockApi.labels.list.mockResolvedValue([
 			makeLabel(),
-			makeLabel({ id: 10, name: "Account 1", source: "account" }),
-			makeLabel({ id: 11, name: "Account 2", source: "account" }),
+			makeLabel({ id: 10, name: "Identity 1", source: "identity" }),
+			makeLabel({ id: 11, name: "Identity 2", source: "identity" }),
 		]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
 		render(<App />);
 		await waitFor(() => {
-			expect(screen.getByRole("button", { name: /Account 1/ })).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: /Identity 1/ })).toBeInTheDocument();
 		});
-		// Switch account via Accounts section label button
-		await userEvent.click(screen.getByRole("button", { name: /Account 2/ }));
-		// Clicking an account label triggers label-based filtering, which fetches label messages
+		// Switch identity via identity section label button
+		await userEvent.click(screen.getByRole("button", { name: /Identity 2/ }));
+		// Clicking an identity label triggers label-based filtering, which fetches label messages
 		await waitFor(() => {
 			expect(mockApi.labels.messages).toHaveBeenCalledWith(11, expect.anything());
 		});
@@ -1348,8 +1348,8 @@ describe("App — Label switching", () => {
 		const msg = makeMessage({ id: 42 });
 		mockApi.messages.get.mockResolvedValue(msg);
 		mockApi.messages.getThread.mockResolvedValue([msg]);
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel({ id: 1, name: "inbox" }), makeLabel({ id: 2, name: "Archive", unread_count: 0 })],
 			[makeMessageSummary({ id: 42, subject: "Selected msg" })],
 		);
@@ -1373,8 +1373,8 @@ describe("App — Label switching", () => {
 	});
 
 	it("clicking a label in sidebar changes the active label", async () => {
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel({ id: 1, name: "inbox" }), makeLabel({ id: 2, name: "Archive", unread_count: 0 })],
 		);
 		render(<App />);
@@ -1401,8 +1401,8 @@ describe("App — Reply-All and Forward shortcuts", () => {
 		const msg = makeMessage({ id: 60, subject: "Shortcuts test", text_body: "Body" });
 		mockApi.messages.get.mockResolvedValue(msg);
 		mockApi.messages.getThread.mockResolvedValue([msg]);
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel()],
 			[makeMessageSummary({ id: 60, subject: "Shortcuts test" })],
 		);
@@ -1429,7 +1429,7 @@ describe("App — Reply-All and Forward shortcuts", () => {
 	});
 
 	it("a shortcut does nothing when no message selected", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "a" });
@@ -1438,7 +1438,7 @@ describe("App — Reply-All and Forward shortcuts", () => {
 	});
 
 	it("f shortcut does nothing when no message selected", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "f" });
@@ -1447,7 +1447,7 @@ describe("App — Reply-All and Forward shortcuts", () => {
 	});
 
 	it("a shortcut does nothing when compose already open", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		fireEvent.keyDown(window, { key: "c" });
@@ -1471,8 +1471,8 @@ describe("App — Load more", () => {
 			makeMessageSummary({ id: i + 1, subject: `Message ${i + 1}` }),
 		);
 		mockApi.labels.messages.mockResolvedValue(messages);
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
-		// Override the mockResolvedValue set in setupWithAccounts
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
+		// Override the mockResolvedValue set in setupWithIdentities
 		mockApi.labels.messages.mockResolvedValue(messages);
 		render(<App />);
 		await waitFor(() => {
@@ -1486,7 +1486,7 @@ describe("App — Load more", () => {
 		);
 		const more = [makeMessageSummary({ id: 51, subject: "Msg 51" })];
 		mockApi.labels.messages.mockResolvedValueOnce(initial).mockResolvedValueOnce(more);
-		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.identities.list.mockResolvedValue([makeIdentity()]);
 		mockApi.labels.list.mockResolvedValue([makeLabel()]);
 		mockApi.folders.list.mockResolvedValue([]);
 		render(<App />);
@@ -1512,7 +1512,7 @@ describe("App — Bulk selection", () => {
 			makeMessageSummary({ id: 100, subject: "Bulk msg 1", flags: null }),
 			makeMessageSummary({ id: 101, subject: "Bulk msg 2", flags: null }),
 		];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Bulk msg 1")).toBeInTheDocument());
 	}
@@ -1603,8 +1603,8 @@ describe("App — Bulk selection", () => {
 // ------------------------------------------------------------------
 
 describe("App — Sync trigger", () => {
-	it("sync now button calls api.sync.trigger with account id", async () => {
-		setupWithAccounts([makeAccount({ id: 7 })], [makeLabel()]);
+	it("sync now button calls api.sync.trigger with identity id", async () => {
+		setupWithIdentities([makeIdentity({ id: 7 })], [makeLabel()]);
 		render(<App />);
 		await waitForAppLayout();
 		const syncBtn = screen.getByTitle("Sync now");
@@ -1621,7 +1621,7 @@ describe("App — Sync trigger", () => {
 
 describe("App — Search message selection", () => {
 	it("selecting message from search panel closes panel and selects message", async () => {
-		setupWithAccounts([makeAccount()], [makeLabel()]);
+		setupWithIdentities([makeIdentity()], [makeLabel()]);
 		const msg = makeMessage({ id: 77, subject: "Found via search" });
 		mockApi.messages.get.mockResolvedValue(msg);
 		mockApi.messages.getThread.mockResolvedValue([msg]);
@@ -1649,7 +1649,7 @@ describe("App — Search message selection", () => {
 
 describe("App — Mobile sidebar", () => {
 	it("hamburger button opens sidebar on mobile", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// The hamburger button opens the mobile sidebar overlay
@@ -1662,7 +1662,7 @@ describe("App — Mobile sidebar", () => {
 	});
 
 	it("clicking sidebar overlay closes sidebar", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// Open sidebar first
@@ -1692,7 +1692,7 @@ describe("App — Send email", () => {
 			rejected: [],
 			stored_message_id: 1,
 		});
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// Open compose
@@ -1717,7 +1717,7 @@ describe("App — Send email", () => {
 	it("shows error inline when send fails", async () => {
 		const { api } = await import("../api");
 		(api.send as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("SMTP connection refused"));
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// Open compose
@@ -1750,7 +1750,7 @@ describe("App — Send email", () => {
 describe("App — Inline star toggle", () => {
 	it("inline star toggle calls updateFlags with add Flagged for unstarred message", async () => {
 		const messages = [makeMessageSummary({ id: 80, subject: "Star inline", flags: null })];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Star inline")).toBeInTheDocument());
 		// The star button appears on hover — click it directly
@@ -1765,7 +1765,7 @@ describe("App — Inline star toggle", () => {
 
 	it("inline star toggle calls updateFlags with remove Flagged for starred message", async () => {
 		const messages = [makeMessageSummary({ id: 81, subject: "Unstar inline", flags: "\\Flagged" })];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Unstar inline")).toBeInTheDocument());
 		const starBtn = screen.getByRole("button", { name: /remove star/i });
@@ -1782,7 +1782,7 @@ describe("App — Inline star toggle", () => {
 			new Error("Network error"),
 		);
 		const messages = [makeMessageSummary({ id: 82, subject: "Star fail", flags: null })];
-		setupWithAccounts([makeAccount()], [makeLabel()], messages);
+		setupWithIdentities([makeIdentity()], [makeLabel()], messages);
 		render(<App />);
 		await waitFor(() => expect(screen.getByText("Star fail")).toBeInTheDocument());
 		const starBtn = screen.getByRole("button", { name: /star message/i });
@@ -1801,7 +1801,7 @@ describe("App — Inline star toggle", () => {
 
 describe("App — Container locked event", () => {
 	it("shows unlock screen when stork-container-locked event fires", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// Dispatch the custom event that the API client fires on 423 responses
@@ -1819,7 +1819,7 @@ describe("App — Container locked event", () => {
 describe("App — Sync trigger errors", () => {
 	it("shows error toast when sync trigger fails with non-already-syncing error", async () => {
 		mockApi.sync.trigger.mockRejectedValueOnce(new Error("Connection refused"));
-		setupWithAccounts([makeAccount({ id: 5 })], [makeLabel()]);
+		setupWithIdentities([makeIdentity({ id: 5 })], [makeLabel()]);
 		render(<App />);
 		await waitForAppLayout();
 		const syncBtn = screen.getByTitle("Sync now");
@@ -1831,7 +1831,7 @@ describe("App — Sync trigger errors", () => {
 
 	it("suppresses toast when sync trigger fails with already syncing", async () => {
 		mockApi.sync.trigger.mockRejectedValueOnce(new Error("already syncing"));
-		setupWithAccounts([makeAccount({ id: 5 })], [makeLabel()]);
+		setupWithIdentities([makeIdentity({ id: 5 })], [makeLabel()]);
 		render(<App />);
 		await waitForAppLayout();
 		const syncBtn = screen.getByTitle("Sync now");
@@ -1847,8 +1847,8 @@ describe("App — Sync trigger errors", () => {
 // ------------------------------------------------------------------
 
 describe("App — Welcome screen", () => {
-	it("shows welcome screen when no accounts exist", async () => {
-		setupWithAccounts([], []);
+	it("shows welcome screen when no identities exist", async () => {
+		setupWithIdentities([], []);
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Welcome to Stork")).toBeInTheDocument();
@@ -1858,7 +1858,7 @@ describe("App — Welcome screen", () => {
 
 describe("App — Escape key chain", () => {
 	it("Escape closes shortcuts modal", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// Open shortcuts help
@@ -1884,8 +1884,8 @@ describe("App — Reply compose pre-fills sender", () => {
 		});
 		mockApi.messages.get.mockResolvedValue(msg);
 		mockApi.messages.getThread.mockResolvedValue([msg]);
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel()],
 			[makeMessageSummary({ id: 90, subject: "Reply pre-fill" })],
 		);
@@ -1925,8 +1925,8 @@ describe("App — Send with reply threading", () => {
 			rejected: [],
 			stored_message_id: 2,
 		});
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel()],
 			[makeMessageSummary({ id: 91, subject: "Thread test" })],
 		);
@@ -1983,8 +1983,8 @@ describe("App — Send with reply threading", () => {
 			rejected: [],
 			stored_message_id: 3,
 		});
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel()],
 			[makeMessageSummary({ id: 92, subject: "Space refs" })],
 		);
@@ -2025,8 +2025,8 @@ describe("App — MessageDetail callbacks", () => {
 		const msg = makeMessage({ id: 70, subject: "Detail test", text_body: "Body text" });
 		mockApi.messages.get.mockResolvedValue(msg);
 		mockApi.messages.getThread.mockResolvedValue([msg]);
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel()],
 			[makeMessageSummary({ id: 70, subject: "Detail test" })],
 		);
@@ -2078,7 +2078,7 @@ describe("App — MessageDetail callbacks", () => {
 
 describe("App — Search result navigation", () => {
 	it("opening search and closing returns to correct state", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// Open search
@@ -2102,7 +2102,7 @@ describe("App — Search result navigation", () => {
 
 describe("App — Escape closes settings before other modals", () => {
 	it("Escape closes settings modal when settings is open", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 		// Open settings
@@ -2138,7 +2138,7 @@ describe("App — Back from search-opened message", () => {
 				snippet: "Found body",
 			},
 		]);
-		setupWithAccounts([makeAccount()], [makeLabel()]);
+		setupWithIdentities([makeIdentity()], [makeLabel()]);
 		render(<App />);
 		await waitForAppLayout();
 
@@ -2185,8 +2185,8 @@ describe("App — onMessageChanged callback", () => {
 		const msg = makeMessage({ id: 88, subject: "Refetch trigger test", flags: null });
 		mockApi.messages.get.mockResolvedValue(msg);
 		mockApi.messages.getThread.mockResolvedValue([msg]);
-		setupWithAccounts(
-			[makeAccount()],
+		setupWithIdentities(
+			[makeIdentity()],
 			[makeLabel()],
 			[makeMessageSummary({ id: 88, subject: "Refetch trigger test", flags: null })],
 		);
@@ -2220,7 +2220,7 @@ describe("App — onMessageChanged callback", () => {
 
 describe("App — Modal onClose via X button", () => {
 	it("clicking X button in ShortcutsHelp calls onClose and closes the modal", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 
@@ -2240,7 +2240,7 @@ describe("App — Modal onClose via X button", () => {
 	});
 
 	it("clicking Close settings button in Settings modal calls onClose", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 
@@ -2261,7 +2261,7 @@ describe("App — Modal onClose via X button", () => {
 	});
 
 	it("clicking X button in ComposeModal calls onClose prop", async () => {
-		setupWithAccounts();
+		setupWithIdentities();
 		render(<App />);
 		await waitForAppLayout();
 
@@ -2303,7 +2303,7 @@ describe("App — Escape key from search-opened message", () => {
 				snippet: "Found body",
 			},
 		]);
-		setupWithAccounts([makeAccount()], [makeLabel()]);
+		setupWithIdentities([makeIdentity()], [makeLabel()]);
 		render(<App />);
 		await waitForAppLayout();
 
@@ -2357,7 +2357,7 @@ describe("App — Escape key from search-opened message", () => {
 
 describe("App — History navigation with searchActive", () => {
 	it("popstate with searchActive=true opens search panel", async () => {
-		setupWithAccounts([makeAccount()], [makeLabel()]);
+		setupWithIdentities([makeIdentity()], [makeLabel()]);
 		render(<App />);
 		await waitForAppLayout();
 
@@ -2366,7 +2366,7 @@ describe("App — History navigation with searchActive", () => {
 
 		// Fire a popstate event simulating browser back to a state where search was open (lines 272-278)
 		const navState = {
-			accountId: 1,
+			identityId: 1,
 			labelId: 1,
 			messageId: null,
 			searchActive: true,
@@ -2380,12 +2380,12 @@ describe("App — History navigation with searchActive", () => {
 	});
 
 	it("popstate without searchActive leaves search panel closed", async () => {
-		setupWithAccounts([makeAccount()], [makeLabel()]);
+		setupWithIdentities([makeIdentity()], [makeLabel()]);
 		render(<App />);
 		await waitForAppLayout();
 
 		// Fire popstate without searchActive
-		const navState = { accountId: 1, labelId: 1, messageId: null };
+		const navState = { identityId: 1, labelId: 1, messageId: null };
 		window.dispatchEvent(new PopStateEvent("popstate", { state: navState }));
 
 		// Wait a tick and verify search panel remains closed
@@ -2437,7 +2437,7 @@ describe("App — Search prev/next navigation", () => {
 			makeResult(103, "Result Three"),
 		]);
 
-		setupWithAccounts([makeAccount()], [makeLabel()]);
+		setupWithIdentities([makeIdentity()], [makeLabel()]);
 		render(<App />);
 		await waitForAppLayout();
 
@@ -2539,7 +2539,7 @@ describe("App — Search prev/next navigation", () => {
 				snippet: "body",
 			},
 		]);
-		setupWithAccounts([makeAccount()], [makeLabel()]);
+		setupWithIdentities([makeIdentity()], [makeLabel()]);
 		render(<App />);
 		await waitForAppLayout();
 
@@ -2575,7 +2575,7 @@ describe("App — api.status error fallback", () => {
 		(mockApiModule.status as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
 			new Error("Connection refused"),
 		);
-		mockApi.accounts.list.mockResolvedValue([makeAccount()]);
+		mockApi.identities.list.mockResolvedValue([makeIdentity()]);
 		mockApi.labels.list.mockResolvedValue([makeLabel()]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
@@ -2586,14 +2586,14 @@ describe("App — api.status error fallback", () => {
 });
 
 // ------------------------------------------------------------------
-// Tests: per-account default_view "label:<id>" parsing (App.tsx lines 101-102)
+// Tests: per-identity default_view "label:<id>" parsing (App.tsx lines 101-102)
 // ------------------------------------------------------------------
 
-describe("App — per-account default_view label: parsing", () => {
+describe("App — per-identity default_view label: parsing", () => {
 	it("selects the specified label when default_view is 'label:<id>'", async () => {
 		const targetLabel = makeLabel({ id: 7, name: "work", unread_count: 3, message_count: 5 });
-		const accountWithLabelView = makeAccount({ default_view: "label:7" });
-		mockApi.accounts.list.mockResolvedValue([accountWithLabelView]);
+		const identityWithLabelView = makeIdentity({ default_view: "label:7" });
+		mockApi.identities.list.mockResolvedValue([identityWithLabelView]);
 		mockApi.labels.list.mockResolvedValue([makeLabel(), targetLabel]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
@@ -2604,9 +2604,9 @@ describe("App — per-account default_view label: parsing", () => {
 	});
 
 	it("falls back to inbox when default_view is 'label:<nan>'", async () => {
-		const accountWithBadView = makeAccount({ default_view: "label:notanumber" });
+		const identityWithBadView = makeIdentity({ default_view: "label:notanumber" });
 		const inboxLabel = makeLabel({ id: 1, name: "inbox" });
-		mockApi.accounts.list.mockResolvedValue([accountWithBadView]);
+		mockApi.identities.list.mockResolvedValue([identityWithBadView]);
 		mockApi.labels.list.mockResolvedValue([inboxLabel]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
@@ -2632,7 +2632,7 @@ describe("App — useSyncPoller onSyncComplete callback", () => {
 		});
 
 		try {
-			setupWithAccounts([makeAccount()], [makeLabel()]);
+			setupWithIdentities([makeIdentity()], [makeLabel()]);
 			render(<App />);
 			await waitForAppLayout();
 

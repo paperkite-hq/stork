@@ -45,7 +45,7 @@ npm run build && npm start
 
 ## First-Run Setup: Encryption
 
-When you first start Stork, you'll be prompted to create an encryption password. This password protects your entire database — all emails, attachments, and account credentials are encrypted at rest using SQLCipher (AES-256).
+When you first start Stork, you'll be prompted to create an encryption password. This password protects your entire database — all emails, attachments, and identity credentials are encrypted at rest using SQLCipher (AES-256).
 
 **Choose a strong password** (minimum 12 characters). Stork uses Argon2id key derivation with 64 MiB memory cost to resist brute-force attacks.
 
@@ -69,9 +69,9 @@ If you suspect your recovery mnemonic has been compromised, rotate it from Setti
 
 If you forget your password but have your recovery mnemonic, use it on the unlock screen. You'll be prompted to set a new password. The recovery mnemonic is not invalidated by this process.
 
-## Adding an Email Account
+## Adding an Email Identity
 
-After unlocking, you'll see the Welcome screen prompting you to add an account.
+After unlocking, you'll see the Welcome screen prompting you to add an identity.
 
 You'll need:
 - **IMAP server hostname** (e.g., `imap.fastmail.com`, `imap.gmail.com`)
@@ -110,7 +110,7 @@ The interface has three panels:
 
 Click the compose button to write a new message. When viewing a message, use the Reply or Reply All buttons.
 
-Composing requires SMTP credentials configured on the account. If you only set up IMAP, you can read mail but not send.
+Composing requires SMTP credentials configured on the identity. If you only set up IMAP, you can read mail but not send.
 
 ### Search
 
@@ -132,9 +132,9 @@ Press `?` to see available keyboard shortcuts. Navigation, compose, and search a
 
 Toggle dark mode from the settings or use the theme button. Your preference is saved in the browser.
 
-### Multiple Accounts
+### Multiple Identities
 
-You can add multiple email accounts from the Settings panel. Each account syncs independently on its own schedule. The sidebar shows all accounts with their labels.
+You can add multiple email identities from the Settings panel. Each identity syncs independently on its own schedule. The sidebar shows all identities with their labels.
 
 ### Mail Organization Philosophy
 
@@ -143,7 +143,7 @@ Stork uses a **labels, not folders** model inspired by Gmail. Every IMAP folder 
 **Promoted views** (always at the top of the sidebar):
 - **Inbox** — your landing view. Shows messages with the Inbox label. This is portable across providers because every IMAP server has an INBOX folder, which Stork syncs as a label.
 - **Unread** — shows all unread messages across every label. This is a Stork-internal unread bit and does not flow back to the IMAP server. Useful when your IMAP server auto-sorts emails into folders — new messages in those folders will surface here.
-- **All Mail** — every message for the account, regardless of labels. Nothing is hidden from this view.
+- **All Mail** — every message for the identity, regardless of labels. Nothing is hidden from this view.
 
 **Labels** (below the divider):
 - All other labels (Sent, Drafts, Trash, Spam, custom labels, etc.) appear in the lower section.
@@ -186,11 +186,11 @@ Stork syncs mail using the IMAP protocol:
 2. **Message sync** — for each folder, fetches messages newer than what Stork already has (incremental sync using IMAP UIDs).
 3. **Flag sync** — updates read/unread/starred status for existing messages.
 
-Sync runs automatically every 5 minutes per account. You can also trigger a manual sync from the UI.
+Sync runs automatically every 5 minutes per identity. You can also trigger a manual sync from the UI.
 
 ### What Stork Does NOT Do (by default)
 
-- **Stork does not delete mail from your server by default.** The sync is strictly read-only. To use Stork as a permanent local archive, turn on **Connector mode** in Settings > Accounts for each account. With it enabled, Stork automatically removes messages from the IMAP server after syncing them locally — your mail provider becomes a transient delivery edge, and Stork becomes the single source of truth.
+- **Stork does not delete mail from your server by default.** The sync is strictly read-only. To use Stork as a permanent local archive, turn on **Connector mode** in Settings > Identities for each identity. With it enabled, Stork automatically removes messages from the IMAP server after syncing them locally — your mail provider becomes a transient delivery edge, and Stork becomes the single source of truth.
 - **Stork does not modify flags on the server.** Marking a message as read in Stork only affects local storage. Your IMAP server's flags remain unchanged.
 
 ### Sync Errors
@@ -209,7 +209,7 @@ Stork is configured via environment variables:
 ### Data Storage
 
 All data is stored in `$STORK_DATA_DIR`:
-- `stork.db` — encrypted SQLite database (accounts, folders, messages, FTS index)
+- `stork.db` — encrypted SQLite database (identities, folders, messages, FTS index)
 - `stork.keys` — encrypted vault key envelopes (password + recovery key wrappings)
 - Attachments are stored inside the SQLite database as BLOBs (encrypted along with everything else)
 
@@ -287,4 +287,4 @@ Transient network errors are normal. Stork retries with backoff. If errors persi
 
 ### Search returns no results
 
-The FTS index is built automatically as messages are synced. If you just added an account, wait for the initial sync to complete. The search covers subject, sender, recipients, and body text.
+The FTS index is built automatically as messages are synced. If you just added an identity, wait for the initial sync to complete. The search covers subject, sender, recipients, and body text.

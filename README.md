@@ -25,7 +25,7 @@ Stork syncs your email from any IMAP server, stores it locally with **AES-256 en
 - **Full-text search** — FTS5-powered search across your entire mailbox, instantly
 - **Compose & send** — reply, reply-all, forward, and compose via your SMTP server
 - **Labels, not folders** — Gmail-style labels replace rigid folder hierarchies ([why?](docs/design-decisions.md))
-- **Multi-account** — connect multiple IMAP accounts; unified inbox shows all messages in one view
+- **Multi-identity** — connect multiple email identities; unified inbox shows all messages in one view
 - **Mirror & Connector modes** — test the waters with your provider as backup, then flip to Connector mode when you're ready to commit
 - **Desktop notifications** — new mail alerts as messages arrive
 - **Recovery key** — 24-word BIP39 mnemonic so a forgotten password doesn't mean lost mail
@@ -59,7 +59,7 @@ docker compose up -d
 # Open http://localhost:3100
 ```
 
-The setup wizard will guide you through creating a password and connecting your email account. See the [Getting Started guide](docs/getting-started.md) for a full walkthrough.
+The setup wizard will guide you through creating a password and connecting your email. See the [Getting Started guide](docs/getting-started.md) for a full walkthrough.
 
 <details>
 <summary>Docker run (single command)</summary>
@@ -122,7 +122,7 @@ The idea is simple. Your inbox is full of sensitive history — receipts, contra
   └──────────────────────┘          └──────────────────────┘
 ```
 
-The UI walks you through this choice when you connect your first account, and surfaces an ambient reminder while any account is still in mirror mode. The [User Guide](docs/user-guide.md) covers both modes in detail. The connector architecture supports any mail source — not just IMAP — so connector mode generalizes naturally as new connectors are added.
+The UI walks you through this choice when you connect your first email, and surfaces an ambient reminder while any identity is still in mirror mode. The [User Guide](docs/user-guide.md) covers both modes in detail. The connector architecture supports any mail source — not just IMAP — so connector mode generalizes naturally as new connectors are added.
 
 ## How Stork Compares
 
@@ -152,7 +152,7 @@ The UI walks you through this choice when you connect your first account, and su
 - [x] Encryption at rest (AES-256 via SQLCipher, BIP39 recovery key)
 - [x] Pluggable connector architecture
 - [x] Delete-from-server workflow
-- [x] Multi-account support (unified inbox)
+- [x] Multi-identity support (unified inbox)
 
 ### v0.6.0 (planned)
 
@@ -162,7 +162,7 @@ The UI walks you through this choice when you connect your first account, and su
 
 ## Documentation
 
-- **[Getting Started](docs/getting-started.md)** — first launch, encryption setup, adding an account
+- **[Getting Started](docs/getting-started.md)** — first launch, encryption setup, adding an email identity
 - **[User Guide](docs/user-guide.md)** — search tips, backups, reverse proxy
 - **[Use Cases](docs/use-cases.md)** — encrypted Gmail backup, Mailcow replacement, VPN access
 - **[Configuration](docs/configuration.md)** — environment variables, Docker options

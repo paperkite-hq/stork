@@ -52,7 +52,7 @@ describe("container state machine", () => {
 
 		// Boot locked
 		const { app } = await bootContainer(dataDir, createApp);
-		const res = await app.request("/api/accounts");
+		const res = await app.request("/api/identities");
 		expect(res.status).toBe(423);
 	});
 
@@ -172,7 +172,7 @@ describe("POST /api/unlock", () => {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ password: "correctpassword!" }),
 		});
-		const res = await app.request("/api/accounts");
+		const res = await app.request("/api/identities");
 		expect(res.status).toBe(200);
 	});
 });

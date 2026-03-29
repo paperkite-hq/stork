@@ -1,6 +1,6 @@
-import Database from "better-sqlite3-multiple-ciphers";
+import type Database from "better-sqlite3-multiple-ciphers";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { MIGRATIONS } from "../storage/schema.js";
+import { createTestDb, createTestFolder, createTestIdentity } from "../test-helpers/test-db.js";
 import { MessageSearch, parseSearchQuery } from "./search.js";
 
 describe("parseSearchQuery", () => {
@@ -83,31 +83,21 @@ describe("MessageSearch — structured operators", () => {
 	let search: MessageSearch;
 
 	beforeAll(() => {
-		db = new Database(":memory:");
-		db.exec("PRAGMA foreign_keys = ON");
-		db.exec(MIGRATIONS[0]);
-		db.exec(MIGRATIONS[2]); // labels (v3, with account_id)
-		db.exec(MIGRATIONS[9]); // cached label counts (v10)
-		db.exec(MIGRATIONS[14]); // unify labels — remove account_id (v15)
+		db = createTestDb();
 
-		db.prepare(
-			"INSERT INTO accounts (name, email, imap_host, imap_user, imap_pass) VALUES (?, ?, ?, ?, ?)",
-		).run("Test", "test@example.com", "imap.test.com", "test", "pass");
-
-		db.prepare(
-			"INSERT INTO folders (account_id, path, name, uid_validity) VALUES (?, ?, ?, ?)",
-		).run(1, "INBOX", "Inbox", 1);
+		const identityId = createTestIdentity(db);
+		const folderId = createTestFolder(db, identityId, "INBOX");
 
 		const insert = db.prepare(`
-			INSERT INTO messages (account_id, folder_id, uid, message_id, subject,
-				from_address, from_name, to_addresses, cc_addresses, date, text_body, flags, has_attachments)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO messages (identity_id, folder_id, uid, message_id, subject,
+				from_address, from_name, to_addresses, cc_addresses, date, text_body, flags, has_attachments, size)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1000)
 		`);
 
 		// Message 1: unread, from alice, with attachment
 		insert.run(
-			1,
-			1,
+			identityId,
+			folderId,
 			1,
 			"<m1@test.com>",
 			"Project proposal",
@@ -123,8 +113,8 @@ describe("MessageSearch — structured operators", () => {
 
 		// Message 2: read, starred, from bob, cc to carol
 		insert.run(
-			1,
-			1,
+			identityId,
+			folderId,
 			2,
 			"<m2@test.com>",
 			"Meeting tomorrow",
@@ -140,8 +130,8 @@ describe("MessageSearch — structured operators", () => {
 
 		// Message 3: unread, from alice, no attachment
 		insert.run(
-			1,
-			1,
+			identityId,
+			folderId,
 			3,
 			"<m3@test.com>",
 			"Follow-up on proposal",
@@ -157,8 +147,8 @@ describe("MessageSearch — structured operators", () => {
 
 		// Message 4: read, from charlie, old date
 		insert.run(
-			1,
-			1,
+			identityId,
+			folderId,
 			4,
 			"<m4@test.com>",
 			"Invoice December",
@@ -172,13 +162,22 @@ describe("MessageSearch — structured operators", () => {
 			1,
 		);
 
-		// Create a label and assign it
+		// Create a label and assign it to message 1
 		db.prepare("INSERT INTO labels (name, color, source) VALUES (?, ?, ?)").run(
 			"Important",
 			"#ef4444",
 			"user",
 		);
-		db.prepare("INSERT INTO message_labels (message_id, label_id) VALUES (?, ?)").run(1, 1); // Message 1 has "Important" label
+		const labelRow = db.prepare("SELECT id FROM labels WHERE name = 'Important'").get() as {
+			id: number;
+		};
+		const msg1Row = db
+			.prepare("SELECT id FROM messages WHERE message_id = '<m1@test.com>'")
+			.get() as { id: number };
+		db.prepare("INSERT INTO message_labels (message_id, label_id) VALUES (?, ?)").run(
+			msg1Row.id,
+			labelRow.id,
+		);
 
 		search = new MessageSearch(db);
 	});
