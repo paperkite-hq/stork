@@ -275,6 +275,12 @@ interface MessageListProps {
 	/** Labels to suggest for intersection filtering — shown as clickable chips above the list */
 	suggestedLabels?: LabelSummary[];
 	onAddFilterLabel?: (id: number) => void;
+	/** Active filter label IDs — shown as removable pills above the list */
+	filterLabelIds?: number[];
+	/** All labels — used to resolve filter pill names */
+	allLabels?: LabelSummary[];
+	onRemoveFilterLabel?: (id: number) => void;
+	onClearFilter?: () => void;
 }
 
 export function MessageList({
@@ -304,6 +310,10 @@ export function MessageList({
 	totalCount,
 	suggestedLabels,
 	onAddFilterLabel,
+	filterLabelIds,
+	allLabels,
+	onRemoveFilterLabel,
+	onClearFilter,
 }: MessageListProps) {
 	const selectedRef = useRef<HTMLButtonElement>(null);
 	const bulkCount = selectedIds?.size ?? 0;
@@ -407,28 +417,82 @@ export function MessageList({
 					/>
 				)}
 
-			{/* Suggested filter labels — shown when there are co-occurring labels to narrow by.
-			    Click any chip to add it to the current view as an intersection filter. */}
-			{suggestedLabels && suggestedLabels.length > 0 && onAddFilterLabel && (
+			{/* Active filter pills + suggested filter labels — unified chip bar above the message list */}
+			{((filterLabelIds && filterLabelIds.length > 1 && onRemoveFilterLabel) ||
+				(suggestedLabels && suggestedLabels.length > 0 && onAddFilterLabel)) && (
 				<div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center gap-1.5 flex-wrap">
-					<span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">Also view:</span>
-					{suggestedLabels.map((l) => (
-						<button
-							key={l.id}
-							type="button"
-							onClick={() => onAddFilterLabel(l.id)}
-							className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-stork-100 dark:hover:bg-stork-900 hover:text-stork-700 dark:hover:text-stork-300 transition-colors"
-							title={`Filter by ${l.name}`}
-						>
-							{l.color && (
-								<span
-									className="w-2 h-2 rounded-full flex-shrink-0"
-									style={{ backgroundColor: l.color }}
-								/>
+					{/* Active filter pills */}
+					{filterLabelIds && filterLabelIds.length > 1 && onRemoveFilterLabel && (
+						<>
+							<span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">Filtering:</span>
+							{filterLabelIds.map((fid) => {
+								const fl = allLabels?.find((l) => l.id === fid);
+								if (!fl) return null;
+								return (
+									<span
+										key={fid}
+										className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-stork-100 dark:bg-stork-900 text-stork-700 dark:text-stork-300"
+									>
+										{fl.color && (
+											<span
+												className="w-2 h-2 rounded-full flex-shrink-0"
+												style={{ backgroundColor: fl.color }}
+											/>
+										)}
+										{fl.name}
+										<button
+											type="button"
+											onClick={() => onRemoveFilterLabel(fid)}
+											className="hover:text-red-500 transition-colors"
+											title={`Remove ${fl.name} filter`}
+										>
+											×
+										</button>
+									</span>
+								);
+							})}
+							{onClearFilter && (
+								<button
+									type="button"
+									onClick={onClearFilter}
+									className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors ml-0.5"
+									title="Clear all filters"
+								>
+									Clear
+								</button>
 							)}
-							{l.name}
-						</button>
-					))}
+							{suggestedLabels && suggestedLabels.length > 0 && (
+								<span className="text-gray-300 dark:text-gray-600 mx-0.5">|</span>
+							)}
+						</>
+					)}
+					{/* Suggestion chips */}
+					{suggestedLabels && suggestedLabels.length > 0 && onAddFilterLabel && (
+						<>
+							{!(filterLabelIds && filterLabelIds.length > 1) && (
+								<span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
+									Also view:
+								</span>
+							)}
+							{suggestedLabels.map((l) => (
+								<button
+									key={l.id}
+									type="button"
+									onClick={() => onAddFilterLabel(l.id)}
+									className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-stork-100 dark:hover:bg-stork-900 hover:text-stork-700 dark:hover:text-stork-300 transition-colors"
+									title={`Filter by ${l.name}`}
+								>
+									{l.color && (
+										<span
+											className="w-2 h-2 rounded-full flex-shrink-0"
+											style={{ backgroundColor: l.color }}
+										/>
+									)}
+									{l.name}
+								</button>
+							))}
+						</>
+					)}
 				</div>
 			)}
 

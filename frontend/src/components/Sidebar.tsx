@@ -204,7 +204,6 @@ export function Sidebar({
 	filterLabelIds,
 	onSelectLabel,
 	onToggleFilterLabel,
-	onClearFilter,
 	onCompose,
 	onSearch,
 	onSettings,
@@ -436,49 +435,6 @@ export function Sidebar({
 						</button>
 						<div className="my-2 mx-3 border-t border-gray-200 dark:border-gray-700" />
 					</>
-				)}
-
-				{/* Active multi-label filter pills — shown when filtering by 2+ labels */}
-				{filterLabelIds.length > 1 && (
-					<div className="px-3 pb-2">
-						<div className="flex items-center gap-1 flex-wrap">
-							<span className="text-xs text-gray-400 dark:text-gray-500 mr-1">Filtering:</span>
-							{filterLabelIds.map((fid) => {
-								const fl = labels.find((l) => l.id === fid);
-								if (!fl) return null;
-								return (
-									<span
-										key={fid}
-										className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs bg-stork-100 dark:bg-stork-900 text-stork-700 dark:text-stork-300"
-									>
-										{fl.color && (
-											<span
-												className="w-2 h-2 rounded-full flex-shrink-0"
-												style={{ backgroundColor: fl.color }}
-											/>
-										)}
-										{fl.name}
-										<button
-											type="button"
-											onClick={() => onToggleFilterLabel(fid)}
-											className="hover:text-red-500 transition-colors"
-											title={`Remove ${fl.name} filter`}
-										>
-											×
-										</button>
-									</span>
-								);
-							})}
-							<button
-								type="button"
-								onClick={onClearFilter}
-								className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors ml-1"
-								title="Clear all filters"
-							>
-								Clear
-							</button>
-						</div>
-					</div>
 				)}
 
 				{/* All labels — Inbox excluded (promoted above). Identity labels appear inline with person icon. */}

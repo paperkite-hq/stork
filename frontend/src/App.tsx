@@ -141,20 +141,41 @@ export function App() {
 	const inboxLabelId = inboxLabel?.id ?? null;
 
 	// Suggested intersection filters: labels that commonly co-occur with messages in the current view.
-	// Only fetched for real labels (positive ID) when not already multi-filtering.
-	// For the promoted "Inbox" virtual view, use the underlying inbox label ID.
+	// For real labels (positive ID) and the promoted Inbox view: fetch from the related-labels API.
+	// For virtual views (All Mail, Unread, unified variants): derive from labels by message count.
 	const suggestForLabelId =
 		filterLabelIds.length === 0
-			? isInbox
+			? isInbox || isUnifiedInbox
 				? inboxLabelId
 				: effectiveLabelId && effectiveLabelId > 0
 					? effectiveLabelId
 					: null
 			: null;
-	const { data: relatedLabels } = useAsync(
+	const { data: relatedLabelsFromApi } = useAsync(
 		() => (suggestForLabelId ? api.labels.related(suggestForLabelId, 5) : Promise.resolve(null)),
 		[suggestForLabelId],
 	);
+
+	// For virtual "all" views, suggest top labels by message count (user + connector labels)
+	const isVirtualAllView =
+		filterLabelIds.length === 0 &&
+		!suggestForLabelId &&
+		(isAllMail || isUnread || isUnifiedAllMail || isUnifiedUnread);
+	const virtualViewSuggestions =
+		isVirtualAllView && labels
+			? labels
+					.filter(
+						(l) =>
+							l.message_count > 0 &&
+							(l.source === "user" || l.source === "connector") &&
+							!filterLabelIds.includes(l.id),
+					)
+					.sort((a, b) => b.message_count - a.message_count)
+					.slice(0, 5)
+					.map((l) => ({ id: l.id, name: l.name, color: l.color, source: l.source }))
+			: null;
+
+	const relatedLabels = relatedLabelsFromApi ?? virtualViewSuggestions;
 
 	// Fetch "All Mail" count for the sidebar badge (global across all inbound connectors)
 	const { data: allMailCount, refetch: refetchAllMailCount } = useAsync(
@@ -901,6 +922,10 @@ export function App() {
 								folders={folders ?? []}
 								suggestedLabels={relatedLabels ?? undefined}
 								onAddFilterLabel={handleToggleFilterLabel}
+								filterLabelIds={filterLabelIds}
+								allLabels={labels ?? undefined}
+								onRemoveFilterLabel={handleToggleFilterLabel}
+								onClearFilter={handleClearFilter}
 							/>
 						)}
 					</div>

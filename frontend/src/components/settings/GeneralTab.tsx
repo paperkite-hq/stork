@@ -44,7 +44,7 @@ export function GeneralTab() {
 	};
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-6 p-4 sm:p-6">
 			<h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">General Settings</h3>
 
 			<div className="space-y-4">

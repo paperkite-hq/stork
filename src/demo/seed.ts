@@ -450,7 +450,7 @@ If you don't recognize this device, you can remove it from your admin console.
 // ─── Second demo identity (work email) ────────────────────────────────────────
 
 const DEMO_IDENTITY_2 = {
-	name: "Alex (Work)",
+	name: "Alex Demo",
 	email: "a.demo@acme-corp.com",
 	imap_host: "mail.acme-corp.com",
 	imap_port: 993,
@@ -553,7 +553,7 @@ If you need help, reach out in #platform-migration.
 	{
 		subject: "Re: Code review: feat/cache-invalidation",
 		from_address: "a.demo@acme-corp.com",
-		from_name: "Alex (Work)",
+		from_name: "Alex Demo",
 		to_addresses: "sam@acme-corp.com",
 		date: "2026-03-22T14:45:00Z",
 		text_body: `Sam,
@@ -624,15 +624,16 @@ export function seedDemoData(db: Database.Database): void {
 		"INSERT OR IGNORE INTO labels (name, color, source) VALUES (?, ?, ?)",
 	);
 	const lookupLabel = db.prepare("SELECT id FROM labels WHERE name = ?");
-	// Create connector label (auto-label all messages with the connector name)
-	insertLabel.run(DEMO_IDENTITY.name, "#3b82f6", "connector");
+	// Create connector label (auto-label all messages with the email address)
+	const connectorLabel1Name = DEMO_IDENTITY.email;
+	insertLabel.run(connectorLabel1Name, "#3b82f6", "connector");
 	for (const label of DEMO_LABELS) {
 		insertLabel.run(label.name, label.color, label.source);
 		const row = lookupLabel.get(label.name) as { id: number };
 		labelMap.set(label.name, row.id);
 	}
 	// Look up connector label ID
-	const connectorLabelRow = lookupLabel.get(DEMO_IDENTITY.name) as { id: number };
+	const connectorLabelRow = lookupLabel.get(connectorLabel1Name) as { id: number };
 	const connectorLabelId = connectorLabelRow.id;
 
 	// Insert messages
@@ -742,8 +743,9 @@ export function seedDemoData(db: Database.Database): void {
 	const folderId2 = folder2Result.lastInsertRowid as number;
 
 	// Create connector label for second inbound connector
-	insertLabel.run(DEMO_IDENTITY_2.name, "#10b981", "connector");
-	const connectorLabel2Row = lookupLabel.get(DEMO_IDENTITY_2.name) as { id: number };
+	const connectorLabel2Name = DEMO_IDENTITY_2.email;
+	insertLabel.run(connectorLabel2Name, "#10b981", "connector");
+	const connectorLabel2Row = lookupLabel.get(connectorLabel2Name) as { id: number };
 	const connectorLabel2Id = connectorLabel2Row.id;
 
 	const labelMap2 = new Map<string, number>();

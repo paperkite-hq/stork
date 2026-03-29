@@ -103,7 +103,7 @@ export function SecurityTab() {
 	};
 
 	return (
-		<div className="space-y-8">
+		<div className="space-y-8 p-4 sm:p-6">
 			<h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Security</h3>
 
 			{/* Change Password */}

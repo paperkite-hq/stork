@@ -154,30 +154,7 @@ function InboundConnectorForm({
 				</select>
 			</div>
 
-			{form.type === "imap" && !initial && (
-				<div className="rounded-lg border-2 border-stork-300 dark:border-stork-700 bg-stork-50 dark:bg-stork-950 px-4 py-3 space-y-2">
-					<p className="text-sm font-bold text-stork-800 dark:text-stork-200">
-						⚡ Two minutes to understand how Stork thinks about email
-					</p>
-					<p className="text-xs text-stork-700 dark:text-stork-300">
-						Most email clients treat your mail provider (Gmail, Fastmail, etc.) as the permanent
-						home for your email. Stork{"'"}s philosophy is different:{" "}
-						<strong>your provider is just the delivery edge</strong>. Mail arrives there, Stork
-						picks it up and stores it encrypted on your own hardware, and — when you{"'"}re ready —
-						clears it from the provider.
-					</p>
-					<p className="text-xs text-stork-700 dark:text-stork-300">
-						<strong>Mirror mode (default):</strong> Stork reads alongside your provider. Both have
-						copies. Perfect for trying Stork — your provider stays your safety net. Heads up:
-						actions you take in Stork (delete, label, archive) stay local and don{"'"}t sync back.
-					</p>
-					<p className="text-xs text-stork-700 dark:text-stork-300">
-						<strong>Connector mode:</strong> Once you{"'"}re confident, flip the switch. Stork
-						becomes your permanent encrypted email home. Your provider is just a pipe — mail
-						arrives, Stork grabs it and erases it from the server. Back up your Stork database.
-					</p>
-				</div>
-			)}
+			{/* "Two minutes" philosophy box moved below IMAP fields — see below */}
 
 			{form.type === "imap" && (
 				<>
@@ -263,43 +240,48 @@ function InboundConnectorForm({
 							className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
 						/>
 					</div>
-					{/* Mirror vs Connector mode — only applies to IMAP connectors */}
-					<div className="space-y-2 pt-1">
-						<label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+					{/* Philosophy + Mirror vs Connector mode */}
+					<div className="rounded-lg border-2 border-stork-300 dark:border-stork-700 bg-stork-50 dark:bg-stork-950 px-4 py-3 space-y-2">
+						{!initial && (
+							<>
+								<p className="text-sm font-bold text-stork-800 dark:text-stork-200">
+									⚡ Two minutes to understand how Stork thinks about email
+								</p>
+								<p className="text-xs text-stork-700 dark:text-stork-300">
+									Most email clients treat your mail provider (Gmail, Fastmail, etc.) as the
+									permanent home for your email. Stork{"'"}s philosophy is different:{" "}
+									<strong>your provider is just the delivery edge</strong>. Mail arrives there,
+									Stork picks it up and stores it encrypted on your own hardware, and — when you
+									{"'"}re ready — clears it from the provider.
+								</p>
+								<p className="text-xs text-stork-700 dark:text-stork-300">
+									<strong>Mirror mode (default):</strong> Stork reads alongside your provider. Both
+									have copies. Perfect for trying Stork — your provider stays your safety net. Heads
+									up: actions you take in Stork (delete, label, archive) stay local and don
+									{"'"}t sync back.
+								</p>
+								<p className="text-xs text-stork-700 dark:text-stork-300">
+									<strong>Connector mode:</strong> Once you{"'"}re confident, flip the switch. Stork
+									becomes your permanent encrypted email home. Your provider is just a pipe — mail
+									arrives, Stork grabs it and erases it from the server. Back up your Stork
+									database.
+								</p>
+							</>
+						)}
+						<label className="flex items-start gap-2 text-sm text-stork-800 dark:text-stork-200 cursor-pointer pt-1">
 							<input
 								type="checkbox"
 								checked={form.sync_delete_from_server === 1}
 								onChange={(e) =>
 									setForm({ ...form, sync_delete_from_server: e.target.checked ? 1 : 0 })
 								}
-								className="rounded border-gray-300 dark:border-gray-600 mt-0.5 shrink-0"
+								className="rounded border-stork-400 dark:border-stork-600 mt-0.5 shrink-0"
 							/>
 							<span>
 								<span className="font-medium">Connector mode</span> — after syncing, remove messages
 								from the IMAP server so Stork becomes your permanent encrypted email home
 							</span>
 						</label>
-						{form.sync_delete_from_server === 1 ? (
-							<div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded px-3 py-2">
-								<p className="font-medium">
-									Connector mode — Stork is your permanent encrypted email home.
-								</p>
-								<p>
-									Messages are removed from the IMAP server after each sync. Back up your Stork
-									database.
-								</p>
-							</div>
-						) : (
-							<div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-2">
-								<p className="font-medium">
-									Mirror mode — Stork reads alongside your IMAP provider.
-								</p>
-								<p>
-									Your provider stays authoritative; both hold copies. Actions in Stork are local
-									only.
-								</p>
-							</div>
-						)}
 					</div>
 				</>
 			)}
@@ -923,7 +905,7 @@ export function InboundConnectorsTab() {
 						onClick={() => setEditingInbound("new")}
 						className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
 					>
-						Add Inbound
+						Add
 					</button>
 				)}
 			</div>
@@ -1116,7 +1098,7 @@ export function OutboundConnectorsTab() {
 						onClick={() => setEditingOutbound("new")}
 						className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
 					>
-						Add Outbound
+						Add
 					</button>
 				)}
 			</div>
