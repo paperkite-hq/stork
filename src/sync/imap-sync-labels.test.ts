@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	createTestDb,
 	createTestFolder,
-	createTestIdentity,
+	createTestInboundConnector,
 	createTestMessage,
 } from "../test-helpers/test-db.js";
 import { ImapSync } from "./imap-sync.js";
@@ -35,7 +35,7 @@ describe("ensureLabelsForFolders", () => {
 
 	beforeEach(() => {
 		db = createTestDb();
-		identityId = createTestIdentity(db);
+		identityId = createTestInboundConnector(db);
 	});
 
 	test("no folders → no labels created", () => {
@@ -94,9 +94,7 @@ describe("ensureLabelsForFolders", () => {
 	});
 
 	test("labels are global — two identities sharing a folder name produce one label", () => {
-		const otherAccountId = createTestIdentity(db, {
-			email: "other@example.com",
-		});
+		const otherAccountId = createTestInboundConnector(db);
 
 		createTestFolder(db, identityId, "INBOX");
 		createTestFolder(db, otherAccountId, "INBOX");
@@ -116,7 +114,7 @@ describe("ensureLabelsForFolders", () => {
 		// createTestFolder stores path in both path and name columns,
 		// but name is just the last segment (mimics real IMAP behaviour)
 		db.prepare(`
-			INSERT INTO folders (identity_id, path, name, delimiter, flags, special_use, uid_validity)
+			INSERT INTO folders (inbound_connector_id, path, name, delimiter, flags, special_use, uid_validity)
 			VALUES (?, 'Archive/2025', '2025', '/', '[]', null, 1)
 		`).run(identityId);
 
@@ -135,7 +133,7 @@ describe("applyFolderLabelsToMessages", () => {
 
 	beforeEach(() => {
 		db = createTestDb();
-		identityId = createTestIdentity(db);
+		identityId = createTestInboundConnector(db);
 	});
 
 	test("no messages → nothing inserted", () => {
@@ -222,7 +220,7 @@ describe("applyFolderLabelsToMessages", () => {
 	});
 
 	test("multi-identity isolation — only applies labels for the correct identity", () => {
-		const otherAccountId = createTestIdentity(db, { email: "other@example.com" });
+		const otherAccountId = createTestInboundConnector(db);
 
 		const myFolderId = createTestFolder(db, identityId, "INBOX");
 		const otherFolderId = createTestFolder(db, otherAccountId, "INBOX");
@@ -241,7 +239,7 @@ describe("applyFolderLabelsToMessages", () => {
 				.prepare(`
 					SELECT COUNT(*) as n FROM message_labels ml
 					JOIN messages m ON m.id = ml.message_id
-					WHERE m.identity_id = ?
+					WHERE m.inbound_connector_id = ?
 				`)
 				.get(identityId) as { n: number }
 		).n;
@@ -251,7 +249,7 @@ describe("applyFolderLabelsToMessages", () => {
 				.prepare(`
 					SELECT COUNT(*) as n FROM message_labels ml
 					JOIN messages m ON m.id = ml.message_id
-					WHERE m.identity_id = ?
+					WHERE m.inbound_connector_id = ?
 				`)
 				.get(otherAccountId) as { n: number }
 		).n;
@@ -280,7 +278,7 @@ describe("refreshLabelCounts", () => {
 
 	beforeEach(() => {
 		db = createTestDb();
-		identityId = createTestIdentity(db);
+		identityId = createTestInboundConnector(db);
 	});
 
 	test("no labels → no-op", () => {
@@ -334,7 +332,7 @@ describe("refreshLabelCounts", () => {
 	});
 
 	test("global refresh — counts span all identities", () => {
-		const otherAccountId = createTestIdentity(db);
+		const otherAccountId = createTestInboundConnector(db);
 		const folderId = createTestFolder(db, identityId, "INBOX");
 		const otherFolderId = createTestFolder(db, otherAccountId, "INBOX");
 		const sync = makeSync(identityId, db);
@@ -415,20 +413,7 @@ describe("syncAll — label pipeline integration", () => {
 		const inboundId = Number(
 			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 		);
-		db.prepare(`
-			INSERT INTO outbound_connectors (name, type)
-			VALUES ('Test Outbound', 'smtp')
-		`).run();
-		const outboundId = Number(
-			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-		);
-		db.prepare(`
-			INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-			VALUES ('Test', 'testuser@example.com', ?, ?)
-		`).run(inboundId, outboundId);
-		identityId = Number(
-			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-		);
+		identityId = inboundId;
 	});
 
 	afterEach(async () => {
@@ -459,7 +444,7 @@ describe("syncAll — label pipeline integration", () => {
 				SELECT l.name FROM message_labels ml
 				JOIN labels l ON l.id = ml.label_id
 				JOIN messages m ON m.id = ml.message_id
-				WHERE m.identity_id = ?
+				WHERE m.inbound_connector_id = ?
 			`)
 			.get(identityId) as { name: string } | undefined;
 		expect(msgLabel?.name).toBe("INBOX");
@@ -514,20 +499,7 @@ describe("syncAll — sub-batch label application during large folder sync", () 
 		const inboundId = Number(
 			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 		);
-		db.prepare(`
-			INSERT INTO outbound_connectors (name, type)
-			VALUES ('Test Outbound', 'smtp')
-		`).run();
-		const outboundId = Number(
-			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-		);
-		db.prepare(`
-			INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-			VALUES ('Test', 'testuser@example.com', ?, ?)
-		`).run(inboundId, outboundId);
-		identityId = Number(
-			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-		);
+		identityId = inboundId;
 	});
 
 	afterEach(async () => {

@@ -68,13 +68,13 @@ describe("Cloudflare Email Webhook", () => {
 	function createIdentity(
 		name: string,
 		email: string,
-		inboundConnectorId: number,
+		_inboundConnectorId: number,
 		outboundConnectorId: number,
 	) {
 		db.prepare(
-			`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-			VALUES (?, ?, ?, ?)`,
-		).run(name, email, inboundConnectorId, outboundConnectorId);
+			`INSERT INTO identities (name, email, outbound_connector_id)
+			VALUES (?, ?, ?)`,
+		).run(name, email, outboundConnectorId);
 		return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
 	}
 
@@ -166,9 +166,11 @@ describe("Cloudflare Email Webhook", () => {
 
 		// Verify message was stored
 		const msg = db
-			.prepare("SELECT subject, from_address, identity_id FROM messages WHERE identity_id = ?")
-			.get(identityId) as
-			| { subject: string; from_address: string; identity_id: number }
+			.prepare(
+				"SELECT subject, from_address, inbound_connector_id FROM messages WHERE inbound_connector_id = ?",
+			)
+			.get(connectorId) as
+			| { subject: string; from_address: string; inbound_connector_id: number }
 			| undefined;
 		expect(msg).toBeDefined();
 		expect(msg?.subject).toBe("Hello Alice");
@@ -176,8 +178,12 @@ describe("Cloudflare Email Webhook", () => {
 
 		// Verify INBOX folder was created
 		const folder = db
-			.prepare("SELECT path, unread_count, message_count FROM folders WHERE identity_id = ?")
-			.get(identityId) as { path: string; unread_count: number; message_count: number } | undefined;
+			.prepare(
+				"SELECT path, unread_count, message_count FROM folders WHERE inbound_connector_id = ?",
+			)
+			.get(connectorId) as
+			| { path: string; unread_count: number; message_count: number }
+			| undefined;
 		expect(folder).toBeDefined();
 		expect(folder?.path).toBe("INBOX");
 		expect(folder?.unread_count).toBe(1);
@@ -199,14 +205,15 @@ describe("Cloudflare Email Webhook", () => {
 		});
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { ok: boolean; stored: number };
-		expect(body.stored).toBe(2);
+		expect(body.stored).toBe(1); // One message per connector, not per identity
 
 		const msgs = db
-			.prepare("SELECT identity_id FROM messages WHERE subject = 'Shared connector test'")
-			.all() as { identity_id: number }[];
-		const identityIds = msgs.map((m) => m.identity_id);
-		expect(identityIds).toContain(identity1);
-		expect(identityIds).toContain(identity2);
+			.prepare("SELECT inbound_connector_id FROM messages WHERE subject = 'Shared connector test'")
+			.all() as { inbound_connector_id: number }[];
+		const connectorIds = msgs.map((m) => m.inbound_connector_id);
+		// Both messages stored under same connector
+		expect(connectorIds).toContain(connectorId);
+		expect(connectorIds).toHaveLength(1); // One stored per connector (dedup by message-id across identities)
 	});
 
 	test("deduplicates by message-id (INSERT OR IGNORE)", async () => {
@@ -233,9 +240,9 @@ describe("Cloudflare Email Webhook", () => {
 		expect(count).toBe(1);
 	});
 
-	test("returns ok with stored=0 when no identities reference the connector", async () => {
+	test("returns ok with stored=1 even when no identities reference the connector", async () => {
 		const connectorId = createCloudflareConnector();
-		// No identity linked to this connector
+		// No identity linked to this connector — emails are still stored
 
 		const raw = buildRawEmail({});
 		const res = await webhookPost(connectorId, {
@@ -247,7 +254,7 @@ describe("Cloudflare Email Webhook", () => {
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { ok: boolean; stored: number };
 		expect(body.ok).toBe(true);
-		expect(body.stored).toBe(0);
+		expect(body.stored).toBe(1);
 	});
 
 	test("returns 400 for invalid connector ID", async () => {

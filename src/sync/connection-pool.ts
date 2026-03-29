@@ -3,41 +3,41 @@ import { type ImapConfig, ImapSync } from "./imap-sync.js";
 
 export interface PooledConnection {
 	sync: ImapSync;
-	identityId: number;
+	connectorId: number;
 	lastUsed: number;
 	busy: boolean;
 }
 
 export interface ConnectionPoolOptions {
-	/** Max connections per identity (default: 1) */
-	maxPerIdentity?: number;
-	/** Max total connections across all identities (default: 10) */
+	/** Max connections per connector (default: 1) */
+	maxPerConnector?: number;
+	/** Max total connections across all connectors (default: 10) */
 	maxTotal?: number;
 	/** Idle timeout in ms before a connection is closed (default: 5 minutes) */
 	idleTimeoutMs?: number;
 }
 
-const DEFAULT_MAX_PER_IDENTITY = 1;
+const DEFAULT_MAX_PER_CONNECTOR = 1;
 const DEFAULT_MAX_TOTAL = 10;
 const DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
- * Manages a pool of IMAP connections across multiple identities.
+ * Manages a pool of IMAP connections across multiple inbound connectors.
  *
- * Reuses existing connections when possible, enforces per-identity
+ * Reuses existing connections when possible, enforces per-connector
  * and total connection limits, and cleans up idle connections.
  */
 export class ConnectionPool {
 	private connections: Map<number, PooledConnection[]> = new Map();
 	private db: Database.Database;
-	private maxPerIdentity: number;
+	private maxPerConnector: number;
 	private maxTotal: number;
 	private idleTimeoutMs: number;
 	private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
 	constructor(db: Database.Database, options: ConnectionPoolOptions = {}) {
 		this.db = db;
-		this.maxPerIdentity = options.maxPerIdentity ?? DEFAULT_MAX_PER_IDENTITY;
+		this.maxPerConnector = options.maxPerConnector ?? DEFAULT_MAX_PER_CONNECTOR;
 		this.maxTotal = options.maxTotal ?? DEFAULT_MAX_TOTAL;
 		this.idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
 
@@ -46,28 +46,28 @@ export class ConnectionPool {
 	}
 
 	/**
-	 * Acquires an IMAP sync instance for the given identity.
+	 * Acquires an IMAP sync instance for the given inbound connector.
 	 * Reuses an idle connection if available, or creates a new one.
 	 */
-	async acquire(identityId: number, config: ImapConfig): Promise<ImapSync> {
-		const identityConns = this.connections.get(identityId) ?? [];
+	async acquire(connectorId: number, config: ImapConfig): Promise<ImapSync> {
+		const connectorConns = this.connections.get(connectorId) ?? [];
 
 		// Discard idle connections — ImapFlow instances can't be reused after
 		// ungraceful shutdown and there's no reliable way to check liveness.
 		// Always create a fresh connection for each sync cycle.
-		const idleIdx = identityConns.findIndex((c) => !c.busy);
+		const idleIdx = connectorConns.findIndex((c) => !c.busy);
 		if (idleIdx !== -1) {
-			const [stale] = identityConns.splice(idleIdx, 1);
+			const [stale] = connectorConns.splice(idleIdx, 1);
 			stale.sync.disconnect().catch(() => {});
-			if (identityConns.length === 0) {
-				this.connections.delete(identityId);
+			if (connectorConns.length === 0) {
+				this.connections.delete(connectorId);
 			}
 		}
 
-		// Check per-identity limit
-		if (identityConns.length >= this.maxPerIdentity) {
+		// Check per-connector limit
+		if (connectorConns.length >= this.maxPerConnector) {
 			throw new Error(
-				`Connection limit reached for identity ${identityId} (max: ${this.maxPerIdentity})`,
+				`Connection limit reached for connector ${connectorId} (max: ${this.maxPerConnector})`,
 			);
 		}
 
@@ -82,7 +82,7 @@ export class ConnectionPool {
 		}
 
 		// Create new connection
-		const sync = new ImapSync(config, this.db, identityId);
+		const sync = new ImapSync(config, this.db, connectorId);
 		try {
 			await sync.connect();
 		} catch (err) {
@@ -94,15 +94,15 @@ export class ConnectionPool {
 
 		const pooled: PooledConnection = {
 			sync,
-			identityId,
+			connectorId,
 			lastUsed: Date.now(),
 			busy: true,
 		};
 
-		if (!this.connections.has(identityId)) {
-			this.connections.set(identityId, []);
+		if (!this.connections.has(connectorId)) {
+			this.connections.set(connectorId, []);
 		}
-		this.connections.get(identityId)?.push(pooled);
+		this.connections.get(connectorId)?.push(pooled);
 
 		return sync;
 	}
@@ -110,11 +110,11 @@ export class ConnectionPool {
 	/**
 	 * Releases a connection back to the pool for reuse.
 	 */
-	release(identityId: number, sync: ImapSync): void {
-		const identityConns = this.connections.get(identityId);
-		if (!identityConns) return;
+	release(connectorId: number, sync: ImapSync): void {
+		const connectorConns = this.connections.get(connectorId);
+		if (!connectorConns) return;
 
-		const pooled = identityConns.find((c) => c.sync === sync);
+		const pooled = connectorConns.find((c) => c.sync === sync);
 		if (pooled) {
 			pooled.busy = false;
 			pooled.lastUsed = Date.now();
@@ -153,10 +153,10 @@ export class ConnectionPool {
 	}
 
 	/**
-	 * Returns the number of connections for a specific identity.
+	 * Returns the number of connections for a specific connector.
 	 */
-	identityConnections(identityId: number): number {
-		return this.connections.get(identityId)?.length ?? 0;
+	connectorConnections(connectorId: number): number {
+		return this.connections.get(connectorId)?.length ?? 0;
 	}
 
 	/**
@@ -164,7 +164,7 @@ export class ConnectionPool {
 	 */
 	private evictIdle(): void {
 		const now = Date.now();
-		for (const [identityId, conns] of this.connections) {
+		for (const [connectorId, conns] of this.connections) {
 			const remaining: PooledConnection[] = [];
 			for (const conn of conns) {
 				if (!conn.busy && now - conn.lastUsed > this.idleTimeoutMs) {
@@ -174,25 +174,25 @@ export class ConnectionPool {
 				}
 			}
 			if (remaining.length === 0) {
-				this.connections.delete(identityId);
+				this.connections.delete(connectorId);
 			} else {
-				this.connections.set(identityId, remaining);
+				this.connections.set(connectorId, remaining);
 			}
 		}
 	}
 
 	/**
-	 * Evicts the oldest idle connection across all identities.
+	 * Evicts the oldest idle connection across all connectors.
 	 * Returns true if a connection was evicted.
 	 */
 	private evictOldestIdle(): boolean {
-		let oldest: { identityId: number; index: number; lastUsed: number } | null = null;
+		let oldest: { connectorId: number; index: number; lastUsed: number } | null = null;
 
-		for (const [identityId, conns] of this.connections) {
+		for (const [connectorId, conns] of this.connections) {
 			for (let i = 0; i < conns.length; i++) {
 				if (!conns[i].busy) {
 					if (!oldest || conns[i].lastUsed < oldest.lastUsed) {
-						oldest = { identityId, index: i, lastUsed: conns[i].lastUsed };
+						oldest = { connectorId, index: i, lastUsed: conns[i].lastUsed };
 					}
 				}
 			}
@@ -200,13 +200,13 @@ export class ConnectionPool {
 
 		if (!oldest) return false;
 
-		const conns = this.connections.get(oldest.identityId);
+		const conns = this.connections.get(oldest.connectorId);
 		if (!conns) return false;
 		const [removed] = conns.splice(oldest.index, 1);
 		removed.sync.disconnect().catch(() => {});
 
 		if (conns.length === 0) {
-			this.connections.delete(oldest.identityId);
+			this.connections.delete(oldest.connectorId);
 		}
 
 		return true;

@@ -54,14 +54,12 @@ export interface Identity {
 	id: number;
 	name: string;
 	email: string;
-	inbound_connector_id: number | null;
 	outbound_connector_id: number | null;
 	default_view?: string;
 	created_at: string;
 }
 
 export interface IdentityDetail extends Identity {
-	inbound_connector_name: string | null;
 	outbound_connector_name: string | null;
 	updated_at: string;
 }
@@ -177,8 +175,8 @@ export interface MessageSummary {
 	size: number;
 	has_attachments: number;
 	preview: string | null;
-	/** Present only in unified inbox responses — identifies which identity the message belongs to */
-	identity_id?: number;
+	/** Present only in unified inbox responses — identifies which inbound connector the message belongs to */
+	inbound_connector_id?: number;
 }
 
 export interface Message extends MessageSummary {
@@ -204,7 +202,7 @@ export interface Label {
 	id: number;
 	name: string;
 	color: string | null;
-	source: "imap" | "user" | "system" | "identity";
+	source: "imap" | "user" | "system" | "connector";
 	created_at: string;
 	message_count: number;
 	unread_count: number;
@@ -214,7 +212,7 @@ export interface LabelSummary {
 	id: number;
 	name: string;
 	color: string | null;
-	source: "imap" | "user" | "system" | "identity";
+	source: "imap" | "user" | "system" | "connector";
 }
 
 export interface SearchResult {
@@ -287,7 +285,6 @@ export type SendConnectorType = "smtp" | "ses";
 export interface CreateIdentityRequest {
 	name: string;
 	email: string;
-	inbound_connector_id?: number;
 	outbound_connector_id?: number;
 	default_view?: string;
 }
@@ -295,7 +292,6 @@ export interface CreateIdentityRequest {
 export interface UpdateIdentityRequest {
 	name?: string;
 	email?: string;
-	inbound_connector_id?: number;
 	outbound_connector_id?: number;
 	default_view?: string;
 }
@@ -367,7 +363,6 @@ export const api = {
 				body: JSON.stringify(data),
 			}),
 		delete: (id: number) => fetchJSON<{ ok: boolean }>(`/identities/${id}`, { method: "DELETE" }),
-		syncStatus: (id: number) => fetchJSON<SyncStatus[]>(`/identities/${id}/sync-status`),
 		testConnection: (data: TestConnectionRequest) =>
 			fetchJSON<{ ok: boolean; error?: string; mailboxes?: number }>(
 				"/identities/test-connection",
@@ -398,6 +393,19 @@ export const api = {
 					`/connectors/inbound/${id}/test`,
 					{ method: "POST", body: JSON.stringify({}) },
 				),
+			syncStatus: (id: number) =>
+				fetchJSON<{
+					running: boolean;
+					lastSync: number | null;
+					lastError: string | null;
+					consecutiveErrors: number;
+					progress: SyncProgressStatus | null;
+				}>(`/connectors/inbound/${id}/sync-status`),
+			sync: (id: number) =>
+				fetchJSON<{ ok?: boolean; error?: string }>(`/connectors/inbound/${id}/sync`, {
+					method: "POST",
+				}),
+			folders: (id: number) => fetchJSON<Folder[]>(`/connectors/inbound/${id}/folders`),
 		},
 		outbound: {
 			list: () => fetchJSON<OutboundConnector[]>("/connectors/outbound"),
@@ -422,7 +430,9 @@ export const api = {
 		},
 	},
 	folders: {
-		list: (identityId: number) => fetchJSON<Folder[]>(`/identities/${identityId}/folders`),
+		list: (inboundConnectorId: number) =>
+			fetchJSON<Folder[]>(`/connectors/inbound/${inboundConnectorId}/folders`),
+		listAll: () => fetchJSON<Folder[]>("/connectors/inbound/folders"),
 	},
 	labels: {
 		// Labels are global (no identity scoping).
@@ -489,26 +499,6 @@ export const api = {
 			count: () => fetchJSON<{ total: number }>("/inbox/unread-messages/count"),
 		},
 	},
-	allMessages: {
-		list: (identityId: number, opts?: { limit?: number; offset?: number }) => {
-			const params = new URLSearchParams();
-			if (opts?.limit) params.set("limit", String(opts.limit));
-			if (opts?.offset) params.set("offset", String(opts.offset));
-			return fetchJSON<MessageSummary[]>(`/identities/${identityId}/all-messages?${params}`);
-		},
-		count: (identityId: number) =>
-			fetchJSON<{ total: number; unread: number }>(`/identities/${identityId}/all-messages/count`),
-	},
-	unreadMessages: {
-		list: (identityId: number, opts?: { limit?: number; offset?: number }) => {
-			const params = new URLSearchParams();
-			if (opts?.limit) params.set("limit", String(opts.limit));
-			if (opts?.offset) params.set("offset", String(opts.offset));
-			return fetchJSON<MessageSummary[]>(`/identities/${identityId}/unread-messages?${params}`);
-		},
-		count: (identityId: number) =>
-			fetchJSON<{ total: number }>(`/identities/${identityId}/unread-messages/count`),
-	},
 	messages: {
 		list: (identityId: number, folderId: number, opts?: { limit?: number; offset?: number }) => {
 			const params = new URLSearchParams();
@@ -554,19 +544,24 @@ export const api = {
 				body: JSON.stringify({ ids, action, ...opts }),
 			}),
 	},
-	search: (query: string, opts?: { identityId?: number; limit?: number; offset?: number }) => {
+	search: (
+		query: string,
+		opts?: { inboundConnectorId?: number; limit?: number; offset?: number },
+	) => {
 		const params = new URLSearchParams({ q: query });
-		if (opts?.identityId) params.set("identity_id", String(opts.identityId));
+		if (opts?.inboundConnectorId)
+			params.set("inbound_connector_id", String(opts.inboundConnectorId));
 		if (opts?.limit) params.set("limit", String(opts.limit));
 		if (opts?.offset) params.set("offset", String(opts.offset));
 		return fetchJSON<SearchResult[]>(`/search?${params}`);
 	},
 	sync: {
 		status: () => fetchJSON<GlobalSyncStatus>("/sync/status"),
-		trigger: (identityId: number) =>
-			fetchJSON<{ ok?: boolean; error?: string }>(`/identities/${identityId}/sync`, {
-				method: "POST",
-			}),
+		trigger: (inboundConnectorId: number) =>
+			fetchJSON<{ ok?: boolean; error?: string }>(
+				`/connectors/inbound/${inboundConnectorId}/sync`,
+				{ method: "POST" },
+			),
 	},
 	send: (data: {
 		identity_id: number;

@@ -9,7 +9,7 @@ import {
 import type { R2Poller } from "../../sync/r2-poller.js";
 import { signR2Request } from "../../sync/r2-sigv4.js";
 import type { SyncScheduler } from "../../sync/sync-scheduler.js";
-import { parseIntParam } from "../validation.js";
+import { parseIntParam, parsePagination } from "../validation.js";
 
 const VALID_INGEST_TYPES: IngestConnectorType[] = ["imap", "cloudflare-email", "cloudflare-r2"];
 const VALID_SEND_TYPES: SendConnectorType[] = ["smtp", "ses"];
@@ -71,6 +71,19 @@ export function connectorRoutes(
 			)
 			.all();
 		return c.json(connectors);
+	});
+
+	// Returns all folders across all inbound connectors (for global move-to-folder UI)
+	api.get("/inbound/folders", (c) => {
+		const folders = getDb()
+			.prepare(
+				`SELECT id, inbound_connector_id, path, name, special_use, message_count, unread_count, last_synced_at
+				FROM folders
+				WHERE inbound_connector_id IS NOT NULL
+				ORDER BY name`,
+			)
+			.all();
+		return c.json(folders);
 	});
 
 	api.post("/inbound", async (c) => {
@@ -141,7 +154,26 @@ export function connectorRoutes(
 				body.cf_r2_poll_interval_ms ?? null,
 			);
 
-		return c.json({ id: Number(result.lastInsertRowid) }, 201);
+		const newId = Number(result.lastInsertRowid);
+
+		// Register IMAP connectors with the sync scheduler immediately
+		if (type === "imap" && body.imap_host && body.imap_user && body.imap_pass) {
+			try {
+				getScheduler().addConnector({
+					inboundConnectorId: newId,
+					imapConfig: {
+						host: body.imap_host,
+						port: body.imap_port ?? 993,
+						secure: (body.imap_tls ?? 1) === 1,
+						auth: { user: body.imap_user, pass: body.imap_pass },
+					},
+				});
+			} catch {
+				// Scheduler may not be started yet (setup phase) — not fatal
+			}
+		}
+
+		return c.json({ id: newId }, 201);
 	});
 
 	api.get("/inbound/:connectorId", (c) => {
@@ -215,7 +247,7 @@ export function connectorRoutes(
 			...(values as [string | number | null, ...Array<string | number | null>]),
 		);
 
-		// Reload affected identities in scheduler if IMAP credentials changed
+		// Reload connector in scheduler if IMAP credentials changed
 		if (
 			"imap_host" in body ||
 			"imap_port" in body ||
@@ -223,7 +255,7 @@ export function connectorRoutes(
 			"imap_user" in body ||
 			"imap_pass" in body
 		) {
-			_reloadConnectorIdentities(db, getScheduler(), connectorId);
+			_reloadConnector(db, getScheduler(), connectorId);
 		}
 
 		// Reload R2 poller if R2 credentials changed
@@ -249,21 +281,18 @@ export function connectorRoutes(
 		const connectorId = parseIntParam(c, "connectorId", c.req.param("connectorId"));
 		if (connectorId instanceof Response) return connectorId;
 
-		// Block deletion if any identity references this connector
-		const inUse = db
-			.prepare("SELECT COUNT(*) as n FROM identities WHERE inbound_connector_id = ?")
-			.get(connectorId) as { n: number };
-		if (inUse.n > 0) {
-			return c.json(
-				{
-					error: `Cannot delete: ${inUse.n} identity/identities still reference this inbound connector`,
-				},
-				409,
-			);
-		}
-
 		const result = db.prepare("DELETE FROM inbound_connectors WHERE id = ?").run(connectorId);
 		if (result.changes === 0) return c.json({ error: "Inbound connector not found" }, 404);
+
+		// Remove from scheduler and R2 poller
+		try {
+			getScheduler().removeConnector(connectorId);
+		} catch {
+			/* not registered */
+		}
+		const poller = getR2Poller();
+		if (poller) poller.removeConnector(connectorId);
+
 		return c.json({ ok: true });
 	});
 
@@ -347,6 +376,66 @@ export function connectorRoutes(
 			}
 		}
 		return c.json({ ok: false, error: "Unknown connector type" });
+	});
+
+	api.get("/inbound/:connectorId/sync-status", (c) => {
+		const connectorId = parseIntParam(c, "connectorId", c.req.param("connectorId"));
+		if (connectorId instanceof Response) return connectorId;
+
+		const status = getScheduler().getStatus().get(connectorId);
+		if (!status) return c.json({ error: "Connector not registered in scheduler" }, 404);
+		return c.json(status);
+	});
+
+	api.post("/inbound/:connectorId/sync", async (c) => {
+		const connectorId = parseIntParam(c, "connectorId", c.req.param("connectorId"));
+		if (connectorId instanceof Response) return connectorId;
+		try {
+			const result = await getScheduler().syncNow(connectorId);
+			return c.json(result);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			return c.json({ error: message }, 500);
+		}
+	});
+
+	api.get("/inbound/:connectorId/folders", (c) => {
+		const connectorId = parseIntParam(c, "connectorId", c.req.param("connectorId"));
+		if (connectorId instanceof Response) return connectorId;
+
+		const folders = getDb()
+			.prepare(
+				`SELECT id, path, name, special_use, message_count, unread_count, last_synced_at
+				FROM folders
+				WHERE inbound_connector_id = ?
+				ORDER BY name`,
+			)
+			.all(connectorId);
+		return c.json(folders);
+	});
+
+	api.get("/inbound/:connectorId/folders/:folderId/messages", (c) => {
+		const connectorId = parseIntParam(c, "connectorId", c.req.param("connectorId"));
+		if (connectorId instanceof Response) return connectorId;
+		const folderId = parseIntParam(c, "folderId", c.req.param("folderId"));
+		if (folderId instanceof Response) return folderId;
+		const pagination = parsePagination(c);
+		if (pagination instanceof Response) return pagination;
+		const { limit, offset } = pagination;
+
+		const messages = getDb()
+			.prepare(
+				`SELECT id, uid, message_id, subject, from_address, from_name,
+					to_addresses, date, flags, size, has_attachments,
+					SUBSTR(text_body, 1, 200) as preview
+				FROM messages
+				WHERE folder_id = ? AND inbound_connector_id = ?
+				ORDER BY date DESC
+				LIMIT ? OFFSET ?`,
+			)
+			.all(folderId, connectorId, limit, offset);
+
+		return c.json(messages);
 	});
 
 	// ── Outbound Connectors ───────────────────────────────────────────────────
@@ -608,40 +697,48 @@ function _reloadR2Connector(db: Database.Database, poller: R2Poller, connectorId
 	}
 }
 
-/** Reload IMAP identities in the scheduler after an inbound connector's credentials change */
-function _reloadConnectorIdentities(
+/** Reload an IMAP inbound connector in the scheduler after its credentials change. */
+function _reloadConnector(
 	db: Database.Database,
 	scheduler: SyncScheduler,
-	inboundConnectorId: number,
+	connectorId: number,
 ): void {
-	const affected = db
+	const row = db
 		.prepare(
-			`SELECT i.id, ic.imap_host, ic.imap_port, ic.imap_tls, ic.imap_user, ic.imap_pass
-			FROM identities i
-			JOIN inbound_connectors ic ON ic.id = i.inbound_connector_id
-			WHERE i.inbound_connector_id = ? AND ic.type = 'imap'`,
+			`SELECT id, imap_host, imap_port, imap_tls, imap_user, imap_pass
+			FROM inbound_connectors
+			WHERE id = ? AND type = 'imap'`,
 		)
-		.all(inboundConnectorId) as {
-		id: number;
-		imap_host: string;
-		imap_port: number;
-		imap_tls: number;
-		imap_user: string;
-		imap_pass: string;
-	}[];
+		.get(connectorId) as
+		| {
+				id: number;
+				imap_host: string | null;
+				imap_port: number;
+				imap_tls: number;
+				imap_user: string | null;
+				imap_pass: string | null;
+		  }
+		| undefined;
 
-	for (const identity of affected) {
-		scheduler.removeIdentity(identity.id);
-		if (identity.imap_host && identity.imap_user && identity.imap_pass) {
-			scheduler.addIdentity({
-				identityId: identity.id,
+	try {
+		scheduler.removeConnector(connectorId);
+	} catch {
+		/* not registered */
+	}
+
+	if (row?.imap_host && row.imap_user && row.imap_pass) {
+		try {
+			scheduler.addConnector({
+				inboundConnectorId: connectorId,
 				imapConfig: {
-					host: identity.imap_host,
-					port: identity.imap_port,
-					secure: identity.imap_tls === 1,
-					auth: { user: identity.imap_user, pass: identity.imap_pass },
+					host: row.imap_host,
+					port: row.imap_port,
+					secure: row.imap_tls === 1,
+					auth: { user: row.imap_user, pass: row.imap_pass },
 				},
 			});
+		} catch {
+			/* scheduler not started */
 		}
 	}
 }

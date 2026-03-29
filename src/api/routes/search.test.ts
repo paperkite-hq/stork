@@ -6,7 +6,7 @@ import {
 	createTestContext,
 	createTestDb,
 	createTestFolder,
-	createTestIdentity,
+	createTestInboundConnector,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
 
@@ -37,7 +37,7 @@ describe("Search API", () => {
 
 	describe("GET /api/search", () => {
 		test("returns matching results", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			createTestMessage(db, identityId, folderId, 1, {
 				subject: "Quarterly report",
@@ -65,7 +65,7 @@ describe("Search API", () => {
 		});
 
 		test("respects limit parameter", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			for (let i = 1; i <= 5; i++) {
 				createTestMessage(db, identityId, folderId, i, {
@@ -78,9 +78,9 @@ describe("Search API", () => {
 			expect(body).toHaveLength(2);
 		});
 
-		test("supports identity_id filter", async () => {
-			const identity1 = createTestIdentity(db, { name: "A", email: "a@test.com" });
-			const identity2 = createTestIdentity(db, { name: "B", email: "b@test.com" });
+		test("supports inbound_connector_id filter", async () => {
+			const identity1 = createTestInboundConnector(db, { imapUser: "a@test.com" });
+			const identity2 = createTestInboundConnector(db, { imapUser: "b@test.com" });
 			const folder1 = createTestFolder(db, identity1, "INBOX");
 			const folder2 = createTestFolder(db, identity2, "INBOX");
 
@@ -97,7 +97,7 @@ describe("Search API", () => {
 			expect(all).toHaveLength(2);
 
 			const { body: filtered } = await jsonRequest(
-				`/api/search?q=UniqueSearchWord&identity_id=${identity1}`,
+				`/api/search?q=UniqueSearchWord&inbound_connector_id=${identity1}`,
 			);
 			expect(filtered).toHaveLength(1);
 			expect(filtered[0].subject).toContain("in A");

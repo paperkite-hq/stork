@@ -159,7 +159,6 @@ describe("AccountSetupWizard", () => {
 			expect.objectContaining({
 				name: "Work",
 				email: "work@example.com",
-				inbound_connector_id: 1,
 				outbound_connector_id: 2,
 			}),
 		);
@@ -210,7 +209,6 @@ describe("AccountSetupWizard", () => {
 			expect.objectContaining({
 				name: "Personal",
 				email: "me@example.com",
-				inbound_connector_id: 10,
 			}),
 		);
 	});

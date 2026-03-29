@@ -15,16 +15,36 @@ export function createTestDb(): Database.Database {
 	return db;
 }
 
-/** Inserts a test identity (with inbound + outbound connectors) and returns the identity ID */
+/** Creates a test inbound connector and returns its ID */
+export function createTestInboundConnector(
+	db: Database.Database,
+	overrides: Partial<{
+		name: string;
+		imapHost: string;
+		imapPort: number;
+		imapUser: string;
+		imapPass: string;
+	}> = {},
+): number {
+	db.prepare(`
+		INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+		VALUES (?, 'imap', ?, ?, 1, ?, ?)
+	`).run(
+		overrides.name ?? "Test Inbound",
+		overrides.imapHost ?? "127.0.0.1",
+		overrides.imapPort ?? 993,
+		overrides.imapUser ?? "testuser",
+		overrides.imapPass ?? "testpass",
+	);
+	return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
+}
+
+/** Inserts a test identity (send-only: name + email + optional outbound connector) and returns the identity ID */
 export function createTestIdentity(
 	db: Database.Database,
 	overrides: Partial<{
 		name: string;
 		email: string;
-		imapHost: string;
-		imapPort: number;
-		imapUser: string;
-		imapPass: string;
 		smtpHost: string;
 		smtpPort: number;
 		smtpUser: string;
@@ -32,21 +52,6 @@ export function createTestIdentity(
 	}> = {},
 ): number {
 	const name = overrides.name ?? "Test Identity";
-
-	// Create inbound connector
-	db.prepare(`
-		INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-		VALUES (?, 'imap', ?, ?, 1, ?, ?)
-	`).run(
-		`${name} (Inbound)`,
-		overrides.imapHost ?? "127.0.0.1",
-		overrides.imapPort ?? 993,
-		overrides.imapUser ?? "testuser",
-		overrides.imapPass ?? "testpass",
-	);
-	const inboundId = Number(
-		(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-	);
 
 	// Create outbound connector
 	db.prepare(`
@@ -63,19 +68,19 @@ export function createTestIdentity(
 		(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 	);
 
-	// Create identity referencing both connectors
+	// Create identity (send-only: no inbound_connector_id)
 	db.prepare(`
-		INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-		VALUES (?, ?, ?, ?)
-	`).run(name, overrides.email ?? "test@example.com", inboundId, outboundId);
+		INSERT INTO identities (name, email, outbound_connector_id)
+		VALUES (?, ?, ?)
+	`).run(name, overrides.email ?? "test@example.com", outboundId);
 
 	return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
 }
 
-/** Inserts a test folder and returns its ID */
+/** Inserts a test folder (linked to inbound connector) and returns its ID */
 export function createTestFolder(
 	db: Database.Database,
-	identityId: number,
+	inboundConnectorId: number,
 	path: string,
 	overrides: Partial<{
 		name: string;
@@ -84,10 +89,10 @@ export function createTestFolder(
 	}> = {},
 ): number {
 	db.prepare(`
-		INSERT INTO folders (identity_id, path, name, delimiter, flags, special_use, uid_validity)
+		INSERT INTO folders (inbound_connector_id, path, name, delimiter, flags, special_use, uid_validity)
 		VALUES (?, ?, ?, '/', '[]', ?, ?)
 	`).run(
-		identityId,
+		inboundConnectorId,
 		path,
 		overrides.name ?? path.split("/").pop(),
 		overrides.specialUse ?? null,
@@ -121,10 +126,10 @@ export function addMessageLabel(db: Database.Database, messageId: number, labelI
 	);
 }
 
-/** Inserts a test message and returns its ID */
+/** Inserts a test message (linked to inbound connector) and returns its ID */
 export function createTestMessage(
 	db: Database.Database,
-	identityId: number,
+	inboundConnectorId: number,
 	folderId: number,
 	uid: number,
 	overrides: Partial<{
@@ -144,13 +149,13 @@ export function createTestMessage(
 ): number {
 	db.prepare(`
 		INSERT INTO messages (
-			identity_id, folder_id, uid, message_id, subject,
+			inbound_connector_id, folder_id, uid, message_id, subject,
 			from_address, from_name, to_addresses, date,
 			text_body, html_body, flags, size, has_attachments,
 			in_reply_to, "references"
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1000, ?, ?, ?)
 	`).run(
-		identityId,
+		inboundConnectorId,
 		folderId,
 		uid,
 		overrides.messageId ?? `<msg-${uid}@test.local>`,

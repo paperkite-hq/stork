@@ -90,25 +90,17 @@ describe("api client", () => {
 				}),
 			);
 		});
-
-		it("syncStatus fetches /api/identities/:id/sync-status", async () => {
-			const status = [{ id: 1, name: "INBOX", message_count: 10 }];
-			mockFetch.mockResolvedValue(mockJsonResponse(status));
-
-			const result = await api.identities.syncStatus(1);
-			expect(result).toEqual(status);
-		});
 	});
 
 	describe("folders", () => {
-		it("list fetches /api/identities/:id/folders", async () => {
+		it("list fetches /api/connectors/inbound/:id/folders", async () => {
 			const folders = [{ id: 1, path: "INBOX", name: "INBOX" }];
 			mockFetch.mockResolvedValue(mockJsonResponse(folders));
 
 			const result = await api.folders.list(1);
 			expect(result).toEqual(folders);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/identities/1/folders",
+				"/api/connectors/inbound/1/folders",
 				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
 			);
 		});
@@ -202,13 +194,13 @@ describe("api client", () => {
 			expect(url).toContain("q=hello");
 		});
 
-		it("passes identityId and limit options", async () => {
+		it("passes inboundConnectorId and limit options", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse([]));
 
-			await api.search("test", { identityId: 3, limit: 5 });
+			await api.search("test", { inboundConnectorId: 3, limit: 5 });
 			const url = mockFetch.mock.calls[0]?.[0] as string;
 			expect(url).toContain("q=test");
-			expect(url).toContain("identity_id=3");
+			expect(url).toContain("inbound_connector_id=3");
 			expect(url).toContain("limit=5");
 		});
 	});
@@ -443,26 +435,26 @@ describe("api client", () => {
 	});
 
 	describe("sync — extended", () => {
-		it("trigger POSTs to /api/identities/:id/sync", async () => {
+		it("trigger POSTs to /api/connectors/inbound/:id/sync", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({}));
 
 			await api.sync.trigger(1);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/identities/1/sync",
+				"/api/connectors/inbound/1/sync",
 				expect.objectContaining({ method: "POST" }),
 			);
 		});
 	});
 
-	describe("allMessages", () => {
-		it("list fetches /api/identities/:id/all-messages", async () => {
+	describe("inbox.allMessages", () => {
+		it("list fetches /api/inbox/all-messages", async () => {
 			const messages = [{ id: 1, subject: "Hello" }];
 			mockFetch.mockResolvedValue(mockJsonResponse(messages));
 
-			const result = await api.allMessages.list(1);
+			const result = await api.inbox.allMessages.list();
 			expect(result).toEqual(messages);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/identities/1/all-messages?",
+				"/api/inbox/all-messages?",
 				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
 			);
 		});
@@ -470,28 +462,28 @@ describe("api client", () => {
 		it("list passes limit and offset params", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse([]));
 
-			await api.allMessages.list(1, { limit: 25, offset: 50 });
+			await api.inbox.allMessages.list({ limit: 25, offset: 50 });
 			const url = mockFetch.mock.calls[0]?.[0] as string;
 			expect(url).toContain("limit=25");
 			expect(url).toContain("offset=50");
 		});
 
-		it("count fetches /api/identities/:id/all-messages/count", async () => {
+		it("count fetches /api/inbox/all-messages/count", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ total: 100, unread: 5 }));
 
-			const result = await api.allMessages.count(1);
+			const result = await api.inbox.allMessages.count();
 			expect(result).toEqual({ total: 100, unread: 5 });
 		});
 	});
 
-	describe("unreadMessages", () => {
-		it("list fetches /api/identities/:id/unread-messages", async () => {
+	describe("inbox.unreadMessages", () => {
+		it("list fetches /api/inbox/unread-messages", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse([{ id: 1 }]));
 
-			const result = await api.unreadMessages.list(2);
+			const result = await api.inbox.unreadMessages.list();
 			expect(result).toEqual([{ id: 1 }]);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"/api/identities/2/unread-messages?",
+				"/api/inbox/unread-messages?",
 				expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
 			);
 		});
@@ -499,16 +491,16 @@ describe("api client", () => {
 		it("list passes limit and offset params", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse([]));
 
-			await api.unreadMessages.list(1, { limit: 10, offset: 20 });
+			await api.inbox.unreadMessages.list({ limit: 10, offset: 20 });
 			const url = mockFetch.mock.calls[0]?.[0] as string;
 			expect(url).toContain("limit=10");
 			expect(url).toContain("offset=20");
 		});
 
-		it("count fetches /api/identities/:id/unread-messages/count", async () => {
+		it("count fetches /api/inbox/unread-messages/count", async () => {
 			mockFetch.mockResolvedValue(mockJsonResponse({ total: 42 }));
 
-			const result = await api.unreadMessages.count(1);
+			const result = await api.inbox.unreadMessages.count();
 			expect(result).toEqual({ total: 42 });
 		});
 	});

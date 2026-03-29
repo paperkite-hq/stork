@@ -89,19 +89,7 @@ describe("IMAP sync edge cases", () => {
 		const inboundId = Number(
 			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 		);
-		db.prepare(
-			"INSERT INTO outbound_connectors (name, type) VALUES ('Test Outbound', 'smtp')",
-		).run();
-		const outboundId = Number(
-			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-		);
-		db.prepare(`
-			INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-			VALUES ('Test', 'test@example.com', ?, ?)
-		`).run(inboundId, outboundId);
-		identityId = Number(
-			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-		);
+		identityId = inboundId;
 	}
 
 	function makeSync() {
@@ -127,7 +115,9 @@ describe("IMAP sync edge cases", () => {
 		await sync1.syncAll();
 
 		const msgCount1 = (
-			db.prepare("SELECT count(*) as c FROM messages WHERE identity_id = ?").get(identityId) as {
+			db
+				.prepare("SELECT count(*) as c FROM messages WHERE inbound_connector_id = ?")
+				.get(identityId) as {
 				c: number;
 			}
 		).c;
@@ -135,7 +125,7 @@ describe("IMAP sync edge cases", () => {
 
 		// Verify uid_validity was stored
 		const folder1 = db
-			.prepare("SELECT uid_validity FROM folders WHERE identity_id = ? AND path = 'INBOX'")
+			.prepare("SELECT uid_validity FROM folders WHERE inbound_connector_id = ? AND path = 'INBOX'")
 			.get(identityId) as { uid_validity: number };
 		expect(folder1.uid_validity).toBe(1);
 
@@ -172,16 +162,8 @@ describe("IMAP sync edge cases", () => {
 
 		await setupServer(newMailboxes);
 
-		// Need to update the existing inbound connector port for the new server
-		const inboundConnectorId = (
-			db.prepare("SELECT inbound_connector_id FROM identities WHERE id = ?").get(identityId) as {
-				inbound_connector_id: number;
-			}
-		).inbound_connector_id;
-		db.prepare("UPDATE inbound_connectors SET imap_port = ? WHERE id = ?").run(
-			port,
-			inboundConnectorId,
-		);
+		// Update the existing inbound connector port for the new server
+		db.prepare("UPDATE inbound_connectors SET imap_port = ? WHERE id = ?").run(port, identityId);
 
 		const sync2 = makeSync();
 		await sync2.connect();
@@ -189,7 +171,7 @@ describe("IMAP sync edge cases", () => {
 
 		// The old messages should be cleared and only the new one remains
 		const messages = db
-			.prepare("SELECT subject FROM messages WHERE identity_id = ?")
+			.prepare("SELECT subject FROM messages WHERE inbound_connector_id = ?")
 			.all(identityId) as { subject: string }[];
 
 		// Should have the new message
@@ -197,7 +179,7 @@ describe("IMAP sync edge cases", () => {
 
 		// uid_validity should be updated
 		const folder2 = db
-			.prepare("SELECT uid_validity FROM folders WHERE identity_id = ? AND path = 'INBOX'")
+			.prepare("SELECT uid_validity FROM folders WHERE inbound_connector_id = ? AND path = 'INBOX'")
 			.get(identityId) as { uid_validity: number };
 		expect(folder2.uid_validity).toBe(2);
 
@@ -240,7 +222,7 @@ describe("IMAP sync edge cases", () => {
 
 		const msg = db
 			.prepare(
-				"SELECT subject, text_body, html_body FROM messages WHERE identity_id = ? AND uid = 1",
+				"SELECT subject, text_body, html_body FROM messages WHERE inbound_connector_id = ? AND uid = 1",
 			)
 			.get(identityId) as { subject: string; text_body: string | null; html_body: string | null };
 
@@ -315,7 +297,9 @@ describe("IMAP sync edge cases", () => {
 		await sync.syncAll();
 
 		const msg2 = db
-			.prepare('SELECT in_reply_to, "references" FROM messages WHERE identity_id = ? AND uid = 2')
+			.prepare(
+				'SELECT in_reply_to, "references" FROM messages WHERE inbound_connector_id = ? AND uid = 2',
+			)
 			.get(identityId) as { in_reply_to: string | null; references: string | null };
 
 		expect(msg2.in_reply_to).toBe("<thread1@example.com>");
@@ -324,7 +308,9 @@ describe("IMAP sync edge cases", () => {
 		expect(refs).toContain("<thread1@example.com>");
 
 		const msg3 = db
-			.prepare('SELECT in_reply_to, "references" FROM messages WHERE identity_id = ? AND uid = 3')
+			.prepare(
+				'SELECT in_reply_to, "references" FROM messages WHERE inbound_connector_id = ? AND uid = 3',
+			)
 			.get(identityId) as { in_reply_to: string | null; references: string | null };
 
 		expect(msg3.in_reply_to).toBe("<thread2@example.com>");
@@ -357,7 +343,9 @@ describe("IMAP sync edge cases", () => {
 		expect(result.totalNew).toBe(0);
 
 		const msgCount = (
-			db.prepare("SELECT count(*) as c FROM messages WHERE identity_id = ?").get(identityId) as {
+			db
+				.prepare("SELECT count(*) as c FROM messages WHERE inbound_connector_id = ?")
+				.get(identityId) as {
 				c: number;
 			}
 		).c;
@@ -376,7 +364,9 @@ describe("IMAP sync edge cases", () => {
 		await sync1.syncAll();
 
 		const count1 = (
-			db.prepare("SELECT count(*) as c FROM messages WHERE identity_id = ?").get(identityId) as {
+			db
+				.prepare("SELECT count(*) as c FROM messages WHERE inbound_connector_id = ?")
+				.get(identityId) as {
 				c: number;
 			}
 		).c;
@@ -410,7 +400,7 @@ describe("IMAP sync edge cases", () => {
 		expect(result2.totalNew).toBeGreaterThanOrEqual(1);
 
 		const allMsgs = db
-			.prepare("SELECT subject FROM messages WHERE identity_id = ? ORDER BY uid")
+			.prepare("SELECT subject FROM messages WHERE inbound_connector_id = ? ORDER BY uid")
 			.all(identityId) as { subject: string }[];
 
 		expect(allMsgs.length).toBeGreaterThanOrEqual(3);
@@ -475,7 +465,7 @@ describe("IMAP sync edge cases", () => {
 		await sync.syncFolders();
 
 		const folders = db
-			.prepare("SELECT path, special_use FROM folders WHERE identity_id = ? ORDER BY path")
+			.prepare("SELECT path, special_use FROM folders WHERE inbound_connector_id = ? ORDER BY path")
 			.all(identityId) as { path: string; special_use: string | null }[];
 
 		const folderMap = new Map(folders.map((f) => [f.path, f.special_use]));
@@ -498,7 +488,7 @@ describe("IMAP sync edge cases", () => {
 		await sync1.syncAll();
 
 		const flagsBefore = db
-			.prepare("SELECT flags FROM messages WHERE identity_id = ? AND uid = 1")
+			.prepare("SELECT flags FROM messages WHERE inbound_connector_id = ? AND uid = 1")
 			.get(identityId) as { flags: string } | undefined;
 
 		expect(flagsBefore).toBeTruthy();
@@ -520,7 +510,7 @@ describe("IMAP sync edge cases", () => {
 		const result2 = await sync2.syncAll();
 
 		const flagsAfter = db
-			.prepare("SELECT flags FROM messages WHERE identity_id = ? AND uid = 1")
+			.prepare("SELECT flags FROM messages WHERE inbound_connector_id = ? AND uid = 1")
 			.get(identityId) as { flags: string } | undefined;
 
 		expect(flagsAfter).toBeTruthy();
@@ -598,7 +588,7 @@ describe("IMAP sync edge cases", () => {
 		await sync2.disconnect();
 
 		const flagsAfter = db
-			.prepare("SELECT flags FROM messages WHERE identity_id = ? AND uid = 1000")
+			.prepare("SELECT flags FROM messages WHERE inbound_connector_id = ? AND uid = 1000")
 			.get(identityId) as { flags: string } | undefined;
 
 		expect(flagsAfter).toBeTruthy();
@@ -651,7 +641,7 @@ describe("IMAP sync edge cases", () => {
 		await sync.syncFolders();
 
 		const folders = db
-			.prepare("SELECT path FROM folders WHERE identity_id = ?")
+			.prepare("SELECT path FROM folders WHERE inbound_connector_id = ?")
 			.all(identityId) as {
 			path: string;
 		}[];
@@ -765,7 +755,7 @@ describe("IMAP sync edge cases", () => {
 		await sync.syncFolders();
 
 		const folders = db
-			.prepare("SELECT path, special_use FROM folders WHERE identity_id = ? ORDER BY path")
+			.prepare("SELECT path, special_use FROM folders WHERE inbound_connector_id = ? ORDER BY path")
 			.all(identityId) as { path: string; special_use: string | null }[];
 
 		const folderMap = new Map(folders.map((f) => [f.path, f.special_use]));
@@ -796,7 +786,7 @@ describe("IMAP sync edge cases", () => {
 
 		// Read the initial flags
 		const flagsBefore = db
-			.prepare("SELECT flags FROM messages WHERE identity_id = ? AND uid = 1")
+			.prepare("SELECT flags FROM messages WHERE inbound_connector_id = ? AND uid = 1")
 			.get(identityId) as { flags: string };
 		expect(flagsBefore).toBeTruthy();
 
@@ -808,7 +798,7 @@ describe("IMAP sync edge cases", () => {
 
 		// Flags should be unchanged in the DB (false branch of oldFlags !== newFlags)
 		const flagsAfter = db
-			.prepare("SELECT flags FROM messages WHERE identity_id = ? AND uid = 1")
+			.prepare("SELECT flags FROM messages WHERE inbound_connector_id = ? AND uid = 1")
 			.get(identityId) as { flags: string };
 		expect(flagsAfter.flags).toBe(flagsBefore.flags);
 
@@ -861,7 +851,9 @@ describe("IMAP sync edge cases", () => {
 		expect(result.totalErrors).toBe(0);
 
 		const msg = db
-			.prepare("SELECT id, has_attachments FROM messages WHERE identity_id = ? AND uid = 1")
+			.prepare(
+				"SELECT id, has_attachments FROM messages WHERE inbound_connector_id = ? AND uid = 1",
+			)
 			.get(identityId) as { id: number; has_attachments: number } | undefined;
 		if (!msg) throw new Error("Expected message in DB");
 		expect(msg.has_attachments).toBe(1);

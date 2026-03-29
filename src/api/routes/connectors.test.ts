@@ -308,31 +308,18 @@ describe("Connectors API", () => {
 			expect(status).toBe(404);
 		});
 
-		test("DELETE /api/connectors/inbound/:id returns 409 when in use by identity", async () => {
-			// Create connector then an account referencing it
+		test("DELETE /api/connectors/inbound/:id deletes connector (no identity constraint)", async () => {
 			const { body: conn } = await post("/api/connectors/inbound", {
-				name: "In use",
+				name: "To delete",
 				type: "imap",
 				imap_host: "imap.example.com",
 				imap_user: "user",
 				imap_pass: "pass",
 			});
-			// Create outbound connector too for the account
-			const { body: outConn } = await post("/api/connectors/outbound", {
-				name: "Out",
-				type: "smtp",
-				smtp_host: "smtp.example.com",
-				smtp_user: "user",
-				smtp_pass: "pass",
-			});
-			db.prepare(
-				`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-				VALUES ('Acct', 'a@b.com', ?, ?)`,
-			).run(conn.id, outConn.id);
 
 			const { status, body } = await del(`/api/connectors/inbound/${conn.id}`);
-			expect(status).toBe(409);
-			expect(body.error).toMatch(/Cannot delete/);
+			expect(status).toBe(200);
+			expect(body.ok).toBe(true);
 		});
 	});
 
@@ -676,9 +663,9 @@ describe("Connectors API", () => {
 				smtp_pass: "pass",
 			});
 			db.prepare(
-				`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-				VALUES ('Acct', 'a@b.com', ?, ?)`,
-			).run(inConn.id, outConn.id);
+				`INSERT INTO identities (name, email, outbound_connector_id)
+				VALUES ('Acct', 'a@b.com', ?)`,
+			).run(outConn.id);
 
 			const { status, body } = await del(`/api/connectors/outbound/${outConn.id}`);
 			expect(status).toBe(409);

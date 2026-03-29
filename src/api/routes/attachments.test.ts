@@ -6,7 +6,7 @@ import {
 	createTestContext,
 	createTestDb,
 	createTestFolder,
-	createTestIdentity,
+	createTestInboundConnector,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
 
@@ -42,7 +42,7 @@ describe("Attachments API", () => {
 	// ─── Attachment listing and download ────────────────────
 	describe("Listing and download", () => {
 		test("GET /api/messages/:id/attachments returns attachments", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1, { hasAttachments: 1 });
 
@@ -59,7 +59,7 @@ describe("Attachments API", () => {
 		});
 
 		test("GET /api/attachments/:id downloads binary", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
@@ -89,7 +89,7 @@ describe("Attachments API", () => {
 	// ─── Content-ID (cid:) endpoint ────────────────────────
 	describe("By Content-ID", () => {
 		test("GET /api/attachments/by-cid/:messageId/:contentId returns inline image", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
@@ -112,7 +112,7 @@ describe("Attachments API", () => {
 		});
 
 		test("null content_type falls back to application/octet-stream", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
@@ -127,7 +127,7 @@ describe("Attachments API", () => {
 		});
 
 		test("null data returns empty response", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
@@ -144,7 +144,7 @@ describe("Attachments API", () => {
 	// ─── Null data in download endpoint ─────────────────────
 	describe("Null data handling", () => {
 		test("GET /api/attachments/:id returns response for null data", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
@@ -166,7 +166,7 @@ describe("Attachments API", () => {
 	// ─── Content-Disposition security ───────────────────────
 	describe("Filename sanitization", () => {
 		test("sanitizes path separators in attachment filename", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
@@ -187,7 +187,7 @@ describe("Attachments API", () => {
 		});
 
 		test("sanitizes backslash in attachment filename", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
@@ -206,7 +206,7 @@ describe("Attachments API", () => {
 		});
 
 		test("sanitizes quotes in attachment filename", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
@@ -225,7 +225,7 @@ describe("Attachments API", () => {
 		});
 
 		test("null filename falls back to 'attachment'", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
@@ -244,7 +244,7 @@ describe("Attachments API", () => {
 		});
 
 		test("null content_type falls back to application/octet-stream", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
@@ -262,7 +262,7 @@ describe("Attachments API", () => {
 		});
 
 		test("RFC 5987: includes filename* for non-ASCII filenames", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 			const unicodeName = "дайджест.pdf"; // Russian
@@ -286,7 +286,7 @@ describe("Attachments API", () => {
 		});
 
 		test("ASCII-only filename does not include filename*", async () => {
-			const identityId = createTestIdentity(db);
+			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 

@@ -7,6 +7,7 @@ import {
 	createTestDb,
 	createTestFolder,
 	createTestIdentity,
+	createTestInboundConnector,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
 
@@ -231,8 +232,9 @@ describe("Drafts API", () => {
 		});
 
 		test("creates reply draft with original message reference", async () => {
-			const folderId = createTestFolder(db, identityId, "INBOX");
-			const msgId = createTestMessage(db, identityId, folderId, 1, {
+			const connectorId = createTestInboundConnector(db);
+			const folderId = createTestFolder(db, connectorId, "INBOX");
+			const msgId = createTestMessage(db, connectorId, folderId, 1, {
 				subject: "Original message",
 				messageId: "<orig@example.com>",
 			});

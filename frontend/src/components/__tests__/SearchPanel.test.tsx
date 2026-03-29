@@ -24,38 +24,38 @@ describe("SearchPanel", () => {
 	});
 
 	it("renders search input with placeholder", () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		expect(screen.getByPlaceholderText("Search messages…")).toBeInTheDocument();
 	});
 
 	it("renders close button", () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
 	});
 
 	it("calls onClose when close button is clicked", async () => {
 		const onClose = vi.fn();
-		render(<SearchPanel onClose={onClose} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={onClose} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		await userEvent.click(screen.getByRole("button", { name: "Close" }));
 		expect(onClose).toHaveBeenCalledOnce();
 	});
 
 	it("calls onClose when Escape is pressed in input", async () => {
 		const onClose = vi.fn();
-		render(<SearchPanel onClose={onClose} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={onClose} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "{Escape}");
 		expect(onClose).toHaveBeenCalledOnce();
 	});
 
 	it("shows search tip with operator hints", () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		expect(screen.getByText(/to navigate/)).toBeInTheDocument();
 	});
 
 	it("shows no results message after search", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "nonexistent");
 		await waitFor(() => {
@@ -74,7 +74,7 @@ describe("SearchPanel", () => {
 				snippet: "This is a <b>match</b>",
 			},
 		]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "found");
 		await waitFor(() => {
@@ -97,7 +97,9 @@ describe("SearchPanel", () => {
 		]);
 		const onSelectMessage = vi.fn();
 		const onClose = vi.fn();
-		render(<SearchPanel onClose={onClose} onSelectMessage={onSelectMessage} identityId={null} />);
+		render(
+			<SearchPanel onClose={onClose} onSelectMessage={onSelectMessage} inboundConnectorId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "clickable");
 		await waitFor(() => {
@@ -108,13 +110,13 @@ describe("SearchPanel", () => {
 		expect(onClose).not.toHaveBeenCalled();
 	});
 
-	it("passes identityId to search API", async () => {
+	it("passes inboundConnectorId to search API", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={5} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={5} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
-			expect(mockSearch).toHaveBeenCalledWith("test", { identityId: 5, limit: 30 });
+			expect(mockSearch).toHaveBeenCalledWith("test", { inboundConnectorId: 5, limit: 30 });
 		});
 	});
 
@@ -147,7 +149,9 @@ describe("SearchPanel", () => {
 		]);
 		const onSelectMessage = vi.fn();
 		const onClose = vi.fn();
-		render(<SearchPanel onClose={onClose} onSelectMessage={onSelectMessage} identityId={null} />);
+		render(
+			<SearchPanel onClose={onClose} onSelectMessage={onSelectMessage} inboundConnectorId={null} />,
+		);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -196,7 +200,7 @@ describe("SearchPanel", () => {
 				snippet: "",
 			},
 		]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -210,7 +214,7 @@ describe("SearchPanel", () => {
 	});
 
 	it("shows keyboard navigation hint", () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		expect(screen.getByText(/to navigate/)).toBeInTheDocument();
 	});
 
@@ -225,7 +229,7 @@ describe("SearchPanel", () => {
 			snippet: "",
 		}));
 		mockSearch.mockResolvedValueOnce(results);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -246,7 +250,7 @@ describe("SearchPanel", () => {
 				snippet: "",
 			},
 		]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -275,7 +279,7 @@ describe("SearchPanel", () => {
 			},
 		];
 		mockSearch.mockResolvedValueOnce(firstPage);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={3} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={3} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "query");
 		await waitFor(() => {
@@ -288,7 +292,11 @@ describe("SearchPanel", () => {
 			expect(screen.getByText("Extra Result")).toBeInTheDocument();
 		});
 		// Should have called search with offset=30
-		expect(mockSearch).toHaveBeenCalledWith("query", { identityId: 3, limit: 30, offset: 30 });
+		expect(mockSearch).toHaveBeenCalledWith("query", {
+			inboundConnectorId: 3,
+			limit: 30,
+			offset: 30,
+		});
 		// Load more should be gone (secondPage < 30 results)
 		expect(screen.queryByText(/Load more/)).not.toBeInTheDocument();
 	});
@@ -304,7 +312,7 @@ describe("SearchPanel", () => {
 				snippet: "",
 			},
 		]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -313,7 +321,7 @@ describe("SearchPanel", () => {
 	});
 
 	it("renders quick filter buttons", () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		expect(screen.getByText("Unread")).toBeInTheDocument();
 		expect(screen.getByText("Starred")).toBeInTheDocument();
 		expect(screen.getByText("Has attachment")).toBeInTheDocument();
@@ -322,17 +330,17 @@ describe("SearchPanel", () => {
 
 	it("toggles quick filter and triggers search", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={1} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={1} />);
 		// Click "Unread" filter
 		await userEvent.click(screen.getByText("Unread"));
 		await waitFor(() => {
-			expect(mockSearch).toHaveBeenCalledWith("is:unread", { identityId: 1, limit: 30 });
+			expect(mockSearch).toHaveBeenCalledWith("is:unread", { inboundConnectorId: 1, limit: 30 });
 		});
 	});
 
 	it("shows active filter chips and allows removal", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		await userEvent.click(screen.getByText("Starred"));
 		await waitFor(() => {
 			// Should show the active filter chip
@@ -347,7 +355,7 @@ describe("SearchPanel", () => {
 
 	it("combines text query with filter chips", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		// Click a filter first
 		await userEvent.click(screen.getByText("Has attachment"));
 		// Then type a query
@@ -362,7 +370,7 @@ describe("SearchPanel", () => {
 	});
 
 	it("shows date range picker when Date range is clicked", async () => {
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		await userEvent.click(screen.getByText("Date range"));
 		expect(screen.getByText("After:")).toBeInTheDocument();
 		expect(screen.getByText("Before:")).toBeInTheDocument();
@@ -371,7 +379,7 @@ describe("SearchPanel", () => {
 
 	it("shows filter-specific empty state when only filters are active", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		// Activate filter without typing any text
 		await userEvent.click(screen.getByText("Unread"));
 		await waitFor(() => {
@@ -381,7 +389,7 @@ describe("SearchPanel", () => {
 
 	it("clears all filters with Clear all button", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		// Activate two filters
 		await userEvent.click(screen.getByText("Unread"));
 		await userEvent.click(screen.getByText("Starred"));
@@ -396,7 +404,7 @@ describe("SearchPanel", () => {
 
 	it("applies date range filter with after and before dates", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={1} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={1} />);
 		// Open date range picker
 		await userEvent.click(screen.getByText("Date range"));
 		expect(screen.getByText("Apply")).toBeInTheDocument();
@@ -410,7 +418,7 @@ describe("SearchPanel", () => {
 		await waitFor(() => {
 			expect(mockSearch).toHaveBeenCalledWith(
 				"after:2026-01-01 before:2026-02-01",
-				expect.objectContaining({ identityId: 1, limit: 30 }),
+				expect.objectContaining({ inboundConnectorId: 1, limit: 30 }),
 			);
 		});
 		// Date filter chips should appear
@@ -422,7 +430,7 @@ describe("SearchPanel", () => {
 
 	it("applies date filter with only after date", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		await userEvent.click(screen.getByText("Date range"));
 		const afterInput = screen.getByLabelText("After:");
 		await userEvent.type(afterInput, "2026-03-15");
@@ -437,7 +445,7 @@ describe("SearchPanel", () => {
 
 	it("combines date filters with text query and other filters", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		// Type a query first
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "invoice");
@@ -458,7 +466,7 @@ describe("SearchPanel", () => {
 
 	it("shows search error toast on API failure", async () => {
 		mockSearch.mockRejectedValueOnce(new Error("Search failed"));
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "broken");
 		// Wait for the search to be called and fail
@@ -474,7 +482,7 @@ describe("SearchPanel", () => {
 				resolveSearch = resolve;
 			}),
 		);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => expect(mockSearch).toHaveBeenCalled());
@@ -495,7 +503,7 @@ describe("SearchPanel", () => {
 				snippet: "",
 			},
 		]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => expect(mockSearch).toHaveBeenCalled());
@@ -509,7 +517,7 @@ describe("SearchPanel", () => {
 			<SearchPanel
 				onClose={vi.fn()}
 				onSelectMessage={vi.fn()}
-				identityId={null}
+				inboundConnectorId={null}
 				initialQuery="from:alice"
 			/>,
 		);
@@ -531,7 +539,7 @@ describe("SearchPanel", () => {
 		}));
 		mockSearch.mockResolvedValueOnce(firstPage);
 		mockSearch.mockRejectedValueOnce(new Error("Network error"));
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "test");
 		await waitFor(() => {
@@ -545,7 +553,7 @@ describe("SearchPanel", () => {
 
 	it("toggles filter off by clicking same quick filter again", async () => {
 		mockSearch.mockResolvedValue([]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		// Click the quick filter button once to add
 		const starredButtons = screen.getAllByRole("button", { name: /Starred/ });
 		await userEvent.click(starredButtons[0] as HTMLElement);
@@ -575,7 +583,7 @@ describe("SearchPanel", () => {
 				snippet: "",
 			},
 		]);
-		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} identityId={null} />);
+		render(<SearchPanel onClose={vi.fn()} onSelectMessage={vi.fn()} inboundConnectorId={null} />);
 		const input = screen.getByPlaceholderText("Search messages…");
 		await userEvent.type(input, "persistent");
 		await waitFor(() => {

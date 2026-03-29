@@ -2,22 +2,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccountForm } from "../settings/AccountForm";
 
-const mockInbound = [
-	{
-		id: 1,
-		name: "My IMAP",
-		type: "imap" as const,
-		imap_host: "imap.example.com",
-		imap_port: 993,
-		imap_tls: 1,
-		imap_user: "user@example.com",
-		cf_email_webhook_secret: null,
-		sync_delete_from_server: 0,
-		created_at: "",
-		updated_at: "",
-	},
-];
-
 const mockOutbound = [
 	{
 		id: 2,
@@ -37,7 +21,6 @@ const mockOutbound = [
 vi.mock("../../api", () => ({
 	api: {
 		connectors: {
-			inbound: { list: vi.fn() },
 			outbound: { list: vi.fn() },
 		},
 		identities: {
@@ -51,7 +34,6 @@ vi.mock("../../api", () => ({
 import { api } from "../../api";
 const mockApi = api as unknown as {
 	connectors: {
-		inbound: { list: ReturnType<typeof vi.fn> };
 		outbound: { list: ReturnType<typeof vi.fn> };
 	};
 	identities: {
@@ -67,7 +49,6 @@ describe("AccountForm", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockApi.connectors.inbound.list.mockResolvedValue(mockInbound);
 		mockApi.connectors.outbound.list.mockResolvedValue(mockOutbound);
 	});
 
@@ -80,18 +61,9 @@ describe("AccountForm", () => {
 		expect(screen.getByPlaceholderText("you@example.com")).toBeInTheDocument();
 	});
 
-	it("shows connector labels in select options", async () => {
+	it("shows outbound connector label in select options", async () => {
 		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
-		await waitFor(() => expect(screen.getByText(/My IMAP — IMAP/i)).toBeInTheDocument());
-		expect(screen.getByText(/My SMTP — SMTP/i)).toBeInTheDocument();
-	});
-
-	it("shows warning when no inbound connectors are configured", async () => {
-		mockApi.connectors.inbound.list.mockResolvedValue([]);
-		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
-		await waitFor(() =>
-			expect(screen.getByText(/No inbound connectors configured/i)).toBeInTheDocument(),
-		);
+		await waitFor(() => expect(screen.getByText(/My SMTP — SMTP/i)).toBeInTheDocument());
 	});
 
 	it("shows message when no outbound connectors are configured", async () => {
@@ -99,23 +71,6 @@ describe("AccountForm", () => {
 		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
 		await waitFor(() =>
 			expect(screen.getByText(/No outbound connectors configured/i)).toBeInTheDocument(),
-		);
-	});
-
-	it("shows error when submitting without inbound connector", async () => {
-		mockApi.connectors.inbound.list.mockResolvedValue([]);
-		mockApi.connectors.outbound.list.mockResolvedValue([]);
-		const { container } = render(
-			<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />,
-		);
-		await waitFor(() =>
-			expect(screen.getByText(/No inbound connectors configured/i)).toBeInTheDocument(),
-		);
-		// Submit the form directly (submit button is disabled, so submit via form element)
-		const form = container.querySelector("form");
-		if (form) fireEvent.submit(form);
-		await waitFor(() =>
-			expect(screen.getByText(/inbound connector is required/i)).toBeInTheDocument(),
 		);
 	});
 
@@ -142,8 +97,7 @@ describe("AccountForm", () => {
 		const { container } = render(
 			<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />,
 		);
-		// Wait for inbound connector to auto-select before submitting
-		await waitFor(() => expect(screen.getByDisplayValue(/My IMAP/i)).toBeInTheDocument());
+		await waitFor(() => expect(screen.getByPlaceholderText("Work Email")).toBeInTheDocument());
 		const form = container.querySelector("form");
 		if (form) fireEvent.submit(form);
 		await waitFor(() => expect(screen.getByText("Server error")).toBeInTheDocument());
@@ -161,9 +115,7 @@ describe("AccountForm", () => {
 			id: 5,
 			name: "Existing Identity",
 			email: "existing@example.com",
-			inbound_connector_id: 1,
 			outbound_connector_id: 2,
-			sync_delete_from_server: 0,
 			default_view: "inbox",
 		});
 		render(<AccountForm identityId={5} onCancel={onCancel} onSaved={onSaved} />);
@@ -192,9 +144,7 @@ describe("AccountForm", () => {
 			id: 5,
 			name: "Old Name",
 			email: "old@example.com",
-			inbound_connector_id: 1,
 			outbound_connector_id: null,
-			sync_delete_from_server: 0,
 			default_view: "inbox",
 		});
 		mockApi.identities.update.mockResolvedValue({ ok: true });
@@ -208,28 +158,6 @@ describe("AccountForm", () => {
 			expect(mockApi.identities.update).toHaveBeenCalledWith(5, expect.any(Object)),
 		);
 		await waitFor(() => expect(onSaved).toHaveBeenCalled());
-	});
-
-	it("renders cloudflare-email connector label", async () => {
-		mockApi.connectors.inbound.list.mockResolvedValue([
-			{
-				id: 3,
-				name: "CF Email",
-				type: "cloudflare-email" as const,
-				imap_host: null,
-				imap_port: null,
-				imap_tls: null,
-				imap_user: null,
-				cf_email_webhook_secret: "secret",
-				sync_delete_from_server: 0,
-				created_at: "",
-				updated_at: "",
-			},
-		]);
-		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
-		await waitFor(() =>
-			expect(screen.getByText(/CF Email — Cloudflare Email/i)).toBeInTheDocument(),
-		);
 	});
 
 	it("renders ses outbound connector label", async () => {

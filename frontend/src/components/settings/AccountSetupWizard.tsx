@@ -663,7 +663,6 @@ function Step4({
 		setCreating(true);
 		setError(null);
 
-		let inboundId: number;
 		let outboundId: number | undefined;
 
 		try {
@@ -683,10 +682,7 @@ function Step4({
 							}
 						: { cf_email_webhook_secret: inbound.cf_email_webhook_secret }),
 				};
-				const created = await api.connectors.inbound.create(payload);
-				inboundId = created.id;
-			} else {
-				inboundId = inbound.existingId ?? 0;
+				await api.connectors.inbound.create(payload);
 			}
 
 			// Create outbound connector if needed
@@ -718,11 +714,10 @@ function Step4({
 				outboundId = outbound.existingId ?? undefined;
 			}
 
-			// Create identity
+			// Create identity (send-only: name + email + outbound connector)
 			await api.identities.create({
 				name: identity.name,
 				email: identity.email,
-				inbound_connector_id: inboundId,
 				...(outboundId ? { outbound_connector_id: outboundId } : {}),
 				default_view: "inbox",
 			});

@@ -29,7 +29,7 @@ describe("ConnectionPool", () => {
 	test("tracks total and per-identity connections", () => {
 		pool = new ConnectionPool(db, { maxPerIdentity: 3, maxTotal: 10 });
 		expect(pool.totalConnections()).toBe(0);
-		expect(pool.identityConnections(1)).toBe(0);
+		expect(pool.connectorConnections(1)).toBe(0);
 	});
 
 	test("enforces max total connection limit", () => {

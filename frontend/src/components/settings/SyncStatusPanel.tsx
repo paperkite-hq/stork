@@ -1,12 +1,12 @@
-import type { SyncStatus } from "../../api";
+import type { Folder } from "../../api";
 import { api } from "../../api";
 import { useAsync } from "../../hooks";
 import { formatRelative } from "./FormField";
 
-export function SyncStatusPanel({ identityId }: { identityId: number }) {
-	const { data: syncStatus, loading } = useAsync(
-		() => api.identities.syncStatus(identityId),
-		[identityId],
+export function SyncStatusPanel({ connectorId }: { connectorId: number }) {
+	const { data: folders, loading } = useAsync(
+		() => api.connectors.inbound.folders(connectorId),
+		[connectorId],
 	);
 
 	if (loading) {
@@ -29,7 +29,7 @@ export function SyncStatusPanel({ identityId }: { identityId: number }) {
 					</tr>
 				</thead>
 				<tbody>
-					{(syncStatus ?? []).map((f: SyncStatus) => (
+					{(folders ?? []).map((f: Folder) => (
 						<tr
 							key={f.id}
 							className="text-gray-700 dark:text-gray-300 border-t border-gray-100 dark:border-gray-800"
@@ -44,7 +44,7 @@ export function SyncStatusPanel({ identityId }: { identityId: number }) {
 							</td>
 						</tr>
 					))}
-					{(syncStatus ?? []).length === 0 && (
+					{(folders ?? []).length === 0 && (
 						<tr>
 							<td colSpan={4} className="py-2 text-center text-gray-400">
 								No folders synced yet

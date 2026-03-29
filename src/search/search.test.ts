@@ -1,6 +1,10 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { createTestDb, createTestFolder, createTestIdentity } from "../test-helpers/test-db.js";
+import {
+	createTestDb,
+	createTestFolder,
+	createTestInboundConnector,
+} from "../test-helpers/test-db.js";
 import { MessageSearch } from "./search.js";
 
 describe("MessageSearch", () => {
@@ -10,19 +14,19 @@ describe("MessageSearch", () => {
 	beforeAll(() => {
 		db = createTestDb();
 
-		// Insert test identity and folder
-		const identityId = createTestIdentity(db);
-		const folderId = createTestFolder(db, identityId, "INBOX");
+		// Insert test inbound connector and folder
+		const connectorId = createTestInboundConnector(db);
+		const folderId = createTestFolder(db, connectorId, "INBOX");
 
 		// Insert test messages
 		const insert = db.prepare(`
-			INSERT INTO messages (identity_id, folder_id, uid, message_id, subject,
+			INSERT INTO messages (inbound_connector_id, folder_id, uid, message_id, subject,
 				from_address, from_name, to_addresses, date, text_body, flags, size, has_attachments)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1000, 0)
 		`);
 
 		insert.run(
-			identityId,
+			connectorId,
 			folderId,
 			1,
 			"<msg1@example.com>",
@@ -36,7 +40,7 @@ describe("MessageSearch", () => {
 		);
 
 		insert.run(
-			identityId,
+			connectorId,
 			folderId,
 			2,
 			"<msg2@example.com>",
@@ -50,7 +54,7 @@ describe("MessageSearch", () => {
 		);
 
 		insert.run(
-			identityId,
+			connectorId,
 			folderId,
 			3,
 			"<msg3@example.com>",

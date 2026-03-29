@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 18;
+export const SCHEMA_VERSION = 19;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -739,6 +739,222 @@ CREATE INDEX idx_image_trusted_senders_lookup ON image_trusted_senders(sender_ad
 
 -- Step 9: Drop the accounts table
 DROP TABLE accounts;
+
+COMMIT;
+PRAGMA foreign_keys = ON;
+`,
+	// Version 19: Identities are SEND-ONLY — remove inbound_connector_id from identities.
+	//
+	// Core principle: identities hold name + email + outbound connector (for sending).
+	// Inbound connectors are standalone: messages, folders, sync_state, and sync_errors
+	// now reference inbound_connectors directly, not through identities.
+	//
+	// Changes:
+	//   1. identities: remove inbound_connector_id column (temp table approach)
+	//   2. folders: add inbound_connector_id, set identity_id = NULL on migrated rows,
+	//      replace UNIQUE(identity_id, path) with two partial unique indexes
+	//   3. messages: add inbound_connector_id, set identity_id = NULL on migrated rows
+	//   4. sync_state: replace identity_id with inbound_connector_id
+	//   5. sync_errors: replace identity_id with inbound_connector_id
+	//
+	// The drafts table is unchanged: drafts are outgoing and remain identity-based.
+	`
+PRAGMA foreign_keys = OFF;
+BEGIN;
+
+-- Step 1: Recreate identities without inbound_connector_id
+-- Keep old table as identities_v19_temp for data migration
+ALTER TABLE identities RENAME TO identities_v19_temp;
+
+CREATE TABLE identities (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	email TEXT NOT NULL,
+	outbound_connector_id INTEGER REFERENCES outbound_connectors(id),
+	default_view TEXT NOT NULL DEFAULT 'inbox',
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT INTO identities (id, name, email, outbound_connector_id, default_view, created_at, updated_at)
+SELECT id, name, email, outbound_connector_id, default_view, created_at, updated_at
+FROM identities_v19_temp;
+
+-- Step 2: Recreate folders with inbound_connector_id
+-- Drop FTS triggers first (they reference messages which will be recreated)
+DROP TRIGGER IF EXISTS messages_ai;
+DROP TRIGGER IF EXISTS messages_ad;
+DROP TRIGGER IF EXISTS messages_au;
+
+CREATE TABLE folders_v19 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	identity_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+	inbound_connector_id INTEGER REFERENCES inbound_connectors(id) ON DELETE CASCADE,
+	path TEXT NOT NULL,
+	name TEXT NOT NULL,
+	delimiter TEXT,
+	flags TEXT,
+	uid_validity INTEGER,
+	uid_next INTEGER,
+	message_count INTEGER DEFAULT 0,
+	unread_count INTEGER DEFAULT 0,
+	last_synced_at TEXT,
+	special_use TEXT
+);
+
+-- Migrate folders: set inbound_connector_id from old identity's inbound_connector_id,
+-- set identity_id = NULL (folders are for received mail, not identity-owned)
+INSERT INTO folders_v19 (id, identity_id, inbound_connector_id, path, name, delimiter, flags, uid_validity, uid_next, message_count, unread_count, last_synced_at, special_use)
+SELECT f.id, NULL, t.inbound_connector_id, f.path, f.name, f.delimiter, f.flags, f.uid_validity, f.uid_next, f.message_count, f.unread_count, f.last_synced_at, f.special_use
+FROM folders f
+JOIN identities_v19_temp t ON t.id = f.identity_id;
+
+DROP TABLE folders;
+ALTER TABLE folders_v19 RENAME TO folders;
+
+-- Partial unique indexes replace the old UNIQUE(identity_id, path)
+CREATE UNIQUE INDEX idx_folders_unique_inbound ON folders(inbound_connector_id, path) WHERE inbound_connector_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_folders_unique_identity ON folders(identity_id, path) WHERE identity_id IS NOT NULL;
+
+-- Step 3: Recreate messages with inbound_connector_id
+CREATE TABLE messages_v19 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	identity_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+	inbound_connector_id INTEGER REFERENCES inbound_connectors(id) ON DELETE CASCADE,
+	folder_id INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+	uid INTEGER NOT NULL,
+	message_id TEXT,
+	in_reply_to TEXT,
+	"references" TEXT,
+	subject TEXT,
+	from_address TEXT,
+	from_name TEXT,
+	to_addresses TEXT,
+	cc_addresses TEXT,
+	bcc_addresses TEXT,
+	date TEXT,
+	text_body TEXT,
+	html_body TEXT,
+	flags TEXT,
+	size INTEGER,
+	has_attachments INTEGER DEFAULT 0,
+	raw_headers TEXT,
+	deleted_from_server INTEGER DEFAULT 0,
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	pending_archive INTEGER NOT NULL DEFAULT 0,
+	UNIQUE(folder_id, uid)
+);
+
+-- Migrate messages: set inbound_connector_id from old identity's connector, set identity_id = NULL
+INSERT INTO messages_v19 (id, identity_id, inbound_connector_id, folder_id, uid, message_id, in_reply_to, "references", subject, from_address, from_name, to_addresses, cc_addresses, bcc_addresses, date, text_body, html_body, flags, size, has_attachments, raw_headers, deleted_from_server, created_at, pending_archive)
+SELECT m.id, NULL, t.inbound_connector_id, m.folder_id, m.uid, m.message_id, m.in_reply_to, m."references", m.subject, m.from_address, m.from_name, m.to_addresses, m.cc_addresses, m.bcc_addresses, m.date, m.text_body, m.html_body, m.flags, m.size, m.has_attachments, m.raw_headers, m.deleted_from_server, m.created_at, m.pending_archive
+FROM messages m
+JOIN identities_v19_temp t ON t.id = m.identity_id;
+
+DROP TABLE messages;
+ALTER TABLE messages_v19 RENAME TO messages;
+
+-- Recreate messages indexes
+CREATE INDEX idx_messages_inbound_connector ON messages(inbound_connector_id);
+CREATE INDEX idx_messages_identity ON messages(identity_id);
+CREATE INDEX idx_messages_folder ON messages(folder_id);
+CREATE INDEX idx_messages_date ON messages(date DESC);
+CREATE INDEX idx_messages_message_id ON messages(message_id);
+CREATE INDEX idx_messages_in_reply_to ON messages(in_reply_to);
+CREATE INDEX idx_messages_inbound_connector_date ON messages(inbound_connector_id, date DESC);
+CREATE INDEX idx_messages_pending_archive ON messages(folder_id, pending_archive);
+
+-- Recreate FTS triggers
+CREATE TRIGGER messages_ai AFTER INSERT ON messages BEGIN
+	INSERT INTO messages_fts(rowid, subject, from_address, from_name, to_addresses, text_body)
+	VALUES (new.id, new.subject, new.from_address, new.from_name, new.to_addresses, new.text_body);
+END;
+
+CREATE TRIGGER messages_ad AFTER DELETE ON messages BEGIN
+	INSERT INTO messages_fts(messages_fts, rowid, subject, from_address, from_name, to_addresses, text_body)
+	VALUES ('delete', old.id, old.subject, old.from_address, old.from_name, old.to_addresses, old.text_body);
+END;
+
+CREATE TRIGGER messages_au AFTER UPDATE ON messages BEGIN
+	INSERT INTO messages_fts(messages_fts, rowid, subject, from_address, from_name, to_addresses, text_body)
+	VALUES ('delete', old.id, old.subject, old.from_address, old.from_name, old.to_addresses, old.text_body);
+	INSERT INTO messages_fts(rowid, subject, from_address, from_name, to_addresses, text_body)
+	VALUES (new.id, new.subject, new.from_address, new.from_name, new.to_addresses, new.text_body);
+END;
+
+-- Step 4: Recreate sync_state with inbound_connector_id instead of identity_id
+CREATE TABLE sync_state_v19 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	inbound_connector_id INTEGER NOT NULL REFERENCES inbound_connectors(id) ON DELETE CASCADE,
+	folder_id INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+	last_uid INTEGER DEFAULT 0,
+	last_synced_at TEXT,
+	UNIQUE(inbound_connector_id, folder_id)
+);
+
+INSERT INTO sync_state_v19 (id, inbound_connector_id, folder_id, last_uid, last_synced_at)
+SELECT ss.id, t.inbound_connector_id, ss.folder_id, ss.last_uid, ss.last_synced_at
+FROM sync_state ss
+JOIN identities_v19_temp t ON t.id = ss.identity_id;
+
+DROP TABLE sync_state;
+ALTER TABLE sync_state_v19 RENAME TO sync_state;
+
+-- Step 5: Recreate sync_errors with inbound_connector_id instead of identity_id
+CREATE TABLE sync_errors_v19 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	inbound_connector_id INTEGER NOT NULL REFERENCES inbound_connectors(id) ON DELETE CASCADE,
+	folder_path TEXT,
+	uid INTEGER,
+	error_type TEXT NOT NULL,
+	message TEXT NOT NULL,
+	retriable INTEGER NOT NULL DEFAULT 1,
+	resolved INTEGER NOT NULL DEFAULT 0,
+	retry_count INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	resolved_at TEXT
+);
+
+INSERT INTO sync_errors_v19 (id, inbound_connector_id, folder_path, uid, error_type, message, retriable, resolved, retry_count, created_at, resolved_at)
+SELECT se.id, t.inbound_connector_id, se.folder_path, se.uid, se.error_type, se.message, se.retriable, se.resolved, se.retry_count, se.created_at, se.resolved_at
+FROM sync_errors se
+JOIN identities_v19_temp t ON t.id = se.identity_id;
+
+DROP TABLE sync_errors;
+ALTER TABLE sync_errors_v19 RENAME TO sync_errors;
+
+CREATE INDEX idx_sync_errors_inbound_connector ON sync_errors(inbound_connector_id);
+CREATE INDEX idx_sync_errors_unresolved ON sync_errors(inbound_connector_id, resolved);
+
+-- Step 6: Recreate drafts to fix FK reference (RENAME above updated it to identities_v19_temp)
+CREATE TABLE drafts_v19 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	identity_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+	to_addresses TEXT,
+	cc_addresses TEXT,
+	bcc_addresses TEXT,
+	subject TEXT,
+	text_body TEXT,
+	html_body TEXT,
+	in_reply_to TEXT,
+	"references" TEXT,
+	original_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+	compose_mode TEXT NOT NULL DEFAULT 'new',
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT INTO drafts_v19 (id, identity_id, to_addresses, cc_addresses, bcc_addresses, subject, text_body, html_body, in_reply_to, "references", original_message_id, compose_mode, created_at, updated_at)
+SELECT id, identity_id, to_addresses, cc_addresses, bcc_addresses, subject, text_body, html_body, in_reply_to, "references", original_message_id, compose_mode, created_at, updated_at
+FROM drafts;
+
+DROP TABLE drafts;
+ALTER TABLE drafts_v19 RENAME TO drafts;
+
+CREATE INDEX idx_drafts_identity ON drafts(identity_id);
+
+-- Drop the temp table
+DROP TABLE identities_v19_temp;
 
 COMMIT;
 PRAGMA foreign_keys = ON;

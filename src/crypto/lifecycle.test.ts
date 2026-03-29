@@ -76,7 +76,7 @@ vi.mock("../sync/sync-scheduler.js", () => ({
 		return {
 			start: mockSchedulerStart,
 			stop: mockSchedulerStop,
-			loadIdentitiesFromDb: mockSchedulerLoad,
+			loadConnectorsFromDb: mockSchedulerLoad,
 		};
 	}),
 }));
@@ -216,7 +216,7 @@ describe("transitionToUnlocked — scheduler callbacks", () => {
 			folders: [],
 		});
 
-		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("identity 42"));
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("connector 42"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("7 new"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("2 errors"));
 		consoleSpy.mockRestore();
@@ -265,14 +265,14 @@ describe("transitionToUnlocked — scheduler callbacks", () => {
 		consoleSpy.mockRestore();
 	});
 
-	test("onSyncError callback logs identity id and error message", () => {
+	test("onSyncError callback logs connector id and error message", () => {
 		const context = makeLockedContext();
 		transitionToUnlocked(context, Buffer.alloc(32));
 
 		const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		mockCapturedOnSyncError?.(13, new Error("connection refused"));
 
-		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("identity 13"));
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("connector 13"));
 		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("connection refused"));
 		consoleSpy.mockRestore();
 	});

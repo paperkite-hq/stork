@@ -1,6 +1,10 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { createTestDb, createTestFolder, createTestIdentity } from "../test-helpers/test-db.js";
+import {
+	createTestDb,
+	createTestFolder,
+	createTestInboundConnector,
+} from "../test-helpers/test-db.js";
 import { MessageSearch, parseSearchQuery } from "./search.js";
 
 describe("parseSearchQuery", () => {
@@ -85,18 +89,18 @@ describe("MessageSearch — structured operators", () => {
 	beforeAll(() => {
 		db = createTestDb();
 
-		const identityId = createTestIdentity(db);
-		const folderId = createTestFolder(db, identityId, "INBOX");
+		const connectorId = createTestInboundConnector(db);
+		const folderId = createTestFolder(db, connectorId, "INBOX");
 
 		const insert = db.prepare(`
-			INSERT INTO messages (identity_id, folder_id, uid, message_id, subject,
+			INSERT INTO messages (inbound_connector_id, folder_id, uid, message_id, subject,
 				from_address, from_name, to_addresses, cc_addresses, date, text_body, flags, has_attachments, size)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1000)
 		`);
 
 		// Message 1: unread, from alice, with attachment
 		insert.run(
-			identityId,
+			connectorId,
 			folderId,
 			1,
 			"<m1@test.com>",
@@ -113,7 +117,7 @@ describe("MessageSearch — structured operators", () => {
 
 		// Message 2: read, starred, from bob, cc to carol
 		insert.run(
-			identityId,
+			connectorId,
 			folderId,
 			2,
 			"<m2@test.com>",
@@ -130,7 +134,7 @@ describe("MessageSearch — structured operators", () => {
 
 		// Message 3: unread, from alice, no attachment
 		insert.run(
-			identityId,
+			connectorId,
 			folderId,
 			3,
 			"<m3@test.com>",
@@ -147,7 +151,7 @@ describe("MessageSearch — structured operators", () => {
 
 		// Message 4: read, from charlie, old date
 		insert.run(
-			identityId,
+			connectorId,
 			folderId,
 			4,
 			"<m4@test.com>",

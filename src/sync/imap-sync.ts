@@ -90,7 +90,7 @@ const DEFAULT_SUB_BATCH_LABEL_SIZE = 500;
 export class ImapSync {
 	private client: ImapFlow;
 	private db: Database.Database;
-	private identityId: number;
+	private inboundConnectorId: number;
 	private config: ImapConfig;
 	private subBatchLabelSize: number;
 
@@ -100,7 +100,7 @@ export class ImapSync {
 	constructor(
 		config: ImapConfig,
 		db: Database.Database,
-		identityId: number,
+		inboundConnectorId: number,
 		subBatchLabelSize = DEFAULT_SUB_BATCH_LABEL_SIZE,
 	) {
 		this.config = config;
@@ -109,7 +109,7 @@ export class ImapSync {
 			logger: false,
 		});
 		this.db = db;
-		this.identityId = identityId;
+		this.inboundConnectorId = inboundConnectorId;
 		this.subBatchLabelSize = subBatchLabelSize;
 
 		// Prepare statement for persisting errors (table may not exist in tests
@@ -119,7 +119,7 @@ export class ImapSync {
 			.get();
 		if (hasTable) {
 			this.insertSyncError = this.db.prepare(`
-				INSERT INTO sync_errors (identity_id, folder_path, uid, error_type, message, retriable)
+				INSERT INTO sync_errors (inbound_connector_id, folder_path, uid, error_type, message, retriable)
 				VALUES (?, ?, ?, ?, ?, ?)
 			`);
 		}
@@ -131,7 +131,7 @@ export class ImapSync {
 	private recordError(result: SyncResult, error: SyncError): void {
 		result.errors.push(error);
 		this.insertSyncError?.run(
-			this.identityId,
+			this.inboundConnectorId,
 			error.folderPath,
 			error.uid,
 			error.errorType,
@@ -150,9 +150,9 @@ export class ImapSync {
 		this.db
 			.prepare(
 				`UPDATE sync_errors SET resolved = 1, resolved_at = datetime('now')
-				 WHERE identity_id = ? AND resolved = 0`,
+				 WHERE inbound_connector_id = ? AND resolved = 0`,
 			)
-			.run(this.identityId);
+			.run(this.inboundConnectorId);
 	}
 
 	async connect(): Promise<void> {
@@ -283,12 +283,11 @@ export class ImapSync {
 			// Read connector mode setting from the inbound connector.
 			const connectorRow = this.db
 				.prepare(`
-					SELECT ic.sync_delete_from_server
-					FROM inbound_connectors ic
-					JOIN identities i ON i.inbound_connector_id = ic.id
-					WHERE i.id = ?
+					SELECT sync_delete_from_server
+					FROM inbound_connectors
+					WHERE id = ?
 				`)
-				.get(this.identityId) as { sync_delete_from_server: number } | undefined;
+				.get(this.inboundConnectorId) as { sync_delete_from_server: number } | undefined;
 			const deleteFromServerAfterSync = connectorRow?.sync_delete_from_server === 1;
 
 			const totalFolders = folders.length;
@@ -364,9 +363,9 @@ export class ImapSync {
 		const remotePaths = new Set<string>();
 
 		const upsertFolder = this.db.prepare(`
-			INSERT INTO folders (identity_id, path, name, delimiter, flags, special_use)
+			INSERT INTO folders (inbound_connector_id, path, name, delimiter, flags, special_use)
 			VALUES (?, ?, ?, ?, ?, ?)
-			ON CONFLICT(identity_id, path) DO UPDATE SET
+			ON CONFLICT(inbound_connector_id, path) WHERE inbound_connector_id IS NOT NULL DO UPDATE SET
 				name = excluded.name,
 				delimiter = excluded.delimiter,
 				flags = excluded.flags,
@@ -383,7 +382,7 @@ export class ImapSync {
 
 				const specialUse = resolveSpecialUse(mailbox);
 				upsertFolder.run(
-					this.identityId,
+					this.inboundConnectorId,
 					mailbox.path,
 					mailbox.name,
 					mailbox.delimiter,
@@ -408,8 +407,8 @@ export class ImapSync {
 	 */
 	private pruneDeletedFolders(remotePaths: Set<string>): number {
 		const localFolders = this.db
-			.prepare("SELECT id, path FROM folders WHERE identity_id = ?")
-			.all(this.identityId) as { id: number; path: string }[];
+			.prepare("SELECT id, path FROM folders WHERE inbound_connector_id = ?")
+			.all(this.inboundConnectorId) as { id: number; path: string }[];
 
 		let deleted = 0;
 		const deleteFolder = this.db.prepare("DELETE FROM folders WHERE id = ?");
@@ -452,8 +451,10 @@ export class ImapSync {
 		};
 
 		const folder = this.db
-			.prepare("SELECT id, uid_validity FROM folders WHERE identity_id = ? AND path = ?")
-			.get(this.identityId, folderPath) as { id: number; uid_validity: number | null } | undefined;
+			.prepare("SELECT id, uid_validity FROM folders WHERE inbound_connector_id = ? AND path = ?")
+			.get(this.inboundConnectorId, folderPath) as
+			| { id: number; uid_validity: number | null }
+			| undefined;
 
 		if (!folder) {
 			this.recordError(result, {
@@ -501,8 +502,8 @@ export class ImapSync {
 				if (folder.uid_validity && BigInt(folder.uid_validity) !== mailboxStatus.uidValidity) {
 					this.db.prepare("DELETE FROM messages WHERE folder_id = ?").run(folder.id);
 					this.db
-						.prepare("DELETE FROM sync_state WHERE identity_id = ? AND folder_id = ?")
-						.run(this.identityId, folder.id);
+						.prepare("DELETE FROM sync_state WHERE inbound_connector_id = ? AND folder_id = ?")
+						.run(this.inboundConnectorId, folder.id);
 				}
 
 				// Update folder metadata
@@ -521,8 +522,10 @@ export class ImapSync {
 				// an empty mailbox returns "Invalid messageset")
 				if (mailboxStatus.exists > 0) {
 					const syncState = this.db
-						.prepare("SELECT last_uid FROM sync_state WHERE identity_id = ? AND folder_id = ?")
-						.get(this.identityId, folder.id) as { last_uid: number } | undefined;
+						.prepare(
+							"SELECT last_uid FROM sync_state WHERE inbound_connector_id = ? AND folder_id = ?",
+						)
+						.get(this.inboundConnectorId, folder.id) as { last_uid: number } | undefined;
 
 					const lastUid = syncState?.last_uid ?? 0;
 					const range = lastUid > 0 ? `${lastUid + 1}:*` : "1:*";
@@ -726,14 +729,14 @@ export class ImapSync {
 		if (uids.length === 0) return 0;
 
 		const syncState = this.db
-			.prepare("SELECT last_uid FROM sync_state WHERE identity_id = ? AND folder_id = ?")
-			.get(this.identityId, folderId) as { last_uid: number } | undefined;
+			.prepare("SELECT last_uid FROM sync_state WHERE inbound_connector_id = ? AND folder_id = ?")
+			.get(this.inboundConnectorId, folderId) as { last_uid: number } | undefined;
 
 		const lastUid = syncState?.last_uid ?? 0;
 
 		const insertMessage = this.db.prepare(`
 			INSERT OR IGNORE INTO messages (
-				identity_id, folder_id, uid, message_id, in_reply_to, "references",
+				inbound_connector_id, folder_id, uid, message_id, in_reply_to, "references",
 				subject, from_address, from_name, to_addresses, cc_addresses, bcc_addresses,
 				date, text_body, html_body, flags, size, has_attachments, raw_headers
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -801,7 +804,7 @@ export class ImapSync {
 						: null;
 
 					const dbResult = insertMessage.run(
-						this.identityId,
+						this.inboundConnectorId,
 						folderId,
 						message.uid,
 						toStringOrNull(envelope.messageId),
@@ -877,13 +880,13 @@ export class ImapSync {
 		if (maxUid > lastUid) {
 			this.db
 				.prepare(`
-				INSERT INTO sync_state (identity_id, folder_id, last_uid, last_synced_at)
+				INSERT INTO sync_state (inbound_connector_id, folder_id, last_uid, last_synced_at)
 				VALUES (?, ?, ?, datetime('now'))
-				ON CONFLICT(identity_id, folder_id) DO UPDATE SET
+				ON CONFLICT(inbound_connector_id, folder_id) DO UPDATE SET
 					last_uid = excluded.last_uid,
 					last_synced_at = excluded.last_synced_at
 			`)
-				.run(this.identityId, folderId, maxUid);
+				.run(this.inboundConnectorId, folderId, maxUid);
 		}
 
 		return count;
@@ -960,8 +963,8 @@ export class ImapSync {
 	 */
 	ensureLabelsForFolders(): void {
 		const folders = this.db
-			.prepare("SELECT id, name FROM folders WHERE identity_id = ?")
-			.all(this.identityId) as { id: number; name: string }[];
+			.prepare("SELECT id, name FROM folders WHERE inbound_connector_id = ?")
+			.all(this.inboundConnectorId) as { id: number; name: string }[];
 
 		const upsertLabel = this.db.prepare(`
 			INSERT INTO labels (name, source)
@@ -993,9 +996,9 @@ export class ImapSync {
 			JOIN folders f ON f.id = m.folder_id
 			JOIN labels l ON l.name = f.name
 			LEFT JOIN message_labels ml ON ml.message_id = m.id AND ml.label_id = l.id
-			WHERE m.identity_id = ? AND ml.message_id IS NULL
+			WHERE m.inbound_connector_id = ? AND ml.message_id IS NULL
 		`)
-			.run(this.identityId);
+			.run(this.inboundConnectorId);
 	}
 
 	/**
@@ -1041,52 +1044,52 @@ export class ImapSync {
 	}
 
 	/**
-	 * Ensures a label exists for this identity (source='identity'), named after the
-	 * identity display name. These auto-labels replace the per-identity sidebar drill-in,
-	 * enabling label-based identity filtering that composes with other label filters.
+	 * Ensures a label exists for this inbound connector (source='connector'), named after
+	 * the connector's display name. These auto-labels enable label-based connector filtering
+	 * that composes with other label filters.
 	 */
 	ensureIdentityLabel(): void {
-		const identity = this.db
-			.prepare("SELECT name FROM identities WHERE id = ?")
-			.get(this.identityId) as { name: string } | undefined;
-		if (!identity) return;
+		const connector = this.db
+			.prepare("SELECT name FROM inbound_connectors WHERE id = ?")
+			.get(this.inboundConnectorId) as { name: string } | undefined;
+		if (!connector) return;
 
 		this.db
 			.prepare(`
 				INSERT INTO labels (name, source, color)
-				VALUES (?, 'identity', ?)
-				ON CONFLICT(name) DO UPDATE SET source = 'identity'
+				VALUES (?, 'connector', ?)
+				ON CONFLICT(name) DO UPDATE SET source = 'connector'
 			`)
-			.run(identity.name, this.identityLabelColor());
+			.run(connector.name, this.connectorLabelColor());
 	}
 
 	/**
-	 * Applies the identity label to all messages from this identity that don't have it yet.
+	 * Applies the connector label to all messages from this connector that don't have it yet.
 	 * Runs after each sync cycle alongside applyFolderLabelsToMessages().
 	 */
 	applyIdentityLabelToMessages(): void {
-		const identity = this.db
-			.prepare("SELECT name FROM identities WHERE id = ?")
-			.get(this.identityId) as { name: string } | undefined;
-		if (!identity) return;
+		const connector = this.db
+			.prepare("SELECT name FROM inbound_connectors WHERE id = ?")
+			.get(this.inboundConnectorId) as { name: string } | undefined;
+		if (!connector) return;
 
 		this.db
 			.prepare(`
 				INSERT OR IGNORE INTO message_labels (message_id, label_id)
 				SELECT m.id, l.id
 				FROM messages m
-				JOIN labels l ON l.name = ? AND l.source = 'identity'
+				JOIN labels l ON l.name = ? AND l.source = 'connector'
 				LEFT JOIN message_labels ml ON ml.message_id = m.id AND ml.label_id = l.id
-				WHERE m.identity_id = ? AND ml.message_id IS NULL
+				WHERE m.inbound_connector_id = ? AND ml.message_id IS NULL
 			`)
-			.run(identity.name, this.identityId);
+			.run(connector.name, this.inboundConnectorId);
 	}
 
 	/**
-	 * Returns a color for the identity label based on identity ID position.
+	 * Returns a color for the connector label based on connector ID position.
 	 * Uses a curated palette of distinct, accessible colors.
 	 */
-	private identityLabelColor(): string {
+	private connectorLabelColor(): string {
 		const palette = [
 			"#3b82f6", // blue
 			"#10b981", // emerald
@@ -1097,7 +1100,7 @@ export class ImapSync {
 			"#ec4899", // pink
 			"#84cc16", // lime
 		];
-		return palette[(this.identityId - 1) % palette.length] ?? palette[0];
+		return palette[(this.inboundConnectorId - 1) % palette.length] ?? palette[0];
 	}
 
 	/**
@@ -1113,8 +1116,8 @@ export class ImapSync {
 	 */
 	async detectServerDeletions(folderPath: string): Promise<number[]> {
 		const folder = this.db
-			.prepare("SELECT id FROM folders WHERE identity_id = ? AND path = ?")
-			.get(this.identityId, folderPath) as { id: number } | undefined;
+			.prepare("SELECT id FROM folders WHERE inbound_connector_id = ? AND path = ?")
+			.get(this.inboundConnectorId, folderPath) as { id: number } | undefined;
 
 		if (!folder) return [];
 
@@ -1152,8 +1155,8 @@ export class ImapSync {
 		if (uids.length === 0) return 0;
 
 		const folder = this.db
-			.prepare("SELECT id FROM folders WHERE identity_id = ? AND path = ?")
-			.get(this.identityId, folderPath) as { id: number } | undefined;
+			.prepare("SELECT id FROM folders WHERE inbound_connector_id = ? AND path = ?")
+			.get(this.inboundConnectorId, folderPath) as { id: number } | undefined;
 
 		const markDeleted = folder
 			? this.db.prepare(

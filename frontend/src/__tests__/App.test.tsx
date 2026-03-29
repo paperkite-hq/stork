@@ -27,6 +27,7 @@ vi.mock("../api", () => ({
 		},
 		folders: {
 			list: vi.fn().mockResolvedValue([]),
+			listAll: vi.fn().mockResolvedValue([]),
 		},
 		labels: {
 			list: vi.fn(),
@@ -197,7 +198,7 @@ const mockApi = api as unknown as {
 		messages: ReturnType<typeof vi.fn>;
 		related: ReturnType<typeof vi.fn>;
 	};
-	folders: { list: ReturnType<typeof vi.fn> };
+	folders: { list: ReturnType<typeof vi.fn>; listAll: ReturnType<typeof vi.fn> };
 	messages: {
 		get: ReturnType<typeof vi.fn>;
 		getThread: ReturnType<typeof vi.fn>;

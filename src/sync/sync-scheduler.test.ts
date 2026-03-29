@@ -13,23 +13,11 @@ function createTestDb(): Database.Database {
 	return db;
 }
 
-function createIdentity(db: Database.Database, name = "Test"): number {
+function createConnector(db: Database.Database, name = "Test"): number {
 	db.prepare(`
 		INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
 		VALUES (?, 'imap', 'imap.example.com', 993, 1, 'test', 'pass')
 	`).run(`${name} (Inbound)`);
-	const inboundId = (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
-
-	db.prepare(`
-		INSERT INTO outbound_connectors (name, type)
-		VALUES (?, 'smtp')
-	`).run(`${name} (Outbound)`);
-	const outboundId = (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
-
-	db.prepare(`
-		INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-		VALUES (?, 'test@example.com', ?, ?)
-	`).run(name, inboundId, outboundId);
 	return (db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id;
 }
 
@@ -49,8 +37,8 @@ describe("SyncScheduler", () => {
 	test("adds and removes identities", () => {
 		scheduler = new SyncScheduler(db);
 
-		scheduler.addIdentity({
-			identityId: 1,
+		scheduler.addConnector({
+			inboundConnectorId: 1,
 			imapConfig: {
 				host: "imap.example.com",
 				port: 993,
@@ -98,8 +86,8 @@ describe("SyncScheduler", () => {
 	});
 
 	test("loads identities from database", () => {
-		const identityId = createIdentity(db, "Identity 1");
-		createIdentity(db, "Identity 2");
+		const identityId = createConnector(db, "Identity 1");
+		createConnector(db, "Identity 2");
 
 		scheduler = new SyncScheduler(db);
 		scheduler.loadIdentitiesFromDb();
@@ -109,11 +97,11 @@ describe("SyncScheduler", () => {
 	});
 
 	test("loadIdentitiesFromDb skips already-registered identities", () => {
-		const identityId = createIdentity(db);
+		const identityId = createConnector(db);
 
 		scheduler = new SyncScheduler(db);
-		scheduler.addIdentity({
-			identityId,
+		scheduler.addConnector({
+			inboundConnectorId: identityId,
 			imapConfig: {
 				host: "custom.example.com",
 				port: 993,
@@ -130,8 +118,8 @@ describe("SyncScheduler", () => {
 	test("status tracks consecutive errors", () => {
 		scheduler = new SyncScheduler(db);
 
-		scheduler.addIdentity({
-			identityId: 1,
+		scheduler.addConnector({
+			inboundConnectorId: 1,
 			imapConfig: {
 				host: "imap.example.com",
 				port: 993,
@@ -148,8 +136,8 @@ describe("SyncScheduler", () => {
 	test("status includes progress field as null when not running", () => {
 		scheduler = new SyncScheduler(db);
 
-		scheduler.addIdentity({
-			identityId: 1,
+		scheduler.addConnector({
+			inboundConnectorId: 1,
 			imapConfig: {
 				host: "imap.example.com",
 				port: 993,
@@ -178,8 +166,8 @@ describe("SyncScheduler", () => {
 
 	test("stop completes within timeout even with no running syncs", async () => {
 		scheduler = new SyncScheduler(db);
-		scheduler.addIdentity({
-			identityId: 1,
+		scheduler.addConnector({
+			inboundConnectorId: 1,
 			imapConfig: {
 				host: "imap.example.com",
 				port: 993,
@@ -198,8 +186,8 @@ describe("SyncScheduler", () => {
 
 	test("stop clears abort controllers and sync promises", async () => {
 		scheduler = new SyncScheduler(db);
-		scheduler.addIdentity({
-			identityId: 1,
+		scheduler.addConnector({
+			inboundConnectorId: 1,
 			imapConfig: {
 				host: "imap.example.com",
 				port: 993,

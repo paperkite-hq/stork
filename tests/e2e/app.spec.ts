@@ -233,12 +233,12 @@ test.describe("API integration", () => {
 		expect(identities[0].email).toBe("e2e@test.local");
 	});
 
-	test("GET /api/identities/:id/folders returns seeded folders", async ({ request }) => {
-		const identitiesRes = await request.get("/api/identities");
-		const identities = await identitiesRes.json();
-		const identityId = identities[0].id;
+	test("GET /api/connectors/inbound/:id/folders returns seeded folders", async ({ request }) => {
+		const connectorsRes = await request.get("/api/connectors/inbound");
+		const connectors = await connectorsRes.json();
+		const connectorId = connectors[0].id;
 
-		const response = await request.get(`/api/identities/${identityId}/folders`);
+		const response = await request.get(`/api/connectors/inbound/${connectorId}/folders`);
 		expect(response.ok()).toBeTruthy();
 		const folders = await response.json();
 		expect(folders.length).toBeGreaterThanOrEqual(4);
@@ -250,16 +250,16 @@ test.describe("API integration", () => {
 	});
 
 	test("GET messages returns inbox messages", async ({ request }) => {
-		const identitiesRes = await request.get("/api/identities");
-		const identities = await identitiesRes.json();
-		const identityId = identities[0].id;
+		const connectorsRes = await request.get("/api/connectors/inbound");
+		const connectors = await connectorsRes.json();
+		const connectorId = connectors[0].id;
 
-		const foldersRes = await request.get(`/api/identities/${identityId}/folders`);
+		const foldersRes = await request.get(`/api/connectors/inbound/${connectorId}/folders`);
 		const folders = await foldersRes.json();
 		const inbox = folders.find((f: { name: string }) => f.name === "INBOX");
 
 		const response = await request.get(
-			`/api/identities/${identityId}/folders/${inbox.id}/messages`,
+			`/api/connectors/inbound/${connectorId}/folders/${inbox.id}/messages`,
 		);
 		expect(response.ok()).toBeTruthy();
 		const messages = await response.json();
@@ -267,16 +267,16 @@ test.describe("API integration", () => {
 	});
 
 	test("GET /api/messages/:id returns message detail", async ({ request }) => {
-		const identitiesRes = await request.get("/api/identities");
-		const identities = await identitiesRes.json();
-		const identityId = identities[0].id;
+		const connectorsRes = await request.get("/api/connectors/inbound");
+		const connectors = await connectorsRes.json();
+		const connectorId = connectors[0].id;
 
-		const foldersRes = await request.get(`/api/identities/${identityId}/folders`);
+		const foldersRes = await request.get(`/api/connectors/inbound/${connectorId}/folders`);
 		const folders = await foldersRes.json();
 		const inbox = folders.find((f: { name: string }) => f.name === "INBOX");
 
 		const messagesRes = await request.get(
-			`/api/identities/${identityId}/folders/${inbox.id}/messages?limit=1`,
+			`/api/connectors/inbound/${connectorId}/folders/${inbox.id}/messages?limit=1`,
 		);
 		const messages = await messagesRes.json();
 		const msgId = messages[0].id;
@@ -289,16 +289,16 @@ test.describe("API integration", () => {
 	});
 
 	test("PATCH flags updates message flags", async ({ request }) => {
-		const identitiesRes = await request.get("/api/identities");
-		const identities = await identitiesRes.json();
-		const identityId = identities[0].id;
+		const connectorsRes = await request.get("/api/connectors/inbound");
+		const connectors = await connectorsRes.json();
+		const connectorId = connectors[0].id;
 
-		const foldersRes = await request.get(`/api/identities/${identityId}/folders`);
+		const foldersRes = await request.get(`/api/connectors/inbound/${connectorId}/folders`);
 		const folders = await foldersRes.json();
 		const inbox = folders.find((f: { name: string }) => f.name === "INBOX");
 
 		const messagesRes = await request.get(
-			`/api/identities/${identityId}/folders/${inbox.id}/messages?limit=1`,
+			`/api/connectors/inbound/${connectorId}/folders/${inbox.id}/messages?limit=1`,
 		);
 		const messages = await messagesRes.json();
 		const msgId = messages[0].id;
@@ -338,7 +338,6 @@ test.describe("API integration", () => {
 			data: {
 				name: "New E2E Identity",
 				email: "new@test.local",
-				inbound_connector_id: inbound.id,
 			},
 		});
 		expect(response.status()).toBe(201);
@@ -350,16 +349,15 @@ test.describe("API integration", () => {
 	});
 
 	test("GET thread returns related messages", async ({ request }) => {
-		const identitiesRes = await request.get("/api/identities");
-		const identities = await identitiesRes.json();
-		const identityId = identities[0].id;
-
-		const foldersRes = await request.get(`/api/identities/${identityId}/folders`);
+		const foldersRes = await request.get("/api/connectors/inbound/folders");
 		const folders = await foldersRes.json();
-		const inbox = folders.find((f: { name: string }) => f.name === "INBOX");
+		const inbox = folders.find(
+			(f: { name: string; inbound_connector_id: number }) => f.name === "INBOX",
+		);
+		const connectorId = inbox.inbound_connector_id;
 
 		const messagesRes = await request.get(
-			`/api/identities/${identityId}/folders/${inbox.id}/messages`,
+			`/api/connectors/inbound/${connectorId}/folders/${inbox.id}/messages`,
 		);
 		const messages = await messagesRes.json();
 		const threadMsg = messages.find((m: { subject: string }) =>
@@ -374,16 +372,15 @@ test.describe("API integration", () => {
 	});
 
 	test("GET attachments lists message attachments", async ({ request }) => {
-		const identitiesRes = await request.get("/api/identities");
-		const identities = await identitiesRes.json();
-		const identityId = identities[0].id;
-
-		const foldersRes = await request.get(`/api/identities/${identityId}/folders`);
+		const foldersRes = await request.get("/api/connectors/inbound/folders");
 		const folders = await foldersRes.json();
-		const inbox = folders.find((f: { name: string }) => f.name === "INBOX");
+		const inbox = folders.find(
+			(f: { name: string; inbound_connector_id: number }) => f.name === "INBOX",
+		);
+		const connectorId = inbox.inbound_connector_id;
 
 		const messagesRes = await request.get(
-			`/api/identities/${identityId}/folders/${inbox.id}/messages`,
+			`/api/connectors/inbound/${connectorId}/folders/${inbox.id}/messages`,
 		);
 		const messages = await messagesRes.json();
 		const attachMsg = messages.find(
@@ -399,16 +396,15 @@ test.describe("API integration", () => {
 	});
 
 	test("DELETE message removes it", async ({ request }) => {
-		const identitiesRes = await request.get("/api/identities");
-		const identities = await identitiesRes.json();
-		const identityId = identities[0].id;
-
-		const foldersRes = await request.get(`/api/identities/${identityId}/folders`);
+		const foldersRes = await request.get("/api/connectors/inbound/folders");
 		const folders = await foldersRes.json();
-		const inbox = folders.find((f: { name: string }) => f.name === "INBOX");
+		const inbox = folders.find(
+			(f: { name: string; inbound_connector_id: number }) => f.name === "INBOX",
+		);
+		const connectorId = inbox.inbound_connector_id;
 
 		const messagesRes = await request.get(
-			`/api/identities/${identityId}/folders/${inbox.id}/messages`,
+			`/api/connectors/inbound/${connectorId}/folders/${inbox.id}/messages`,
 		);
 		const messages = await messagesRes.json();
 		const lastMsg = messages[messages.length - 1];

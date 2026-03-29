@@ -10,6 +10,7 @@ import {
 	createTestDb,
 	createTestFolder,
 	createTestIdentity,
+	createTestInboundConnector,
 	createTestLabel,
 	createTestMessage,
 } from "../../src/test-helpers/test-db.js";
@@ -18,28 +19,32 @@ const PORT = 13200;
 const db = createTestDb();
 
 // Seed test data
-const identityId = createTestIdentity(db, {
-	name: "E2E Test Account",
-	email: "e2e@test.local",
+// Create inbound connector (for receiving mail) and identity (for sending)
+const connectorId = createTestInboundConnector(db, {
+	name: "E2E Test Inbound",
 	imapHost: "127.0.0.1",
 	imapPort: 9993,
+});
+createTestIdentity(db, {
+	name: "E2E Test Account",
+	email: "e2e@test.local",
 	smtpHost: "127.0.0.1",
 	smtpPort: 9587,
 });
 
-const inboxId = createTestFolder(db, identityId, "INBOX", {
+const inboxId = createTestFolder(db, connectorId, "INBOX", {
 	name: "INBOX",
 	specialUse: "\\Inbox",
 });
-const sentId = createTestFolder(db, identityId, "Sent", {
+const sentId = createTestFolder(db, connectorId, "Sent", {
 	name: "Sent",
 	specialUse: "\\Sent",
 });
-const draftsId = createTestFolder(db, identityId, "Drafts", {
+const draftsId = createTestFolder(db, connectorId, "Drafts", {
 	name: "Drafts",
 	specialUse: "\\Drafts",
 });
-const trashId = createTestFolder(db, identityId, "Trash", {
+const trashId = createTestFolder(db, connectorId, "Trash", {
 	name: "Trash",
 	specialUse: "\\Trash",
 });
@@ -55,7 +60,7 @@ const now = new Date();
 const inboxMessageIds: number[] = [];
 for (let i = 1; i <= 10; i++) {
 	const date = new Date(now.getTime() - i * 3600_000);
-	const msgId = createTestMessage(db, identityId, inboxId, i, {
+	const msgId = createTestMessage(db, connectorId, inboxId, i, {
 		subject: `E2E Test Email #${i}`,
 		fromAddress: `sender${i}@example.com`,
 		fromName: `Sender ${i}`,
@@ -69,7 +74,7 @@ for (let i = 1; i <= 10; i++) {
 }
 
 // Create a starred message
-const starredMsgId = createTestMessage(db, identityId, inboxId, 11, {
+const starredMsgId = createTestMessage(db, connectorId, inboxId, 11, {
 	subject: "Important Starred Email",
 	fromAddress: "vip@example.com",
 	fromName: "VIP Sender",
@@ -85,7 +90,7 @@ const threadMsgId1 = "<thread-1@test.local>";
 const threadMsgId2 = "<thread-2@test.local>";
 const threadMsgId3 = "<thread-3@test.local>";
 
-const thread1Id = createTestMessage(db, identityId, inboxId, 12, {
+const thread1Id = createTestMessage(db, connectorId, inboxId, 12, {
 	messageId: threadMsgId1,
 	subject: "Thread: Project Discussion",
 	fromAddress: "alice@example.com",
@@ -97,7 +102,7 @@ const thread1Id = createTestMessage(db, identityId, inboxId, 12, {
 });
 inboxMessageIds.push(thread1Id);
 
-const thread2Id = createTestMessage(db, identityId, inboxId, 13, {
+const thread2Id = createTestMessage(db, connectorId, inboxId, 13, {
 	messageId: threadMsgId2,
 	subject: "Re: Thread: Project Discussion",
 	fromAddress: "e2e@test.local",
@@ -111,7 +116,7 @@ const thread2Id = createTestMessage(db, identityId, inboxId, 13, {
 });
 inboxMessageIds.push(thread2Id);
 
-const thread3Id = createTestMessage(db, identityId, inboxId, 14, {
+const thread3Id = createTestMessage(db, connectorId, inboxId, 14, {
 	messageId: threadMsgId3,
 	subject: "Re: Thread: Project Discussion",
 	fromAddress: "alice@example.com",
@@ -126,7 +131,7 @@ const thread3Id = createTestMessage(db, identityId, inboxId, 14, {
 inboxMessageIds.push(thread3Id);
 
 // Create sent messages
-const sentMsgId = createTestMessage(db, identityId, sentId, 1, {
+const sentMsgId = createTestMessage(db, connectorId, sentId, 1, {
 	subject: "Outgoing Test",
 	fromAddress: "e2e@test.local",
 	fromName: "E2E Test Account",
@@ -137,7 +142,7 @@ const sentMsgId = createTestMessage(db, identityId, sentId, 1, {
 });
 
 // Create a message with attachment metadata
-const attachMsgId = createTestMessage(db, identityId, inboxId, 15, {
+const attachMsgId = createTestMessage(db, connectorId, inboxId, 15, {
 	subject: "Email with Attachment",
 	fromAddress: "files@example.com",
 	fromName: "File Sender",

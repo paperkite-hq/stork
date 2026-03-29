@@ -16,12 +16,15 @@ export interface ActiveSyncProgress {
 	startedAt: number;
 }
 
-export interface IdentitySyncConfig {
-	identityId: number;
+export interface ConnectorSyncConfig {
+	inboundConnectorId: number;
 	imapConfig: ImapConfig;
 	/** Sync interval in ms (default: 5 minutes) */
 	intervalMs?: number;
 }
+
+/** @deprecated Use ConnectorSyncConfig */
+export type IdentitySyncConfig = ConnectorSyncConfig;
 
 export interface SyncSchedulerOptions {
 	/** Default sync interval in ms (default: 5 minutes) */
@@ -29,15 +32,15 @@ export interface SyncSchedulerOptions {
 	/** Connection pool options */
 	poolOptions?: ConnectionPoolOptions;
 	/** Called when a sync completes */
-	onSyncComplete?: (identityId: number, result: SyncAllResult) => void;
+	onSyncComplete?: (inboundConnectorId: number, result: SyncAllResult) => void;
 	/** Called immediately when a sync error is recorded (for inline logging) */
-	onSyncRecordError?: (identityId: number, error: SyncError) => void;
+	onSyncRecordError?: (inboundConnectorId: number, error: SyncError) => void;
 	/** Called when a sync fails */
-	onSyncError?: (identityId: number, error: Error) => void;
+	onSyncError?: (inboundConnectorId: number, error: Error) => void;
 }
 
-interface ScheduledIdentity {
-	config: IdentitySyncConfig;
+interface ScheduledConnector {
+	config: ConnectorSyncConfig;
 	timer: ReturnType<typeof setInterval> | null;
 	running: boolean;
 	lastSync: number | null;
@@ -55,20 +58,20 @@ const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 const MAX_BACKOFF_MS = 30 * 60 * 1000;
 
 /**
- * Manages periodic background sync for multiple IMAP identities.
+ * Manages periodic background sync for multiple IMAP inbound connectors.
  *
- * Each identity syncs on its own interval. Failed syncs use exponential
+ * Each connector syncs on its own interval. Failed syncs use exponential
  * backoff to avoid hammering a broken server. Uses ConnectionPool to
  * reuse IMAP connections across sync cycles.
  */
 export class SyncScheduler {
-	private identities: Map<number, ScheduledIdentity> = new Map();
+	private connectors: Map<number, ScheduledConnector> = new Map();
 	private pool: ConnectionPool;
 	private db: Database.Database;
 	private defaultIntervalMs: number;
-	private onSyncComplete?: (identityId: number, result: SyncAllResult) => void;
-	private onSyncRecordError?: (identityId: number, error: SyncError) => void;
-	private onSyncError?: (identityId: number, error: Error) => void;
+	private onSyncComplete?: (inboundConnectorId: number, result: SyncAllResult) => void;
+	private onSyncRecordError?: (inboundConnectorId: number, error: SyncError) => void;
+	private onSyncError?: (inboundConnectorId: number, error: Error) => void;
 	private started = false;
 
 	constructor(db: Database.Database, options: SyncSchedulerOptions = {}) {
@@ -81,15 +84,15 @@ export class SyncScheduler {
 	}
 
 	/**
-	 * Adds an identity to the scheduler.
+	 * Adds an inbound connector to the scheduler.
 	 * If the scheduler is already started, begins syncing immediately.
 	 */
-	addIdentity(config: IdentitySyncConfig): void {
-		if (this.identities.has(config.identityId)) {
-			throw new Error(`Identity ${config.identityId} is already scheduled`);
+	addConnector(config: ConnectorSyncConfig): void {
+		if (this.connectors.has(config.inboundConnectorId)) {
+			throw new Error(`Connector ${config.inboundConnectorId} is already scheduled`);
 		}
 
-		const scheduled: ScheduledIdentity = {
+		const scheduled: ScheduledConnector = {
 			config,
 			timer: null,
 			running: false,
@@ -101,36 +104,46 @@ export class SyncScheduler {
 			progress: null,
 		};
 
-		this.identities.set(config.identityId, scheduled);
+		this.connectors.set(config.inboundConnectorId, scheduled);
 
 		if (this.started) {
-			this.startIdentitySync(scheduled);
+			this.startConnectorSync(scheduled);
 		}
 	}
 
+	/** @deprecated Use addConnector */
+	addIdentity(config: ConnectorSyncConfig): void {
+		this.addConnector(config);
+	}
+
 	/**
-	 * Removes an identity from the scheduler and releases its connections.
+	 * Removes an inbound connector from the scheduler and releases its connections.
 	 */
-	removeIdentity(identityId: number): void {
-		const scheduled = this.identities.get(identityId);
+	removeConnector(inboundConnectorId: number): void {
+		const scheduled = this.connectors.get(inboundConnectorId);
 		if (!scheduled) return;
 
 		if (scheduled.timer) {
 			clearInterval(scheduled.timer);
 		}
 
-		this.identities.delete(identityId);
+		this.connectors.delete(inboundConnectorId);
+	}
+
+	/** @deprecated Use removeConnector */
+	removeIdentity(inboundConnectorId: number): void {
+		this.removeConnector(inboundConnectorId);
 	}
 
 	/**
-	 * Starts the scheduler — begins periodic sync for all registered identities.
+	 * Starts the scheduler — begins periodic sync for all registered connectors.
 	 */
 	start(): void {
 		if (this.started) return;
 		this.started = true;
 
-		for (const scheduled of this.identities.values()) {
-			this.startIdentitySync(scheduled);
+		for (const scheduled of this.connectors.values()) {
+			this.startConnectorSync(scheduled);
 		}
 	}
 
@@ -143,7 +156,7 @@ export class SyncScheduler {
 
 		const pendingSyncs: Promise<void>[] = [];
 
-		for (const scheduled of this.identities.values()) {
+		for (const scheduled of this.connectors.values()) {
 			if (scheduled.timer) {
 				clearInterval(scheduled.timer);
 				scheduled.timer = null;
@@ -169,20 +182,20 @@ export class SyncScheduler {
 	}
 
 	/**
-	 * Triggers an immediate sync for a specific identity.
-	 * Returns the sync result, or throws if the identity is already syncing.
+	 * Triggers an immediate sync for a specific inbound connector.
+	 * Returns the sync result, or throws if the connector is already syncing.
 	 */
-	async syncNow(identityId: number): Promise<SyncAllResult> {
-		const scheduled = this.identities.get(identityId);
+	async syncNow(inboundConnectorId: number): Promise<SyncAllResult> {
+		const scheduled = this.connectors.get(inboundConnectorId);
 		if (!scheduled) {
-			throw new Error(`Identity ${identityId} is not registered`);
+			throw new Error(`Connector ${inboundConnectorId} is not registered`);
 		}
 
 		return this.runSync(scheduled);
 	}
 
 	/**
-	 * Returns the status of all scheduled identities.
+	 * Returns the status of all scheduled connectors.
 	 */
 	getStatus(): Map<
 		number,
@@ -205,8 +218,8 @@ export class SyncScheduler {
 			}
 		>();
 
-		for (const [identityId, scheduled] of this.identities) {
-			status.set(identityId, {
+		for (const [inboundConnectorId, scheduled] of this.connectors) {
+			status.set(inboundConnectorId, {
 				running: scheduled.running,
 				lastSync: scheduled.lastSync,
 				lastError: scheduled.lastError,
@@ -219,18 +232,15 @@ export class SyncScheduler {
 	}
 
 	/**
-	 * Loads all identities from the database and adds them to the scheduler.
+	 * Loads all IMAP inbound connectors from the database and adds them to the scheduler.
+	 * Cloudflare Email connectors are push-based (webhook/R2) and don't need polling.
 	 */
-	loadIdentitiesFromDb(): void {
-		// Only load identities with IMAP inbound connectors for periodic sync —
-		// Cloudflare Email identities are push-based (webhook) and don't need polling.
-		// Join with inbound_connectors to get IMAP credentials from the connector table.
-		const identities = this.db
+	loadConnectorsFromDb(): void {
+		const connectors = this.db
 			.prepare(
-				`SELECT i.id, ic.imap_host, ic.imap_port, ic.imap_tls, ic.imap_user, ic.imap_pass
-				FROM identities i
-				JOIN inbound_connectors ic ON ic.id = i.inbound_connector_id
-				WHERE ic.type = 'imap'`,
+				`SELECT id, imap_host, imap_port, imap_tls, imap_user, imap_pass
+				FROM inbound_connectors
+				WHERE type = 'imap'`,
 			)
 			.all() as {
 			id: number;
@@ -241,25 +251,30 @@ export class SyncScheduler {
 			imap_pass: string;
 		}[];
 
-		for (const identity of identities) {
-			if (this.identities.has(identity.id)) continue;
+		for (const connector of connectors) {
+			if (this.connectors.has(connector.id)) continue;
 
-			this.addIdentity({
-				identityId: identity.id,
+			this.addConnector({
+				inboundConnectorId: connector.id,
 				imapConfig: {
-					host: identity.imap_host,
-					port: identity.imap_port,
-					secure: identity.imap_tls === 1,
+					host: connector.imap_host,
+					port: connector.imap_port,
+					secure: connector.imap_tls === 1,
 					auth: {
-						user: identity.imap_user,
-						pass: identity.imap_pass,
+						user: connector.imap_user,
+						pass: connector.imap_pass,
 					},
 				},
 			});
 		}
 	}
 
-	private startIdentitySync(scheduled: ScheduledIdentity): void {
+	/** @deprecated Use loadConnectorsFromDb */
+	loadIdentitiesFromDb(): void {
+		this.loadConnectorsFromDb();
+	}
+
+	private startConnectorSync(scheduled: ScheduledConnector): void {
 		// Run an initial sync immediately
 		this.runSync(scheduled).catch(() => {});
 
@@ -269,9 +284,9 @@ export class SyncScheduler {
 		}, intervalMs);
 	}
 
-	private async runSync(scheduled: ScheduledIdentity): Promise<SyncAllResult> {
+	private async runSync(scheduled: ScheduledConnector): Promise<SyncAllResult> {
 		if (scheduled.running) {
-			throw new Error(`Identity ${scheduled.config.identityId} is already syncing`);
+			throw new Error(`Connector ${scheduled.config.inboundConnectorId} is already syncing`);
 		}
 
 		scheduled.running = true;
@@ -283,7 +298,7 @@ export class SyncScheduler {
 			errors: 0,
 			startedAt: Date.now(),
 		};
-		const identityId = scheduled.config.identityId;
+		const inboundConnectorId = scheduled.config.inboundConnectorId;
 		const abortController = new AbortController();
 		scheduled.abortController = abortController;
 
@@ -301,20 +316,20 @@ export class SyncScheduler {
 
 		const doSync = async (): Promise<SyncAllResult> => {
 			try {
-				const sync = await this.pool.acquire(identityId, scheduled.config.imapConfig);
+				const sync = await this.pool.acquire(inboundConnectorId, scheduled.config.imapConfig);
 
 				try {
 					const onError = this.onSyncRecordError
-						? (err: SyncError) => this.onSyncRecordError?.(identityId, err)
+						? (err: SyncError) => this.onSyncRecordError?.(inboundConnectorId, err)
 						: undefined;
 					const result = await sync.syncAll(abortController.signal, onProgress, onError);
 					scheduled.lastSync = Date.now();
 					scheduled.lastError = null;
 					scheduled.consecutiveErrors = 0;
-					this.onSyncComplete?.(identityId, result);
+					this.onSyncComplete?.(inboundConnectorId, result);
 					return result;
 				} finally {
-					this.pool.release(identityId, sync);
+					this.pool.release(inboundConnectorId, sync);
 				}
 			} catch (err) {
 				const error = err instanceof Error ? err : new Error(String(err));
@@ -324,7 +339,7 @@ export class SyncScheduler {
 					? `${imapErr.responseStatus ?? "ERROR"}: ${imapErr.responseText}`
 					: error.message;
 				scheduled.consecutiveErrors++;
-				this.onSyncError?.(identityId, error);
+				this.onSyncError?.(inboundConnectorId, error);
 
 				// Apply exponential backoff by rescheduling with delay
 				if (scheduled.consecutiveErrors > 1 && scheduled.timer) {

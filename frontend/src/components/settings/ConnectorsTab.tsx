@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
 	type CreateInboundConnectorRequest,
 	type CreateOutboundConnectorRequest,
@@ -603,21 +603,16 @@ function OutboundConnectorForm({
 function IdentityForm({
 	outboundConnectorId,
 	identityId,
-	inboundConnectors,
 	onSave,
 	onCancel,
 }: {
 	outboundConnectorId: number;
 	identityId: number | null;
-	inboundConnectors: InboundConnector[];
 	onSave: () => void;
 	onCancel: () => void;
 }) {
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
-	const [inboundId, setInboundId] = useState<number | "">(
-		inboundConnectors.length > 0 ? (inboundConnectors[0]?.id ?? "") : "",
-	);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [loaded, setLoaded] = useState(identityId === null);
@@ -630,7 +625,6 @@ function IdentityForm({
 			.then((detail) => {
 				setName(detail.name);
 				setEmail(detail.email);
-				setInboundId(detail.inbound_connector_id ?? "");
 				setLoaded(true);
 			})
 			.catch((err) => {
@@ -645,10 +639,6 @@ function IdentityForm({
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault();
-		if (!inboundId) {
-			setError("An inbound connector is required.");
-			return;
-		}
 		setSaving(true);
 		setError(null);
 		try {
@@ -656,7 +646,6 @@ function IdentityForm({
 				await api.identities.create({
 					name,
 					email,
-					inbound_connector_id: Number(inboundId),
 					outbound_connector_id: outboundConnectorId,
 					default_view: "inbox",
 				});
@@ -664,7 +653,6 @@ function IdentityForm({
 				await api.identities.update(identityId, {
 					name,
 					email,
-					inbound_connector_id: Number(inboundId),
 					outbound_connector_id: outboundConnectorId,
 				});
 			}
@@ -714,34 +702,6 @@ function IdentityForm({
 						className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
 					/>
 				</div>
-			</div>
-			<div>
-				<label
-					htmlFor="id-inbound"
-					className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
-				>
-					Inbound Connector
-				</label>
-				{inboundConnectors.length === 0 ? (
-					<p className="text-sm text-amber-700 dark:text-amber-400">
-						No inbound connectors configured.
-					</p>
-				) : (
-					<select
-						id="id-inbound"
-						value={inboundId}
-						onChange={(e) => setInboundId(e.target.value ? Number(e.target.value) : "")}
-						required
-						className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
-					>
-						<option value="">Select inbound connector…</option>
-						{inboundConnectors.map((c) => (
-							<option key={c.id} value={c.id}>
-								{c.name}
-							</option>
-						))}
-					</select>
-				)}
 			</div>
 			{error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 			<div className="flex gap-2">
@@ -817,10 +777,12 @@ export function ConnectorsTab() {
 	} | null>(null);
 	const [deleting, setDeleting] = useState<{ id: number; dir: "in" | "out" } | null>(null);
 
+	// Inbound connector sync status display
+	const [syncStatusConnectorId, setSyncStatusConnectorId] = useState<number | null>(null);
+
 	// Identity editing state — keyed on outbound connector ID
 	const [editingIdentityFor, setEditingIdentityFor] = useState<number | null>(null);
 	const [editingIdentityId, setEditingIdentityId] = useState<number | "new" | null>(null);
-	const [syncStatusIdentityId, setSyncStatusIdentityId] = useState<number | null>(null);
 	const [deletingIdentity, setDeletingIdentity] = useState<Identity | null>(null);
 
 	async function handleTestInbound(id: number) {
@@ -964,79 +926,92 @@ export function ConnectorsTab() {
 
 				<ul className="space-y-2">
 					{inbound?.map((c) => (
-						<li
-							key={c.id}
-							className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-						>
-							<div className="min-w-0">
-								<div className="flex items-center gap-2">
-									<span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-										{c.name}
-									</span>
-									<ConnectorBadge type={c.type} />
-								</div>
-								<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-									{c.type === "imap"
-										? `${c.imap_user ?? ""}@${c.imap_host ?? ""}:${c.imap_port}`
-										: "Push-based webhook"}
-								</p>
-								{testResult?.id === c.id && testResult.dir === "in" && (
-									<p
-										className={`text-xs mt-0.5 ${testResult.ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
-									>
-										{testResult.msg}
+						<Fragment key={c.id}>
+							<li className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+								<div className="min-w-0">
+									<div className="flex items-center gap-2">
+										<span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+											{c.name}
+										</span>
+										<ConnectorBadge type={c.type} />
+									</div>
+									<p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+										{c.type === "imap"
+											? `${c.imap_user ?? ""}@${c.imap_host ?? ""}:${c.imap_port}`
+											: "Push-based webhook"}
 									</p>
-								)}
-							</div>
-							<div className="flex items-center gap-1.5 shrink-0">
-								{deleting?.id === c.id && deleting.dir === "in" ? (
-									<>
-										<span className="text-xs text-red-600 dark:text-red-400">Delete?</span>
-										<button
-											type="button"
-											onClick={() => handleDeleteInbound(c.id)}
-											className="text-xs text-red-600 dark:text-red-400 hover:underline"
+									{testResult?.id === c.id && testResult.dir === "in" && (
+										<p
+											className={`text-xs mt-0.5 ${testResult.ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
 										>
-											Yes
-										</button>
-										<button
-											type="button"
-											onClick={() => setDeleting(null)}
-											className="text-xs text-gray-500 hover:underline"
-										>
-											No
-										</button>
-									</>
-								) : (
-									<>
-										<button
-											type="button"
-											onClick={() => handleTestInbound(c.id)}
-											className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600"
-										>
-											Test
-										</button>
-										<button
-											type="button"
-											onClick={() => {
-												setEditingInbound(c.id);
-												setTestResult(null);
-											}}
-											className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-										>
-											Edit
-										</button>
-										<button
-											type="button"
-											onClick={() => setDeleting({ id: c.id, dir: "in" })}
-											className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-										>
-											Delete
-										</button>
-									</>
-								)}
-							</div>
-						</li>
+											{testResult.msg}
+										</p>
+									)}
+								</div>
+								<div className="flex items-center gap-1.5 shrink-0">
+									{deleting?.id === c.id && deleting.dir === "in" ? (
+										<>
+											<span className="text-xs text-red-600 dark:text-red-400">Delete?</span>
+											<button
+												type="button"
+												onClick={() => handleDeleteInbound(c.id)}
+												className="text-xs text-red-600 dark:text-red-400 hover:underline"
+											>
+												Yes
+											</button>
+											<button
+												type="button"
+												onClick={() => setDeleting(null)}
+												className="text-xs text-gray-500 hover:underline"
+											>
+												No
+											</button>
+										</>
+									) : (
+										<>
+											<button
+												type="button"
+												onClick={() =>
+													setSyncStatusConnectorId(syncStatusConnectorId === c.id ? null : c.id)
+												}
+												className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600"
+											>
+												Sync Status
+											</button>
+											<button
+												type="button"
+												onClick={() => handleTestInbound(c.id)}
+												className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600"
+											>
+												Test
+											</button>
+											<button
+												type="button"
+												onClick={() => {
+													setEditingInbound(c.id);
+													setTestResult(null);
+												}}
+												className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+											>
+												Edit
+											</button>
+											<button
+												type="button"
+												onClick={() => setDeleting({ id: c.id, dir: "in" })}
+												className="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+											>
+												Delete
+											</button>
+										</>
+									)}
+								</div>
+							</li>
+							{syncStatusConnectorId === c.id && (
+								<li className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+									<SyncStatusPanel connectorId={c.id} />
+								</li>
+							)}
+						</Fragment>
 					))}
 				</ul>
 			</section>
@@ -1187,7 +1162,6 @@ export function ConnectorsTab() {
 												<IdentityForm
 													outboundConnectorId={c.id}
 													identityId={identity.id}
-													inboundConnectors={inbound ?? []}
 													onSave={() => {
 														setEditingIdentityFor(null);
 														setEditingIdentityId(null);
@@ -1212,17 +1186,6 @@ export function ConnectorsTab() {
 														<div className="flex items-center gap-1.5 shrink-0">
 															<button
 																type="button"
-																onClick={() =>
-																	setSyncStatusIdentityId(
-																		syncStatusIdentityId === identity.id ? null : identity.id,
-																	)
-																}
-																className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-600"
-															>
-																Sync Status
-															</button>
-															<button
-																type="button"
 																onClick={() => {
 																	setEditingIdentityFor(c.id);
 																	setEditingIdentityId(identity.id);
@@ -1240,9 +1203,6 @@ export function ConnectorsTab() {
 															</button>
 														</div>
 													</div>
-													{syncStatusIdentityId === identity.id && (
-														<SyncStatusPanel identityId={identity.id} />
-													)}
 												</div>
 											)}
 										</div>
@@ -1252,7 +1212,6 @@ export function ConnectorsTab() {
 										<IdentityForm
 											outboundConnectorId={c.id}
 											identityId={null}
-											inboundConnectors={inbound ?? []}
 											onSave={() => {
 												setEditingIdentityFor(null);
 												setEditingIdentityId(null);
@@ -1301,7 +1260,6 @@ export function ConnectorsTab() {
 											<IdentityForm
 												outboundConnectorId={outbound[0]?.id ?? 0}
 												identityId={identity.id}
-												inboundConnectors={inbound ?? []}
 												onSave={() => {
 													setEditingIdentityFor(null);
 													setEditingIdentityId(null);

@@ -9,6 +9,7 @@ import {
 	createTestDb,
 	createTestFolder,
 	createTestIdentity,
+	createTestInboundConnector,
 	createTestLabel,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
@@ -16,19 +17,15 @@ import {
 describe("Identities API", () => {
 	let db: Database.Database;
 	let app: Hono;
-	let scheduler: import("../../sync/sync-scheduler.js").SyncScheduler;
 
 	beforeEach(() => {
 		db = createTestDb();
 		const ctx = createTestContext(db);
 		const result = createApp(ctx);
 		app = result.app;
-		if (!ctx.scheduler) throw new Error("scheduler not initialized");
-		scheduler = ctx.scheduler;
 	});
 
 	afterEach(async () => {
-		await scheduler.stop();
 		db.close();
 	});
 
@@ -36,37 +33,6 @@ describe("Identities API", () => {
 		const res = await app.request(path, init);
 		const body = await res.json().catch(() => ({ error: "parse error" }));
 		return { status: res.status, body };
-	}
-
-	/** Helper: create inbound + outbound connectors and return their IDs */
-	function createConnectors(overrides?: {
-		imapHost?: string;
-		imapUser?: string;
-		imapPass?: string;
-		smtpHost?: string;
-		smtpUser?: string;
-		smtpPass?: string;
-	}): { inboundId: number; outboundId: number } {
-		db.prepare(`
-			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
-			VALUES ('Test Inbound', 'imap', ?, 993, 1, ?, ?)
-		`).run(
-			overrides?.imapHost ?? "imap.example.com",
-			overrides?.imapUser ?? "user",
-			overrides?.imapPass ?? "pass",
-		);
-		const inboundId = Number(
-			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-		);
-
-		db.prepare(`
-			INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
-			VALUES ('Test Outbound', 'smtp', ?, 587, 0, ?, ?)
-		`).run(overrides?.smtpHost ?? null, overrides?.smtpUser ?? null, overrides?.smtpPass ?? null);
-		const outboundId = Number(
-			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-		);
-		return { inboundId, outboundId };
 	}
 
 	// ─── Identities CRUD ──────────────────────────────────────
@@ -78,15 +44,12 @@ describe("Identities API", () => {
 		});
 
 		test("POST /api/identities creates an identity", async () => {
-			const { inboundId, outboundId } = createConnectors();
 			const { status, body } = await jsonRequest("/api/identities", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					name: "Test",
 					email: "test@example.com",
-					inbound_connector_id: inboundId,
-					outbound_connector_id: outboundId,
 				}),
 			});
 			expect(status).toBe(201);
@@ -98,13 +61,33 @@ describe("Identities API", () => {
 			expect(identities[0].email).toBe("test@example.com");
 		});
 
+		test("POST /api/identities with outbound_connector_id creates identity", async () => {
+			db.prepare(`
+				INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
+				VALUES ('SMTP', 'smtp', 'smtp.example.com', 587, 0, 'user', 'pass')
+			`).run();
+			const outboundId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			const { status, body } = await jsonRequest("/api/identities", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: "Test",
+					email: "test@example.com",
+					outbound_connector_id: outboundId,
+				}),
+			});
+			expect(status).toBe(201);
+			expect(body.id).toBeGreaterThan(0);
+		});
+
 		test("GET /api/identities/:id returns identity details", async () => {
 			const identityId = createTestIdentity(db);
 			const { status, body } = await jsonRequest(`/api/identities/${identityId}`);
 			expect(status).toBe(200);
 			expect(body.id).toBe(identityId);
 			expect(body.name).toBe("Test Identity");
-			expect(body.imap_pass).toBeUndefined();
 		});
 
 		test("GET /api/identities/:id returns 404 for missing", async () => {
@@ -180,35 +163,6 @@ describe("Identities API", () => {
 		});
 	});
 
-	// ─── Folders ────────────────────────────────────────────
-	describe("Folders", () => {
-		test("GET /api/identities/:id/folders returns folders", async () => {
-			const identityId = createTestIdentity(db);
-			createTestFolder(db, identityId, "INBOX", { specialUse: "\\Inbox" });
-			createTestFolder(db, identityId, "Sent", { specialUse: "\\Sent" });
-
-			const { status, body } = await jsonRequest(`/api/identities/${identityId}/folders`);
-			expect(status).toBe(200);
-			expect(body).toHaveLength(2);
-			expect(body[0].path).toBe("INBOX");
-		});
-
-		test("GET /api/identities/:id/sync-status returns folder sync info", async () => {
-			const identityId = createTestIdentity(db);
-			const folderId = createTestFolder(db, identityId, "INBOX");
-
-			db.prepare("INSERT INTO sync_state (identity_id, folder_id, last_uid) VALUES (?, ?, 42)").run(
-				identityId,
-				folderId,
-			);
-
-			const { status, body } = await jsonRequest(`/api/identities/${identityId}/sync-status`);
-			expect(status).toBe(200);
-			expect(body).toHaveLength(1);
-			expect(body[0].last_uid).toBe(42);
-		});
-	});
-
 	// ─── Validation edge cases ───────────────────────────────
 	describe("Validation", () => {
 		test("POST /api/identities with missing required fields fails gracefully", async () => {
@@ -220,27 +174,13 @@ describe("Identities API", () => {
 			expect(status).toBeGreaterThanOrEqual(400);
 		});
 
-		test("POST /api/identities requires inbound_connector_id", async () => {
+		test("POST /api/identities rejects non-existent outbound connector", async () => {
 			const { status, body } = await jsonRequest("/api/identities", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					name: "Test",
 					email: "test@example.com",
-				}),
-			});
-			expect(status).toBe(400);
-			expect(body.error).toContain("inbound_connector_id");
-		});
-
-		test("POST /api/identities rejects non-existent connector IDs", async () => {
-			const { status, body } = await jsonRequest("/api/identities", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					name: "Test",
-					email: "test@example.com",
-					inbound_connector_id: 9999,
 					outbound_connector_id: 9999,
 				}),
 			});
@@ -274,69 +214,20 @@ describe("Identities API", () => {
 		test("GET /api/identities/:id does not expose passwords", async () => {
 			const identityId = createTestIdentity(db);
 			const { body } = await jsonRequest(`/api/identities/${identityId}`);
-			expect(body.imap_pass).toBeUndefined();
 			expect(body.smtp_pass).toBeUndefined();
 		});
 
 		test("POST /api/identities rejects invalid email format", async () => {
-			const { inboundId, outboundId } = createConnectors();
 			const { status, body } = await jsonRequest("/api/identities", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					name: "Test",
 					email: "not-an-email",
-					inbound_connector_id: inboundId,
-					outbound_connector_id: outboundId,
 				}),
 			});
 			expect(status).toBe(400);
 			expect(body.error).toContain("Invalid email");
-		});
-	});
-
-	// ─── Sync trigger ───────────────────────────────────────
-	describe("Sync trigger", () => {
-		test("POST /api/identities/:id/sync returns 500 when sync fails", async () => {
-			// Account with unreachable IMAP server — syncNow throws, route returns 500
-			const identityId = createTestIdentity(db, {
-				imapHost: "127.0.0.1",
-				imapPort: 19999, // no server listening here
-			});
-			scheduler.addIdentity({
-				identityId,
-				imapConfig: {
-					host: "127.0.0.1",
-					port: 19999,
-					secure: false,
-					auth: { user: "test", pass: "test" },
-				},
-			});
-			const { status } = await jsonRequest(`/api/identities/${identityId}/sync`, {
-				method: "POST",
-			});
-			expect(status).toBe(500);
-		});
-	});
-
-	// ─── Delete cascades ────────────────────────────────────
-	describe("Delete cascades", () => {
-		test("deleting identity removes its folders and messages", async () => {
-			const identityId = createTestIdentity(db);
-			const folderId = createTestFolder(db, identityId, "INBOX");
-			createTestMessage(db, identityId, folderId, 1);
-
-			await jsonRequest(`/api/identities/${identityId}`, { method: "DELETE" });
-
-			const folders = db
-				.prepare("SELECT COUNT(*) as count FROM folders WHERE identity_id = ?")
-				.get(identityId) as { count: number };
-			expect(folders.count).toBe(0);
-
-			const messages = db
-				.prepare("SELECT COUNT(*) as count FROM messages WHERE identity_id = ?")
-				.get(identityId) as { count: number };
-			expect(messages.count).toBe(0);
 		});
 	});
 
@@ -382,300 +273,46 @@ describe("Identities API", () => {
 		});
 
 		test("returns 400 when required fields are missing", async () => {
-			const res = await app.request("/api/identities/test-connection", {
+			const { status } = await jsonRequest("/api/identities/test-connection", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ imap_host: "imap.example.com" }),
+				body: JSON.stringify({}),
 			});
-			expect(res.status).toBe(400);
-			const body = (await res.json()) as { error: string };
-			expect(body.error).toContain("Missing required fields");
+			expect(status).toBe(400);
 		});
 
 		test("returns ok:false with error for unreachable server", async () => {
-			const res = await app.request("/api/identities/test-connection", {
+			const { status, body } = await jsonRequest("/api/identities/test-connection", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					imap_host: "localhost",
+					imap_host: "127.0.0.1",
 					imap_port: 19999,
-					imap_tls: 0,
-					imap_user: "test",
-					imap_pass: "test",
+					imap_tls: false,
+					imap_user: "user",
+					imap_pass: "pass",
 				}),
 			});
-			expect(res.status).toBe(200);
-			const body = (await res.json()) as { ok: boolean; error?: string };
+			expect(status).toBe(200);
 			expect(body.ok).toBe(false);
-			expect(body.error).toBeTruthy();
+			expect(body.error).toBeDefined();
 		});
 
 		test("returns ok:true with mailbox count for valid credentials", async () => {
-			const res = await app.request("/api/identities/test-connection", {
+			const { status, body } = await jsonRequest("/api/identities/test-connection", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					imap_host: "127.0.0.1",
 					imap_port: mockPort,
-					imap_tls: 0,
+					imap_tls: false,
 					imap_user: "conntest",
 					imap_pass: "connpass",
 				}),
 			});
-			expect(res.status).toBe(200);
-			const body = (await res.json()) as { ok: boolean; mailboxes?: number; error?: string };
+			expect(status).toBe(200);
 			expect(body.ok).toBe(true);
-			expect(body.mailboxes).toBeGreaterThanOrEqual(1);
-		});
-	});
-
-	// ─── All Messages ──────────────────────────────────────
-	describe("All Messages", () => {
-		test("GET /api/identities/:id/all-messages returns all messages regardless of labels", async () => {
-			const identityId = createTestIdentity(db);
-			const folderId = createTestFolder(db, identityId, "INBOX");
-			const labelId = createTestLabel(db, "Inbox");
-
-			const msg1 = createTestMessage(db, identityId, folderId, 1, { subject: "Labeled" });
-			createTestMessage(db, identityId, folderId, 2, { subject: "Unlabeled" });
-			addMessageLabel(db, msg1, labelId);
-
-			const { status, body } = await jsonRequest(`/api/identities/${identityId}/all-messages`);
-			expect(status).toBe(200);
-			expect(body).toHaveLength(2);
-		});
-
-		test("GET /api/identities/:id/all-messages respects limit and offset", async () => {
-			const identityId = createTestIdentity(db);
-			const folderId = createTestFolder(db, identityId, "INBOX");
-			for (let i = 1; i <= 5; i++) {
-				createTestMessage(db, identityId, folderId, i, {
-					date: new Date(2026, 0, i).toISOString(),
-				});
-			}
-
-			const { body: page1 } = await jsonRequest(
-				`/api/identities/${identityId}/all-messages?limit=2&offset=0`,
-			);
-			expect(page1).toHaveLength(2);
-
-			const { body: page2 } = await jsonRequest(
-				`/api/identities/${identityId}/all-messages?limit=2&offset=2`,
-			);
-			expect(page2).toHaveLength(2);
-
-			// No overlap between pages
-			const ids1 = page1.map((m: { id: number }) => m.id);
-			const ids2 = page2.map((m: { id: number }) => m.id);
-			expect(ids1.filter((id: number) => ids2.includes(id))).toHaveLength(0);
-		});
-
-		test("GET /api/identities/:id/all-messages returns empty for no messages", async () => {
-			const identityId = createTestIdentity(db);
-			const { status, body } = await jsonRequest(`/api/identities/${identityId}/all-messages`);
-			expect(status).toBe(200);
-			expect(body).toEqual([]);
-		});
-
-		test("GET /api/identities/:id/all-messages/count returns total and unread", async () => {
-			const identityId = createTestIdentity(db);
-			const folderId = createTestFolder(db, identityId, "INBOX");
-			createTestMessage(db, identityId, folderId, 1, { flags: "\\Seen" });
-			createTestMessage(db, identityId, folderId, 2, { flags: "" });
-			createTestMessage(db, identityId, folderId, 3, { flags: "" });
-
-			const { status, body } = await jsonRequest(
-				`/api/identities/${identityId}/all-messages/count`,
-			);
-			expect(status).toBe(200);
-			expect(body.total).toBe(3);
-			expect(body.unread).toBe(2);
-		});
-
-		test("GET /api/identities/:id/all-messages/count returns zeros when empty", async () => {
-			const identityId = createTestIdentity(db);
-			const { body } = await jsonRequest(`/api/identities/${identityId}/all-messages/count`);
-			expect(body.total).toBe(0);
-			expect(body.unread).toBe(0);
-		});
-
-		test("GET /api/identities/:id/all-messages/count counts NULL flags as unread", async () => {
-			const identityId = createTestIdentity(db);
-			const folderId = createTestFolder(db, identityId, "INBOX");
-			// Insert a message with NULL flags (could happen with older schema or edge cases)
-			db.prepare(`
-				INSERT INTO messages (identity_id, folder_id, uid, message_id, subject,
-					from_address, date, flags, size, has_attachments)
-				VALUES (?, ?, 99, '<null-flags@test>', 'Null flags msg',
-					'sender@test', datetime('now'), NULL, 1000, 0)
-			`).run(identityId, folderId);
-			createTestMessage(db, identityId, folderId, 1, { flags: "\\Seen" });
-
-			const { body } = await jsonRequest(`/api/identities/${identityId}/all-messages/count`);
-			expect(body.total).toBe(2);
-			expect(body.unread).toBe(1); // NULL flags message should count as unread
-		});
-
-		test("GET /api/identities/:id/all-messages/count returns zeros for unknown identity", async () => {
-			const { status, body } = await jsonRequest("/api/identities/9999/all-messages/count");
-			expect(status).toBe(200);
-			expect(body.total).toBe(0);
-			expect(body.unread).toBe(0);
-		});
-	});
-
-	// ─── Connector type via connectors ─────────────────────
-	describe("Connector types", () => {
-		test("POST /api/identities with IMAP inbound shows imap connector type", async () => {
-			const { inboundId, outboundId } = createConnectors();
-			const { status, body } = await jsonRequest("/api/identities", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					name: "Default",
-					email: "default@example.com",
-					inbound_connector_id: inboundId,
-					outbound_connector_id: outboundId,
-				}),
-			});
-			expect(status).toBe(201);
-
-			const { body: identity } = await jsonRequest(`/api/identities/${body.id}`);
-			expect(identity.ingest_connector_type).toBe("imap");
-			expect(identity.send_connector_type).toBe("smtp");
-		});
-	});
-
-	// ─── Connector health ──────────────────────────────────
-	describe("Connector health", () => {
-		test("GET /api/identities/:id/connector-health returns 404 for missing account", async () => {
-			const { status, body } = await jsonRequest("/api/identities/999/connector-health");
-			expect(status).toBe(404);
-			expect(body.error).toContain("Identity not found");
-		});
-
-		test("GET /api/identities/:id/connector-health reports unconfigured IMAP", async () => {
-			// Create inbound connector with IMAP type but no credentials
-			db.prepare(`
-				INSERT INTO inbound_connectors (name, type)
-				VALUES ('No Config (Inbound)', 'imap')
-			`).run();
-			const inboundId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
-			// Create outbound connector with SMTP type but no credentials
-			db.prepare(`
-				INSERT INTO outbound_connectors (name, type)
-				VALUES ('No Config (Outbound)', 'smtp')
-			`).run();
-			const outboundId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
-			db.prepare(`
-				INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-				VALUES ('No Config', 'noconfig@example.com', ?, ?)
-			`).run(inboundId, outboundId);
-			const identityId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
-
-			const { status, body } = await jsonRequest(`/api/identities/${identityId}/connector-health`);
-			expect(status).toBe(200);
-			expect(body.ingest.type).toBe("imap");
-			expect(body.ingest.ok).toBe(false);
-			expect(body.ingest.error).toContain("not configured");
-			expect(body.send.type).toBe("smtp");
-			expect(body.send.ok).toBe(false);
-			expect(body.send.error).toContain("not configured");
-		});
-
-		test("GET /api/identities/:id/connector-health checks cloudflare-email with secret", async () => {
-			// Create inbound connector with cloudflare-email type and secret
-			db.prepare(`
-				INSERT INTO inbound_connectors (name, type, cf_email_webhook_secret)
-				VALUES ('CF Inbound', 'cloudflare-email', 'my-webhook-secret')
-			`).run();
-			const inboundId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
-			db.prepare(`
-				INSERT INTO outbound_connectors (name, type, smtp_host, smtp_user, smtp_pass)
-				VALUES ('CF Outbound', 'smtp', 'smtp.example.com', 'user', 'pass')
-			`).run();
-			const outboundId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
-			db.prepare(`
-				INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-				VALUES ('CF Account', 'cf@example.com', ?, ?)
-			`).run(inboundId, outboundId);
-			const identityId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
-
-			const { status, body } = await jsonRequest(`/api/identities/${identityId}/connector-health`);
-			expect(status).toBe(200);
-			expect(body.ingest.type).toBe("cloudflare-email");
-			expect(body.ingest.ok).toBe(true);
-			expect(body.ingest.details).toEqual({ mode: "push-based webhook" });
-		});
-
-		test("GET /api/identities/:id/connector-health reports cloudflare-email without secret", async () => {
-			// Create inbound connector with cloudflare-email type but no secret
-			db.prepare(`
-				INSERT INTO inbound_connectors (name, type)
-				VALUES ('CF No Secret (Inbound)', 'cloudflare-email')
-			`).run();
-			const inboundId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
-			db.prepare(`
-				INSERT INTO outbound_connectors (name, type, smtp_host, smtp_user, smtp_pass)
-				VALUES ('CF No Secret (Outbound)', 'smtp', 'smtp.example.com', 'user', 'pass')
-			`).run();
-			const outboundId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
-			db.prepare(`
-				INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-				VALUES ('CF No Secret', 'cf-nosecret@example.com', ?, ?)
-			`).run(inboundId, outboundId);
-			const identityId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
-
-			const { status, body } = await jsonRequest(`/api/identities/${identityId}/connector-health`);
-			expect(status).toBe(200);
-			expect(body.ingest.type).toBe("cloudflare-email");
-			expect(body.ingest.ok).toBe(false);
-			expect(body.ingest.error).toContain("Webhook secret not configured");
-		});
-
-		test("GET /api/identities/:id/connector-health includes sync status when available", async () => {
-			const identityId = createTestIdentity(db, {
-				imapHost: "127.0.0.1",
-				imapPort: 19999,
-			});
-			scheduler.addIdentity({
-				identityId,
-				imapConfig: {
-					host: "127.0.0.1",
-					port: 19999,
-					secure: false,
-					auth: { user: "test", pass: "test" },
-				},
-			});
-
-			const { status, body } = await jsonRequest(`/api/identities/${identityId}/connector-health`);
-			expect(status).toBe(200);
-			expect(body.sync).toBeTruthy();
-			expect(body.sync).toHaveProperty("running");
-		});
-
-		test("GET /api/identities/:id/connector-health returns null sync when not registered", async () => {
-			const identityId = createTestIdentity(db);
-			const { body } = await jsonRequest(`/api/identities/${identityId}/connector-health`);
-			expect(body.sync).toBeNull();
+			expect(body.mailboxes).toBeGreaterThan(0);
 		});
 	});
 
@@ -695,12 +332,13 @@ describe("Identities API", () => {
 
 		test("GET /api/identities/:id/labels returns cached message_count and unread_count", async () => {
 			const identityId = createTestIdentity(db);
-			const folderId = createTestFolder(db, identityId, "INBOX");
+			const inboundId = createTestInboundConnector(db);
+			const folderId = createTestFolder(db, inboundId, "INBOX");
 
 			// Create a label with messages — set counts directly (simulating refreshLabelCounts)
 			const labelId = createTestLabel(db, "INBOX");
-			const msgId1 = createTestMessage(db, identityId, folderId, 1, { flags: "" });
-			const msgId2 = createTestMessage(db, identityId, folderId, 2, { flags: "\\Seen" });
+			const msgId1 = createTestMessage(db, inboundId, folderId, 1, { flags: "" });
+			const msgId2 = createTestMessage(db, inboundId, folderId, 2, { flags: "\\Seen" });
 			addMessageLabel(db, msgId1, labelId);
 			addMessageLabel(db, msgId2, labelId);
 			// Update the cached counts directly (as refreshLabelCounts would)
@@ -718,59 +356,6 @@ describe("Identities API", () => {
 			const { status, body } = await jsonRequest("/api/identities/1/folders/abc/messages");
 			expect(status).toBe(400);
 			expect(body.error).toMatch(/folderId/);
-		});
-
-		test("GET /api/identities/1/all-messages?limit=-1 returns 400", async () => {
-			const { status, body } = await jsonRequest("/api/identities/1/all-messages?limit=-1");
-			expect(status).toBe(400);
-			expect(body.error).toMatch(/limit/);
-		});
-
-		test("GET /api/identities/1/all-messages?offset=abc returns 400", async () => {
-			const { status, body } = await jsonRequest("/api/identities/1/all-messages?offset=abc");
-			expect(status).toBe(400);
-			expect(body.error).toMatch(/offset/);
-		});
-
-		test("GET /api/identities/1/all-messages?limit=500 clamps to 200", async () => {
-			const identityId = createTestIdentity(db);
-			const { status } = await jsonRequest(`/api/identities/${identityId}/all-messages?limit=500`);
-			expect(status).toBe(200);
-			// Just verify it doesn't crash — limit is silently clamped
-		});
-	});
-
-	// ─── Unread messages ───────────────────────────────────
-	describe("Unread Messages", () => {
-		test("GET /api/identities/:id/unread-messages returns only unread", async () => {
-			const identityId = createTestIdentity(db);
-			const folderId = createTestFolder(db, identityId, "INBOX");
-			createTestMessage(db, identityId, folderId, 1, { flags: "\\Seen" });
-			createTestMessage(db, identityId, folderId, 2, { flags: "" });
-			createTestMessage(db, identityId, folderId, 3, { flags: "" });
-
-			const { status, body } = await jsonRequest(`/api/identities/${identityId}/unread-messages`);
-			expect(status).toBe(200);
-			expect(body).toHaveLength(2);
-		});
-
-		test("GET /api/identities/:id/unread-messages/count returns count", async () => {
-			const identityId = createTestIdentity(db);
-			const folderId = createTestFolder(db, identityId, "INBOX");
-			createTestMessage(db, identityId, folderId, 1, { flags: "\\Seen" });
-			createTestMessage(db, identityId, folderId, 2, { flags: "" });
-
-			const { status, body } = await jsonRequest(
-				`/api/identities/${identityId}/unread-messages/count`,
-			);
-			expect(status).toBe(200);
-			expect(body.total).toBe(1);
-		});
-
-		test("GET /api/identities/:id/unread-messages/count returns zero for unknown identity", async () => {
-			const { status, body } = await jsonRequest("/api/identities/9999/unread-messages/count");
-			expect(status).toBe(200);
-			expect(body.total).toBe(0);
 		});
 	});
 });

@@ -602,22 +602,20 @@ export function seedDemoData(db: Database.Database): void {
 		.run(`${DEMO_IDENTITY.name} (Outbound)`, DEMO_IDENTITY.imap_host, DEMO_IDENTITY.email);
 	const outboundId1 = outbound1Result.lastInsertRowid as number;
 
-	// Insert demo identity linked to connectors
-	const identityResult = db
-		.prepare(
-			`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-		 VALUES (?, ?, ?, ?)`,
-		)
-		.run(DEMO_IDENTITY.name, DEMO_IDENTITY.email, inboundId1, outboundId1);
-	const identityId = identityResult.lastInsertRowid as number;
+	// Insert demo identity (send-only: name + email + outbound connector)
+	db.prepare("INSERT INTO identities (name, email, outbound_connector_id) VALUES (?, ?, ?)").run(
+		DEMO_IDENTITY.name,
+		DEMO_IDENTITY.email,
+		outboundId1,
+	);
 
-	// Insert INBOX folder
+	// Insert INBOX folder linked to inbound connector
 	const folderResult = db
 		.prepare(
-			`INSERT INTO folders (identity_id, path, name, special_use, uid_validity, uid_next, message_count, unread_count)
+			`INSERT INTO folders (inbound_connector_id, path, name, special_use, uid_validity, uid_next, message_count, unread_count)
 		 VALUES (?, 'INBOX', 'Inbox', '\\\\Inbox', 1, ?, ?, ?)`,
 		)
-		.run(identityId, DEMO_MESSAGES.length + 1, DEMO_MESSAGES.length, 5);
+		.run(inboundId1, DEMO_MESSAGES.length + 1, DEMO_MESSAGES.length, 5);
 	const folderId = folderResult.lastInsertRowid as number;
 
 	// Insert labels (including identity label for this identity)
@@ -626,20 +624,20 @@ export function seedDemoData(db: Database.Database): void {
 		"INSERT OR IGNORE INTO labels (name, color, source) VALUES (?, ?, ?)",
 	);
 	const lookupLabel = db.prepare("SELECT id FROM labels WHERE name = ?");
-	// Create identity label
-	insertLabel.run(DEMO_IDENTITY.name, "#3b82f6", "identity");
+	// Create connector label (auto-label all messages with the connector name)
+	insertLabel.run(DEMO_IDENTITY.name, "#3b82f6", "connector");
 	for (const label of DEMO_LABELS) {
 		insertLabel.run(label.name, label.color, label.source);
 		const row = lookupLabel.get(label.name) as { id: number };
 		labelMap.set(label.name, row.id);
 	}
-	// Look up identity label ID
-	const identityLabelRow = lookupLabel.get(DEMO_IDENTITY.name) as { id: number };
-	const identityLabelId = identityLabelRow.id;
+	// Look up connector label ID
+	const connectorLabelRow = lookupLabel.get(DEMO_IDENTITY.name) as { id: number };
+	const connectorLabelId = connectorLabelRow.id;
 
 	// Insert messages
 	const insertMessage = db.prepare(`
-		INSERT INTO messages (identity_id, folder_id, uid, message_id, in_reply_to, "references",
+		INSERT INTO messages (inbound_connector_id, folder_id, uid, message_id, in_reply_to, "references",
 			subject, from_address, from_name, to_addresses, cc_addresses, date,
 			text_body, html_body, flags, has_attachments, size)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -654,7 +652,7 @@ export function seedDemoData(db: Database.Database): void {
 			const msg = DEMO_MESSAGES[i];
 			const size = msg.text_body.length + (msg.html_body?.length ?? 0);
 			const result = insertMessage.run(
-				identityId,
+				inboundId1,
 				folderId,
 				i + 1, // UID
 				msg.message_id,
@@ -673,9 +671,9 @@ export function seedDemoData(db: Database.Database): void {
 				size,
 			);
 
-			// Assign labels (including identity label)
+			// Assign labels (including connector label)
 			const messageId = result.lastInsertRowid as number;
-			insertMessageLabel.run(messageId, identityLabelId);
+			insertMessageLabel.run(messageId, connectorLabelId);
 			const labels = MESSAGE_LABELS[i] ?? [];
 			for (const labelName of labels) {
 				const labelId = labelMap.get(labelName);
@@ -728,26 +726,24 @@ export function seedDemoData(db: Database.Database): void {
 		.run(`${DEMO_IDENTITY_2.name} (Outbound)`, DEMO_IDENTITY_2.imap_host, DEMO_IDENTITY_2.email);
 	const outboundId2 = outbound2Result.lastInsertRowid as number;
 
-	const identity2Result = db
-		.prepare(
-			`INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-		 VALUES (?, ?, ?, ?)`,
-		)
-		.run(DEMO_IDENTITY_2.name, DEMO_IDENTITY_2.email, inboundId2, outboundId2);
-	const identityId2 = identity2Result.lastInsertRowid as number;
+	db.prepare("INSERT INTO identities (name, email, outbound_connector_id) VALUES (?, ?, ?)").run(
+		DEMO_IDENTITY_2.name,
+		DEMO_IDENTITY_2.email,
+		outboundId2,
+	);
 
 	const folder2Result = db
 		.prepare(
-			`INSERT INTO folders (identity_id, path, name, special_use, uid_validity, uid_next, message_count, unread_count)
+			`INSERT INTO folders (inbound_connector_id, path, name, special_use, uid_validity, uid_next, message_count, unread_count)
 		 VALUES (?, 'INBOX', 'Inbox', '\\\\Inbox', 1, ?, ?, ?)`,
 		)
-		.run(identityId2, DEMO_MESSAGES_2.length + 1, DEMO_MESSAGES_2.length, 2);
+		.run(inboundId2, DEMO_MESSAGES_2.length + 1, DEMO_MESSAGES_2.length, 2);
 	const folderId2 = folder2Result.lastInsertRowid as number;
 
-	// Create identity label for second identity
-	insertLabel.run(DEMO_IDENTITY_2.name, "#10b981", "identity");
-	const identityLabel2Row = lookupLabel.get(DEMO_IDENTITY_2.name) as { id: number };
-	const identityLabel2Id = identityLabel2Row.id;
+	// Create connector label for second inbound connector
+	insertLabel.run(DEMO_IDENTITY_2.name, "#10b981", "connector");
+	const connectorLabel2Row = lookupLabel.get(DEMO_IDENTITY_2.name) as { id: number };
+	const connectorLabel2Id = connectorLabel2Row.id;
 
 	const labelMap2 = new Map<string, number>();
 	for (const label of DEMO_LABELS_2) {
@@ -761,7 +757,7 @@ export function seedDemoData(db: Database.Database): void {
 			const msg = DEMO_MESSAGES_2[i];
 			const size = msg.text_body.length + (msg.html_body?.length ?? 0);
 			const result = insertMessage.run(
-				identityId2,
+				inboundId2,
 				folderId2,
 				i + 1,
 				msg.message_id,
@@ -780,7 +776,7 @@ export function seedDemoData(db: Database.Database): void {
 				size,
 			);
 			const messageId2 = result.lastInsertRowid as number;
-			insertMessageLabel.run(messageId2, identityLabel2Id);
+			insertMessageLabel.run(messageId2, connectorLabel2Id);
 			const labels2 = MESSAGE_LABELS_2[i] ?? [];
 			for (const labelName of labels2) {
 				const labelId = labelMap2.get(labelName);

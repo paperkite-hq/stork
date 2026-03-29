@@ -107,13 +107,13 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 	// Zero vault key immediately after passing to SQLCipher
 	vaultKey.fill(0);
 
-	// Per-identity batching state for consecutive identical sync errors
+	// Per-connector batching state for consecutive identical sync errors
 	const errorBatches = new Map<number, ErrorBatch>();
 
-	function flushErrorBatch(identityId: number): void {
-		const batch = errorBatches.get(identityId);
+	function flushErrorBatch(connectorId: number): void {
+		const batch = errorBatches.get(connectorId);
 		if (!batch || batch.suppressedCount === 0) {
-			errorBatches.delete(identityId);
+			errorBatches.delete(connectorId);
 			return;
 		}
 		const retry = batch.retriable ? "(will retry)" : "(permanent)";
@@ -122,18 +122,18 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 		console.error(
 			`  ${ts()} [${batch.errorType}] ${folder} — ${total} batches failed, retrying automatically ${retry}`,
 		);
-		errorBatches.delete(identityId);
+		errorBatches.delete(connectorId);
 	}
 
 	const scheduler = new SyncScheduler(db, {
-		onSyncRecordError: (identityId, err) => {
-			const batch = errorBatches.get(identityId);
+		onSyncRecordError: (connectorId, err) => {
+			const batch = errorBatches.get(connectorId);
 			const matchesBatch =
 				batch && batch.folder === err.folderPath && batch.errorType === err.errorType;
 
 			if (!matchesBatch) {
-				flushErrorBatch(identityId);
-				errorBatches.set(identityId, {
+				flushErrorBatch(connectorId);
+				errorBatches.set(connectorId, {
 					folder: err.folderPath,
 					errorType: err.errorType,
 					retriable: err.retriable,
@@ -142,7 +142,7 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 				});
 			}
 
-			const current = errorBatches.get(identityId);
+			const current = errorBatches.get(connectorId);
 			if (current === undefined) return;
 			if (current.shownCount < BATCH_SHOW_LIMIT) {
 				const retry = err.retriable ? "(will retry)" : "(permanent)";
@@ -152,30 +152,30 @@ export function transitionToUnlocked(context: ContainerContext, vaultKey: Buffer
 				current.suppressedCount++;
 			}
 		},
-		onSyncComplete: (identityId, result) => {
-			flushErrorBatch(identityId);
+		onSyncComplete: (connectorId, result) => {
+			flushErrorBatch(connectorId);
 			if (result.aborted) {
 				console.log(
-					`${ts()} Sync interrupted for identity ${identityId}: ${result.totalNew} new (aborted)`,
+					`${ts()} Sync interrupted for connector ${connectorId}: ${result.totalNew} new (aborted)`,
 				);
 				return;
 			}
-			const parts = [`${ts()} Sync complete for identity ${identityId}: ${result.totalNew} new`];
+			const parts = [`${ts()} Sync complete for connector ${connectorId}: ${result.totalNew} new`];
 			if (result.totalErrors > 0) {
 				parts.push(`${result.totalErrors} errors`);
 			}
 			console.log(parts.join(", "));
 		},
-		onSyncError: (identityId, error) => {
-			flushErrorBatch(identityId);
+		onSyncError: (connectorId, error) => {
+			flushErrorBatch(connectorId);
 			const imapErr = error as Error & { responseText?: string; responseStatus?: string };
 			const detail = imapErr.responseText
 				? `${imapErr.responseStatus ?? "ERROR"}: ${imapErr.responseText}`
 				: error.message;
-			console.error(`${ts()} Sync failed for identity ${identityId}: ${detail}`);
+			console.error(`${ts()} Sync failed for connector ${connectorId}: ${detail}`);
 		},
 	});
-	scheduler.loadIdentitiesFromDb();
+	scheduler.loadConnectorsFromDb();
 	scheduler.start();
 
 	const r2Poller = new R2Poller(db, {

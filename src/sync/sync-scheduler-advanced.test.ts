@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { MockImapServer } from "../test-helpers/mock-imap-server.js";
-import { createTestDb, createTestIdentity } from "../test-helpers/test-db.js";
+import { createTestDb, createTestInboundConnector } from "../test-helpers/test-db.js";
 import { SyncScheduler } from "./sync-scheduler.js";
 
 let db: Database.Database;
@@ -81,7 +81,7 @@ describe("SyncScheduler runSync paths", () => {
 			mailboxes: MESSAGE_INBOX,
 		});
 		const port = await mockServer.start();
-		const identityId = createTestIdentity(db, { imapPort: port, imapHost: "127.0.0.1" });
+		const identityId = createTestInboundConnector(db, { imapPort: port, imapHost: "127.0.0.1" });
 
 		let completeCalled = false;
 		scheduler = new SyncScheduler(db, {
@@ -92,7 +92,7 @@ describe("SyncScheduler runSync paths", () => {
 			},
 		});
 
-		scheduler.addIdentity({ identityId, imapConfig: makeImapConfig(port) });
+		scheduler.addConnector({ inboundConnectorId: identityId, imapConfig: makeImapConfig(port) });
 		const result = await scheduler.syncNow(identityId);
 		expect(result).toBeDefined();
 		expect(completeCalled).toBe(true);
@@ -117,8 +117,8 @@ describe("SyncScheduler runSync paths", () => {
 		});
 
 		// Wrong password triggers auth failure
-		scheduler.addIdentity({
-			identityId: 1,
+		scheduler.addConnector({
+			inboundConnectorId: 1,
 			imapConfig: makeImapConfig(port, "testuser", "wrongpass"),
 		});
 
@@ -137,10 +137,10 @@ describe("SyncScheduler runSync paths", () => {
 			mailboxes: EMPTY_INBOX,
 		});
 		const port = await mockServer.start();
-		const identityId = createTestIdentity(db, { imapPort: port, imapHost: "127.0.0.1" });
+		const identityId = createTestInboundConnector(db, { imapPort: port, imapHost: "127.0.0.1" });
 
 		scheduler = new SyncScheduler(db, { defaultIntervalMs: 999999 });
-		scheduler.addIdentity({ identityId, imapConfig: makeImapConfig(port) });
+		scheduler.addConnector({ inboundConnectorId: identityId, imapConfig: makeImapConfig(port) });
 
 		const firstSync = scheduler.syncNow(identityId);
 		await expect(scheduler.syncNow(identityId)).rejects.toThrow("already syncing");
@@ -154,7 +154,7 @@ describe("SyncScheduler runSync paths", () => {
 			mailboxes: EMPTY_INBOX,
 		});
 		const port = await mockServer.start();
-		const identityId = createTestIdentity(db, { imapPort: port, imapHost: "127.0.0.1" });
+		const identityId = createTestInboundConnector(db, { imapPort: port, imapHost: "127.0.0.1" });
 
 		let completeCalled = false;
 		scheduler = new SyncScheduler(db, {
@@ -164,7 +164,7 @@ describe("SyncScheduler runSync paths", () => {
 			},
 		});
 
-		scheduler.addIdentity({ identityId, imapConfig: makeImapConfig(port) });
+		scheduler.addConnector({ inboundConnectorId: identityId, imapConfig: makeImapConfig(port) });
 		scheduler.start();
 
 		// Wait for the initial sync to complete
@@ -181,11 +181,8 @@ describe("SyncScheduler runSync paths", () => {
 		const port = await mockServer.start();
 
 		scheduler = new SyncScheduler(db, { defaultIntervalMs: 200 });
-		const identityId = createTestIdentity(db, { imapPort: port, imapHost: "127.0.0.1" });
-		scheduler.addIdentity({
-			identityId,
-			imapConfig: makeImapConfig(port),
-		});
+		const identityId = createTestInboundConnector(db, { imapPort: port, imapHost: "127.0.0.1" });
+		scheduler.addConnector({ inboundConnectorId: identityId, imapConfig: makeImapConfig(port) });
 
 		scheduler.start();
 		await new Promise((r) => setTimeout(r, 500));
@@ -216,8 +213,8 @@ describe("SyncScheduler runSync paths", () => {
 
 		scheduler.start();
 
-		const identityId = createTestIdentity(db, { imapPort: port, imapHost: "127.0.0.1" });
-		scheduler.addIdentity({ identityId, imapConfig: makeImapConfig(port) });
+		const identityId = createTestInboundConnector(db, { imapPort: port, imapHost: "127.0.0.1" });
+		scheduler.addConnector({ inboundConnectorId: identityId, imapConfig: makeImapConfig(port) });
 
 		await new Promise((r) => setTimeout(r, 3000));
 		expect(completedAccountId).toBe(identityId);
@@ -232,11 +229,8 @@ describe("SyncScheduler runSync paths", () => {
 		const port = await mockServer.start();
 
 		scheduler = new SyncScheduler(db, { defaultIntervalMs: 100 });
-		const identityId = createTestIdentity(db, { imapPort: port, imapHost: "127.0.0.1" });
-		scheduler.addIdentity({
-			identityId,
-			imapConfig: makeImapConfig(port),
-		});
+		const identityId = createTestInboundConnector(db, { imapPort: port, imapHost: "127.0.0.1" });
+		scheduler.addConnector({ inboundConnectorId: identityId, imapConfig: makeImapConfig(port) });
 		scheduler.start();
 
 		await new Promise((r) => setTimeout(r, 300));
@@ -261,9 +255,9 @@ describe("SyncScheduler runSync paths", () => {
 			defaultIntervalMs: 999999,
 		});
 
-		const identityId = createTestIdentity(db, { imapPort: port, imapHost: "127.0.0.1" });
-		scheduler.addIdentity({
-			identityId,
+		const identityId = createTestInboundConnector(db, { imapPort: port, imapHost: "127.0.0.1" });
+		scheduler.addConnector({
+			inboundConnectorId: identityId,
 			imapConfig: makeImapConfig(port, "testuser", "wrongpass"),
 		});
 
@@ -283,13 +277,13 @@ describe("SyncScheduler runSync paths", () => {
 			mailboxes: EMPTY_INBOX,
 		});
 		const port = await mockServer.start();
-		const identityId = createTestIdentity(db, { imapPort: port, imapHost: "127.0.0.1" });
+		const identityId = createTestInboundConnector(db, { imapPort: port, imapHost: "127.0.0.1" });
 
 		scheduler = new SyncScheduler(db, { defaultIntervalMs: 999999 });
 
 		// First: fail with wrong password
-		scheduler.addIdentity({
-			identityId,
+		scheduler.addConnector({
+			inboundConnectorId: identityId,
 			imapConfig: makeImapConfig(port, "testuser", "wrongpass"),
 		});
 		await scheduler.syncNow(identityId).catch(() => {});
@@ -297,7 +291,7 @@ describe("SyncScheduler runSync paths", () => {
 
 		// Fix config: remove and re-add with correct password
 		scheduler.removeIdentity(identityId);
-		scheduler.addIdentity({ identityId, imapConfig: makeImapConfig(port) });
+		scheduler.addConnector({ inboundConnectorId: identityId, imapConfig: makeImapConfig(port) });
 		await scheduler.syncNow(identityId);
 		expect(scheduler.getStatus().get(identityId)?.consecutiveErrors).toBe(0);
 		expect(scheduler.getStatus().get(identityId)?.lastSync).toBeTruthy();
@@ -310,10 +304,10 @@ describe("SyncScheduler runSync paths", () => {
 			mailboxes: EMPTY_INBOX,
 		});
 		const port = await mockServer.start();
-		const identityId = createTestIdentity(db, { imapPort: port, imapHost: "127.0.0.1" });
+		const identityId = createTestInboundConnector(db, { imapPort: port, imapHost: "127.0.0.1" });
 
 		scheduler = new SyncScheduler(db, { defaultIntervalMs: 999999 });
-		scheduler.addIdentity({ identityId, imapConfig: makeImapConfig(port) });
+		scheduler.addConnector({ inboundConnectorId: identityId, imapConfig: makeImapConfig(port) });
 
 		await scheduler.syncNow(identityId);
 		expect(scheduler.getStatus().get(identityId)?.progress).toBeNull();
@@ -328,8 +322,8 @@ describe("SyncScheduler runSync paths", () => {
 		});
 		const port = await mockServer.start();
 
-		createTestIdentity(db, { name: "Acc1", imapPort: port, imapHost: "127.0.0.1" });
-		createTestIdentity(db, { name: "Acc2", imapPort: port, imapHost: "127.0.0.1" });
+		createTestInboundConnector(db, { name: "Acc1", imapPort: port, imapHost: "127.0.0.1" });
+		createTestInboundConnector(db, { name: "Acc2", imapPort: port, imapHost: "127.0.0.1" });
 
 		scheduler = new SyncScheduler(db, { defaultIntervalMs: 999999 });
 		scheduler.loadIdentitiesFromDb();
@@ -354,22 +348,22 @@ describe("SyncScheduler runSync paths", () => {
 			mailboxes: EMPTY_INBOX,
 		});
 		const port = await mockServer.start();
-		const identityId = createTestIdentity(db, { imapPort: port, imapHost: "127.0.0.1" });
-		scheduler.addIdentity({
-			identityId,
+		const identityId = createTestInboundConnector(db, { imapPort: port, imapHost: "127.0.0.1" });
+		scheduler.addConnector({
+			inboundConnectorId: identityId,
 			imapConfig: makeImapConfig(port, "testuser", "wrongpass"),
 		});
 
 		// Inject a fake timer into the internal scheduled state to simulate start() having
 		// been called. Without this, scheduled.timer is null and the backoff branch is skipped.
 		type InternalScheduler = {
-			identities: Map<
+			connectors: Map<
 				number,
 				{ consecutiveErrors: number; timer: ReturnType<typeof setInterval> | null }
 			>;
 		};
 		const internalScheduler = scheduler as unknown as InternalScheduler;
-		const scheduled = internalScheduler.identities.get(identityId);
+		const scheduled = internalScheduler.connectors.get(identityId);
 		if (!scheduled) throw new Error("identity not found in scheduler");
 
 		// Simulate: first error already happened (consecutiveErrors=1), timer is running

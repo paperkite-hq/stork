@@ -59,14 +59,14 @@ export function messageRoutes(
 		if (messageId instanceof Response) return messageId;
 		const message = db
 			.prepare(
-				'SELECT message_id, in_reply_to, "references", identity_id FROM messages WHERE id = ?',
+				'SELECT message_id, in_reply_to, "references", inbound_connector_id FROM messages WHERE id = ?',
 			)
 			.get(messageId) as
 			| {
 					message_id: string | null;
 					in_reply_to: string | null;
 					references: string | null;
-					identity_id: number;
+					inbound_connector_id: number | null;
 			  }
 			| undefined;
 
@@ -109,13 +109,13 @@ export function messageRoutes(
 				SELECT DISTINCT m.*, f.path as folder_path, f.name as folder_name
 				FROM messages m
 				JOIN folders f ON f.id = m.folder_id
-				WHERE m.identity_id = ?
+				WHERE m.inbound_connector_id = ?
 				AND (m.message_id IN (${placeholders})
 					OR m.in_reply_to IN (${placeholders})
 					OR m.id = ?)
 				ORDER BY m.date ASC
 			`)
-			.all(message.identity_id, ...[...threadIds], ...[...threadIds], messageId);
+			.all(message.inbound_connector_id, ...[...threadIds], ...[...threadIds], messageId);
 
 		return c.json(thread);
 	});
@@ -172,8 +172,7 @@ export function messageRoutes(
 				        ic.imap_host, ic.imap_port, ic.imap_tls, ic.imap_user, ic.imap_pass
 				 FROM messages m
 				 JOIN folders f ON f.id = m.folder_id
-				 JOIN identities i ON i.id = m.identity_id
-				 LEFT JOIN inbound_connectors ic ON ic.id = i.inbound_connector_id
+				 LEFT JOIN inbound_connectors ic ON ic.id = m.inbound_connector_id
 				 WHERE m.id = ?`,
 			)
 			.get(messageId) as
@@ -230,8 +229,7 @@ export function messageRoutes(
 					        ic.imap_host, ic.imap_port, ic.imap_tls, ic.imap_user, ic.imap_pass
 					 FROM messages m
 					 JOIN folders f ON f.id = m.folder_id
-					 JOIN identities i ON i.id = m.identity_id
-					 LEFT JOIN inbound_connectors ic ON ic.id = i.inbound_connector_id
+					 LEFT JOIN inbound_connectors ic ON ic.id = m.inbound_connector_id
 					 WHERE m.id IN (${placeholders})`,
 				)
 				.all(...ids) as (ImapConnectorInfo & {

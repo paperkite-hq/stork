@@ -23,6 +23,17 @@ vi.mock("../../api", () => ({
 				update: vi.fn().mockResolvedValue({ ok: true }),
 				delete: vi.fn().mockResolvedValue({ ok: true }),
 				test: vi.fn().mockResolvedValue({ ok: true, mailboxes: 3 }),
+				folders: vi.fn().mockResolvedValue([
+					{
+						id: 1,
+						name: "Inbox",
+						path: "INBOX",
+						message_count: 42,
+						unread_count: 5,
+						last_synced_at: new Date().toISOString(),
+						last_uid: 100,
+					},
+				]),
 			},
 			outbound: {
 				list: vi.fn().mockResolvedValue([
@@ -49,8 +60,6 @@ vi.mock("../../api", () => ({
 					id: 1,
 					name: "Work Email",
 					email: "work@example.com",
-					imap_host: "imap.example.com",
-					inbound_connector_id: 1,
 					outbound_connector_id: 1,
 				},
 			]),
@@ -58,26 +67,13 @@ vi.mock("../../api", () => ({
 				id: 1,
 				name: "Work Email",
 				email: "work@example.com",
-				inbound_connector_id: 1,
 				outbound_connector_id: 1,
-				sync_delete_from_server: 0,
 				default_view: "inbox",
 			}),
 			create: vi.fn().mockResolvedValue({ id: 2 }),
 			update: vi.fn().mockResolvedValue({ ok: true }),
 			delete: vi.fn().mockResolvedValue({ ok: true }),
 			testConnection: vi.fn().mockResolvedValue({ ok: true, mailboxes: 5 }),
-			syncStatus: vi.fn().mockResolvedValue([
-				{
-					id: 1,
-					name: "Inbox",
-					path: "INBOX",
-					message_count: 42,
-					unread_count: 5,
-					last_synced_at: new Date().toISOString(),
-					last_uid: 100,
-				},
-			]),
 		},
 		encryption: {
 			changePassword: vi.fn().mockResolvedValue({ ok: true }),
@@ -179,7 +175,7 @@ describe("Settings", () => {
 		expect(screen.getAllByText("Delete").length).toBeGreaterThanOrEqual(1);
 	});
 
-	it("shows Sync Status button for identities", async () => {
+	it("shows Sync Status button for inbound connectors", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
 			expect(screen.getByText("Sync Status")).toBeInTheDocument();
@@ -228,7 +224,7 @@ describe("Settings", () => {
 		});
 		await userEvent.click(screen.getByText("+ Add Identity"));
 		expect(screen.getByText("Cancel")).toBeInTheDocument();
-		expect(screen.getByText("Inbound Connector")).toBeInTheDocument();
+		expect(screen.getByText(/Outbound Connector/)).toBeInTheDocument();
 	});
 
 	it("shows no identities message when identity list is empty", async () => {
@@ -277,7 +273,7 @@ describe("Settings", () => {
 
 	it("shows empty sync status message when no folders synced", async () => {
 		const { api } = await import("../../api");
-		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+		(api.connectors.inbound.folders as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
 			expect(screen.getByText("Sync Status")).toBeInTheDocument();
@@ -350,7 +346,6 @@ describe("Settings", () => {
 		});
 		// Check form fields render
 		expect(screen.getByLabelText("Email")).toBeInTheDocument();
-		expect(screen.getByText("Inbound Connector")).toBeInTheDocument();
 	});
 
 	it("shows inbound connector section in connectors tab", async () => {
@@ -514,15 +509,8 @@ describe("Settings", () => {
 			id: 1,
 			name: "Work Email",
 			email: "work@example.com",
-			imap_host: "imap.example.com",
-			imap_port: 993,
-			imap_tls: 1,
-			imap_user: "work@example.com",
-			smtp_host: null,
-			smtp_port: 587,
-			smtp_tls: 1,
-			smtp_user: null,
-			sync_delete_from_server: 0,
+			outbound_connector_id: null,
+			default_view: "inbox",
 		});
 	});
 
@@ -552,7 +540,7 @@ describe("Settings", () => {
 	it("shows formatRelative outputs for sync status times", async () => {
 		const { api } = await import("../../api");
 		const now = new Date();
-		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+		(api.connectors.inbound.folders as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
 			{
 				id: 1,
 				name: "Inbox",
@@ -586,7 +574,7 @@ describe("Settings", () => {
 	it("shows minutes-ago format for recent sync times", async () => {
 		const { api } = await import("../../api");
 		const now = new Date();
-		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+		(api.connectors.inbound.folders as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
 			{
 				id: 1,
 				name: "Inbox",
@@ -608,7 +596,7 @@ describe("Settings", () => {
 	it("shows hours-ago format for sync times within the same day", async () => {
 		const { api } = await import("../../api");
 		const now = new Date();
-		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+		(api.connectors.inbound.folders as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
 			{
 				id: 1,
 				name: "Inbox",
@@ -630,7 +618,7 @@ describe("Settings", () => {
 	it("shows days-ago format for sync times within the same week", async () => {
 		const { api } = await import("../../api");
 		const now = new Date();
-		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+		(api.connectors.inbound.folders as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
 			{
 				id: 1,
 				name: "Inbox",
@@ -652,7 +640,7 @@ describe("Settings", () => {
 	it("shows locale date string for sync times older than one week", async () => {
 		const { api } = await import("../../api");
 		const twoWeeksAgo = new Date(Date.now() - 14 * 86400000);
-		(api.identities.syncStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+		(api.connectors.inbound.folders as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
 			{
 				id: 1,
 				name: "Inbox",
@@ -1092,7 +1080,6 @@ describe("Settings — IdentityForm field interactions", () => {
 		// The form should have Name and Email fields
 		expect(screen.getByLabelText("Name")).toBeInTheDocument();
 		expect(screen.getByLabelText("Email")).toBeInTheDocument();
-		expect(screen.getByText("Inbound Connector")).toBeInTheDocument();
 	});
 
 	it("switches to General tab via desktop sidebar tab button", async () => {

@@ -11,7 +11,6 @@ vi.mock("../../api", () => ({
 		identities: {
 			delete: vi.fn(),
 			get: vi.fn(),
-			syncStatus: vi.fn().mockResolvedValue([]),
 		},
 		connectors: {
 			inbound: { list: vi.fn().mockResolvedValue([]) },
@@ -29,7 +28,6 @@ const mockApi = api as unknown as {
 	identities: {
 		delete: ReturnType<typeof vi.fn>;
 		get: ReturnType<typeof vi.fn>;
-		syncStatus: ReturnType<typeof vi.fn>;
 	};
 	connectors: {
 		inbound: { list: ReturnType<typeof vi.fn> };
@@ -47,11 +45,9 @@ const mockIdentities = [
 describe("AccountsTab", () => {
 	const onEdit = vi.fn();
 	const onRefetch = vi.fn();
-	const onShowSync = vi.fn();
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockApi.identities.syncStatus.mockResolvedValue([]);
 	});
 
 	it("shows empty state when no identities and not adding", () => {
@@ -61,8 +57,6 @@ describe("AccountsTab", () => {
 				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusIdentityId={null}
-				onShowSync={onShowSync}
 			/>,
 		);
 		expect(screen.getByText(/No email identities configured/i)).toBeInTheDocument();
@@ -75,8 +69,6 @@ describe("AccountsTab", () => {
 				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusIdentityId={null}
-				onShowSync={onShowSync}
 			/>,
 		);
 		expect(screen.getByText("Work")).toBeInTheDocument();
@@ -90,8 +82,6 @@ describe("AccountsTab", () => {
 				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusIdentityId={null}
-				onShowSync={onShowSync}
 			/>,
 		);
 		fireEvent.click(screen.getByText("+ Add Email Identity"));
@@ -100,14 +90,7 @@ describe("AccountsTab", () => {
 
 	it("renders IdentityForm when editingIdentityId is 'new'", async () => {
 		render(
-			<AccountsTab
-				identities={[]}
-				editingIdentityId="new"
-				onEdit={onEdit}
-				onRefetch={onRefetch}
-				syncStatusIdentityId={null}
-				onShowSync={onShowSync}
-			/>,
+			<AccountsTab identities={[]} editingIdentityId="new" onEdit={onEdit} onRefetch={onRefetch} />,
 		);
 		await waitFor(() =>
 			expect(screen.getByRole("heading", { name: /Add Email Identity/i })).toBeInTheDocument(),
@@ -119,9 +102,7 @@ describe("AccountsTab", () => {
 			id: 1,
 			name: "Work",
 			email: "work@example.com",
-			inbound_connector_id: null,
 			outbound_connector_id: null,
-			sync_delete_from_server: 0,
 			default_view: "inbox",
 		});
 		render(
@@ -130,8 +111,6 @@ describe("AccountsTab", () => {
 				editingIdentityId={1}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusIdentityId={null}
-				onShowSync={onShowSync}
 			/>,
 		);
 		// Other identity should still show as card
@@ -150,8 +129,6 @@ describe("AccountsTab", () => {
 				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusIdentityId={null}
-				onShowSync={onShowSync}
 			/>,
 		);
 		const [firstDelete] = screen.getAllByText("Delete");
@@ -172,8 +149,6 @@ describe("AccountsTab", () => {
 				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusIdentityId={null}
-				onShowSync={onShowSync}
 			/>,
 		);
 		const [firstDelete] = screen.getAllByText("Delete");
@@ -192,45 +167,11 @@ describe("AccountsTab", () => {
 				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusIdentityId={null}
-				onShowSync={onShowSync}
 			/>,
 		);
 		const [firstEdit] = screen.getAllByText("Edit");
 		if (firstEdit) fireEvent.click(firstEdit);
 		expect(onEdit).toHaveBeenCalledWith(1);
-	});
-
-	it("calls onShowSync when Sync Status button clicked", () => {
-		render(
-			<AccountsTab
-				identities={mockIdentities}
-				editingIdentityId={null}
-				onEdit={onEdit}
-				onRefetch={onRefetch}
-				syncStatusIdentityId={null}
-				onShowSync={onShowSync}
-			/>,
-		);
-		const [firstSync] = screen.getAllByText("Sync Status");
-		if (firstSync) fireEvent.click(firstSync);
-		expect(onShowSync).toHaveBeenCalledWith(1);
-	});
-
-	it("calls onShowSync(null) when Sync Status clicked for already-shown identity", () => {
-		render(
-			<AccountsTab
-				identities={mockIdentities}
-				editingIdentityId={null}
-				onEdit={onEdit}
-				onRefetch={onRefetch}
-				syncStatusIdentityId={1}
-				onShowSync={onShowSync}
-			/>,
-		);
-		const [firstSync] = screen.getAllByText("Sync Status");
-		if (firstSync) fireEvent.click(firstSync);
-		expect(onShowSync).toHaveBeenCalledWith(null);
 	});
 
 	it("toggles trusted senders panel on button click", async () => {
@@ -240,8 +181,6 @@ describe("AccountsTab", () => {
 				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusIdentityId={null}
-				onShowSync={onShowSync}
 			/>,
 		);
 		const [firstTs] = screen.getAllByTitle("Manage senders whose remote images are always loaded");
@@ -259,8 +198,6 @@ describe("AccountsTab", () => {
 				editingIdentityId={null}
 				onEdit={onEdit}
 				onRefetch={onRefetch}
-				syncStatusIdentityId={null}
-				onShowSync={onShowSync}
 			/>,
 		);
 		const [firstDelete] = screen.getAllByText("Delete");

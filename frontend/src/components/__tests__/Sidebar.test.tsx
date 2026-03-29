@@ -9,7 +9,7 @@ function makeIdentity(overrides: Partial<Identity> = {}): Identity {
 		id: 1,
 		name: "Test Identity",
 		email: "test@example.com",
-		inbound_connector_id: 1,
+
 		outbound_connector_id: 1,
 		created_at: new Date().toISOString(),
 		...overrides,
@@ -120,8 +120,8 @@ describe("Sidebar", () => {
 			makeIdentity({ id: 2, name: "Identity 2", email: "a2@test.com" }),
 		];
 		const labels = [
-			makeLabel({ id: 10, name: "Identity 1", source: "identity" }),
-			makeLabel({ id: 11, name: "Identity 2", source: "identity" }),
+			makeLabel({ id: 10, name: "Identity 1", source: "connector" }),
+			makeLabel({ id: 11, name: "Identity 2", source: "connector" }),
 		];
 		render(<Sidebar {...defaultProps} identities={identities} labels={labels} />);
 		// Both identity names should appear as identity labels
@@ -244,8 +244,8 @@ describe("Sidebar", () => {
 		];
 		const labels = [
 			makeLabel({ id: 1, name: "inbox", unread_count: 0 }),
-			makeLabel({ id: 10, name: "Identity 1", source: "identity" }),
-			makeLabel({ id: 11, name: "Identity 2", source: "identity" }),
+			makeLabel({ id: 10, name: "Identity 1", source: "connector" }),
+			makeLabel({ id: 11, name: "Identity 2", source: "connector" }),
 		];
 		render(
 			<Sidebar

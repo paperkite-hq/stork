@@ -7,7 +7,7 @@ import {
 	createTestContext,
 	createTestDb,
 	createTestFolder,
-	createTestIdentity,
+	createTestInboundConnector,
 	createTestLabel,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
@@ -49,22 +49,22 @@ describe("Inbox API", () => {
 			expect(body).toEqual([]);
 		});
 
-		test("returns inbox messages across multiple accounts", async () => {
-			// Account 1 with inbox
-			const acct1 = createTestIdentity(db, { name: "Work", email: "work@example.com" });
-			const folder1 = createTestFolder(db, acct1, "INBOX");
+		test("returns inbox messages across multiple inbound connectors", async () => {
+			// Connector 1 with inbox
+			const inbound1 = createTestInboundConnector(db, { name: "Work Inbound" });
+			const folder1 = createTestFolder(db, inbound1, "INBOX");
 			const inboxLabel1 = createTestLabel(db, "Inbox", { source: "imap" });
-			const msg1 = createTestMessage(db, acct1, folder1, 1, {
+			const msg1 = createTestMessage(db, inbound1, folder1, 1, {
 				subject: "Work message",
 				date: "2026-03-25T10:00:00Z",
 			});
 			addMessageLabel(db, msg1, inboxLabel1);
 
-			// Account 2 with inbox
-			const acct2 = createTestIdentity(db, { name: "Personal", email: "personal@example.com" });
-			const folder2 = createTestFolder(db, acct2, "INBOX");
+			// Connector 2 with inbox
+			const inbound2 = createTestInboundConnector(db, { name: "Personal Inbound" });
+			const folder2 = createTestFolder(db, inbound2, "INBOX");
 			const inboxLabel2 = createTestLabel(db, "Inbox", { source: "imap" });
-			const msg2 = createTestMessage(db, acct2, folder2, 1, {
+			const msg2 = createTestMessage(db, inbound2, folder2, 1, {
 				subject: "Personal message",
 				date: "2026-03-25T12:00:00Z",
 			});
@@ -76,21 +76,21 @@ describe("Inbox API", () => {
 			// Sorted by date DESC — personal message (newer) should be first
 			expect(body[0].subject).toBe("Personal message");
 			expect(body[1].subject).toBe("Work message");
-			// Both should include identity_id
-			expect(body[0].identity_id).toBe(acct2);
-			expect(body[1].identity_id).toBe(acct1);
+			// Both should include inbound_connector_id
+			expect(body[0].inbound_connector_id).toBe(inbound2);
+			expect(body[1].inbound_connector_id).toBe(inbound1);
 		});
 
 		test("excludes messages not in inbox label", async () => {
-			const acct = createTestIdentity(db);
-			const folder = createTestFolder(db, acct, "INBOX");
+			const inbound = createTestInboundConnector(db);
+			const folder = createTestFolder(db, inbound, "INBOX");
 			const inboxLabel = createTestLabel(db, "Inbox", { source: "imap" });
 			const sentLabel = createTestLabel(db, "Sent", { source: "imap" });
 
-			const inboxMsg = createTestMessage(db, acct, folder, 1, { subject: "Inbox msg" });
+			const inboxMsg = createTestMessage(db, inbound, folder, 1, { subject: "Inbox msg" });
 			addMessageLabel(db, inboxMsg, inboxLabel);
 
-			const sentMsg = createTestMessage(db, acct, folder, 2, { subject: "Sent msg" });
+			const sentMsg = createTestMessage(db, inbound, folder, 2, { subject: "Sent msg" });
 			addMessageLabel(db, sentMsg, sentLabel);
 
 			const { status, body } = await jsonRequest("/api/inbox/unified");
@@ -100,12 +100,12 @@ describe("Inbox API", () => {
 		});
 
 		test("supports pagination via limit and offset", async () => {
-			const acct = createTestIdentity(db);
-			const folder = createTestFolder(db, acct, "INBOX");
+			const inbound = createTestInboundConnector(db);
+			const folder = createTestFolder(db, inbound, "INBOX");
 			const inboxLabel = createTestLabel(db, "Inbox", { source: "imap" });
 
 			for (let i = 1; i <= 5; i++) {
-				const msg = createTestMessage(db, acct, folder, i, {
+				const msg = createTestMessage(db, inbound, folder, i, {
 					subject: `Message ${i}`,
 					date: `2026-03-${String(i).padStart(2, "0")}T10:00:00Z`,
 				});
@@ -133,17 +133,17 @@ describe("Inbox API", () => {
 			expect(body).toEqual([]);
 		});
 
-		test("returns all messages across multiple accounts sorted by date desc", async () => {
-			const acct1 = createTestIdentity(db, { name: "Work", email: "work@example.com" });
-			const folder1 = createTestFolder(db, acct1, "INBOX");
-			createTestMessage(db, acct1, folder1, 1, {
+		test("returns all messages across multiple connectors sorted by date desc", async () => {
+			const inbound1 = createTestInboundConnector(db, { name: "Work" });
+			const folder1 = createTestFolder(db, inbound1, "INBOX");
+			createTestMessage(db, inbound1, folder1, 1, {
 				subject: "Work message",
 				date: "2026-03-25T10:00:00Z",
 			});
 
-			const acct2 = createTestIdentity(db, { name: "Personal", email: "personal@example.com" });
-			const folder2 = createTestFolder(db, acct2, "INBOX");
-			createTestMessage(db, acct2, folder2, 1, {
+			const inbound2 = createTestInboundConnector(db, { name: "Personal" });
+			const folder2 = createTestFolder(db, inbound2, "INBOX");
+			createTestMessage(db, inbound2, folder2, 1, {
 				subject: "Personal message",
 				date: "2026-03-25T12:00:00Z",
 			});
@@ -153,15 +153,15 @@ describe("Inbox API", () => {
 			expect(body).toHaveLength(2);
 			expect(body[0].subject).toBe("Personal message");
 			expect(body[1].subject).toBe("Work message");
-			expect(body[0].identity_id).toBe(acct2);
-			expect(body[1].identity_id).toBe(acct1);
+			expect(body[0].inbound_connector_id).toBe(inbound2);
+			expect(body[1].inbound_connector_id).toBe(inbound1);
 		});
 
 		test("supports pagination", async () => {
-			const acct = createTestIdentity(db);
-			const folder = createTestFolder(db, acct, "INBOX");
+			const inbound = createTestInboundConnector(db);
+			const folder = createTestFolder(db, inbound, "INBOX");
 			for (let i = 1; i <= 5; i++) {
-				createTestMessage(db, acct, folder, i, {
+				createTestMessage(db, inbound, folder, i, {
 					subject: `Message ${i}`,
 					date: `2026-03-${String(i).padStart(2, "0")}T10:00:00Z`,
 				});
@@ -181,15 +181,15 @@ describe("Inbox API", () => {
 			expect(body).toEqual({ total: 0, unread: 0 });
 		});
 
-		test("counts total and unread across all accounts", async () => {
-			const acct1 = createTestIdentity(db);
-			const folder1 = createTestFolder(db, acct1, "INBOX");
-			createTestMessage(db, acct1, folder1, 1, { subject: "Unread", flags: null });
-			createTestMessage(db, acct1, folder1, 2, { subject: "Read", flags: "\\Seen" });
+		test("counts total and unread across all connectors", async () => {
+			const inbound1 = createTestInboundConnector(db);
+			const folder1 = createTestFolder(db, inbound1, "INBOX");
+			createTestMessage(db, inbound1, folder1, 1, { subject: "Unread", flags: null });
+			createTestMessage(db, inbound1, folder1, 2, { subject: "Read", flags: "\\Seen" });
 
-			const acct2 = createTestIdentity(db, { email: "b@example.com" });
-			const folder2 = createTestFolder(db, acct2, "INBOX");
-			createTestMessage(db, acct2, folder2, 1, { subject: "Also unread", flags: null });
+			const inbound2 = createTestInboundConnector(db, { imapUser: "b@example.com" });
+			const folder2 = createTestFolder(db, inbound2, "INBOX");
+			createTestMessage(db, inbound2, folder2, 1, { subject: "Also unread", flags: null });
 
 			const { status, body } = await jsonRequest("/api/inbox/all-messages/count");
 			expect(status).toBe(200);
@@ -210,19 +210,19 @@ describe("Inbox API", () => {
 			expect(body).toEqual([]);
 		});
 
-		test("returns only unread messages across all accounts", async () => {
-			const acct1 = createTestIdentity(db, { email: "a@example.com" });
-			const folder1 = createTestFolder(db, acct1, "INBOX");
-			createTestMessage(db, acct1, folder1, 1, {
+		test("returns only unread messages across all connectors", async () => {
+			const inbound1 = createTestInboundConnector(db, { imapUser: "a@example.com" });
+			const folder1 = createTestFolder(db, inbound1, "INBOX");
+			createTestMessage(db, inbound1, folder1, 1, {
 				subject: "Unread",
 				flags: null,
 				date: "2026-03-25T10:00:00Z",
 			});
-			createTestMessage(db, acct1, folder1, 2, { subject: "Read", flags: "\\Seen" });
+			createTestMessage(db, inbound1, folder1, 2, { subject: "Read", flags: "\\Seen" });
 
-			const acct2 = createTestIdentity(db, { email: "b@example.com" });
-			const folder2 = createTestFolder(db, acct2, "INBOX");
-			createTestMessage(db, acct2, folder2, 1, {
+			const inbound2 = createTestInboundConnector(db, { imapUser: "b@example.com" });
+			const folder2 = createTestFolder(db, inbound2, "INBOX");
+			createTestMessage(db, inbound2, folder2, 1, {
 				subject: "Also unread",
 				flags: null,
 				date: "2026-03-25T12:00:00Z",
@@ -234,8 +234,8 @@ describe("Inbox API", () => {
 			expect(body[0].subject).toBe("Also unread");
 			expect(body[1].subject).toBe("Unread");
 			expect(body.find((m: { subject: string }) => m.subject === "Read")).toBeUndefined();
-			expect(body[0].identity_id).toBe(acct2);
-			expect(body[1].identity_id).toBe(acct1);
+			expect(body[0].inbound_connector_id).toBe(inbound2);
+			expect(body[1].inbound_connector_id).toBe(inbound1);
 		});
 	});
 
@@ -246,15 +246,15 @@ describe("Inbox API", () => {
 			expect(body).toEqual({ total: 0 });
 		});
 
-		test("counts unread messages across all accounts", async () => {
-			const acct1 = createTestIdentity(db);
-			const folder1 = createTestFolder(db, acct1, "INBOX");
-			createTestMessage(db, acct1, folder1, 1, { flags: null });
-			createTestMessage(db, acct1, folder1, 2, { flags: "\\Seen" });
+		test("counts unread messages across all connectors", async () => {
+			const inbound1 = createTestInboundConnector(db);
+			const folder1 = createTestFolder(db, inbound1, "INBOX");
+			createTestMessage(db, inbound1, folder1, 1, { flags: null });
+			createTestMessage(db, inbound1, folder1, 2, { flags: "\\Seen" });
 
-			const acct2 = createTestIdentity(db, { email: "b@example.com" });
-			const folder2 = createTestFolder(db, acct2, "INBOX");
-			createTestMessage(db, acct2, folder2, 1, { flags: null });
+			const inbound2 = createTestInboundConnector(db, { imapUser: "b@example.com" });
+			const folder2 = createTestFolder(db, inbound2, "INBOX");
+			createTestMessage(db, inbound2, folder2, 1, { flags: null });
 
 			const { status, body } = await jsonRequest("/api/inbox/unread-messages/count");
 			expect(status).toBe(200);
@@ -269,30 +269,30 @@ describe("Inbox API", () => {
 			expect(body).toEqual({ total: 0, unread: 0 });
 		});
 
-		test("counts total and unread across all accounts", async () => {
-			const acct1 = createTestIdentity(db);
-			const folder1 = createTestFolder(db, acct1, "INBOX");
+		test("counts total and unread across all connectors", async () => {
+			const inbound1 = createTestInboundConnector(db);
+			const folder1 = createTestFolder(db, inbound1, "INBOX");
 			const inboxLabel1 = createTestLabel(db, "Inbox", { source: "imap" });
 
 			// Unread message (no \Seen flag)
-			const unreadMsg = createTestMessage(db, acct1, folder1, 1, {
+			const unreadMsg = createTestMessage(db, inbound1, folder1, 1, {
 				subject: "Unread",
 				flags: null,
 			});
 			addMessageLabel(db, unreadMsg, inboxLabel1);
 
 			// Read message
-			const readMsg = createTestMessage(db, acct1, folder1, 2, {
+			const readMsg = createTestMessage(db, inbound1, folder1, 2, {
 				subject: "Read",
 				flags: "\\Seen",
 			});
 			addMessageLabel(db, readMsg, inboxLabel1);
 
-			const acct2 = createTestIdentity(db, { email: "b@example.com" });
-			const folder2 = createTestFolder(db, acct2, "INBOX");
+			const inbound2 = createTestInboundConnector(db, { imapUser: "b@example.com" });
+			const folder2 = createTestFolder(db, inbound2, "INBOX");
 			const inboxLabel2 = createTestLabel(db, "Inbox", { source: "imap" });
 
-			const unreadMsg2 = createTestMessage(db, acct2, folder2, 1, {
+			const unreadMsg2 = createTestMessage(db, inbound2, folder2, 1, {
 				subject: "Also unread",
 				flags: null,
 			});

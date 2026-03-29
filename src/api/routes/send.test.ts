@@ -361,19 +361,10 @@ describe("Send API", () => {
 				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 			);
 
-			// Create inbound connector (IMAP, minimal config)
 			db.prepare(`
-				INSERT INTO inbound_connectors (name, type, imap_host, imap_user, imap_pass)
-				VALUES (?, 'imap', 'imap.example.com', 'user', 'pass')
-			`).run(`${name} (Inbound)`);
-			const inboundId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
-
-			db.prepare(`
-				INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-				VALUES (?, ?, ?, ?)
-			`).run(name, email, inboundId, outboundId);
+				INSERT INTO identities (name, email, outbound_connector_id)
+				VALUES (?, ?, ?)
+			`).run(name, email, outboundId);
 			return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
 		}
 

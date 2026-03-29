@@ -12,11 +12,16 @@ vi.mock("../api", () => ({
 		labels: {
 			messages: (...args: unknown[]) => mockLabelMessages(...args),
 		},
-		allMessages: {
-			list: (...args: unknown[]) => mockAllMessagesList(...args),
-		},
-		unreadMessages: {
-			list: (...args: unknown[]) => mockUnreadMessagesList(...args),
+		inbox: {
+			allMessages: {
+				list: (...args: unknown[]) => mockAllMessagesList(...args),
+			},
+			unreadMessages: {
+				list: (...args: unknown[]) => mockUnreadMessagesList(...args),
+			},
+			unified: {
+				list: vi.fn().mockResolvedValue([]),
+			},
 		},
 	},
 }));
@@ -63,7 +68,7 @@ describe("useMessagePagination", () => {
 		mockLabelMessages.mockResolvedValue(msgs);
 
 		const { result } = renderHook(() =>
-			useMessagePagination({ effectiveLabelId: 1, effectiveIdentityId: 1, isAllMail: false }),
+			useMessagePagination({ effectiveLabelId: 1, isAllMail: false }),
 		);
 
 		await waitFor(() => {
@@ -79,7 +84,7 @@ describe("useMessagePagination", () => {
 		mockLabelMessages.mockResolvedValue(msgs);
 
 		const { result } = renderHook(() =>
-			useMessagePagination({ effectiveLabelId: 1, effectiveIdentityId: 1, isAllMail: false }),
+			useMessagePagination({ effectiveLabelId: 1, isAllMail: false }),
 		);
 
 		await waitFor(() => {
@@ -92,7 +97,6 @@ describe("useMessagePagination", () => {
 		const { result } = renderHook(() =>
 			useMessagePagination({
 				effectiveLabelId: null,
-				effectiveIdentityId: 1,
 				isAllMail: false,
 			}),
 		);
@@ -108,13 +112,13 @@ describe("useMessagePagination", () => {
 		mockAllMessagesList.mockResolvedValue(msgs);
 
 		const { result } = renderHook(() =>
-			useMessagePagination({ effectiveLabelId: -1, effectiveIdentityId: 5, isAllMail: true }),
+			useMessagePagination({ effectiveLabelId: -1, isAllMail: true }),
 		);
 
 		await waitFor(() => {
 			expect(result.current.messagesLoading).toBe(false);
 		});
-		expect(mockAllMessagesList).toHaveBeenCalledWith(5, { limit: 50 });
+		expect(mockAllMessagesList).toHaveBeenCalledWith({ limit: 50 });
 		expect(result.current.allMessages).toEqual(msgs);
 	});
 
@@ -125,7 +129,6 @@ describe("useMessagePagination", () => {
 		const { result } = renderHook(() =>
 			useMessagePagination({
 				effectiveLabelId: null,
-				effectiveIdentityId: 7,
 				isAllMail: false,
 				isUnread: true,
 			}),
@@ -134,32 +137,17 @@ describe("useMessagePagination", () => {
 		await waitFor(() => {
 			expect(result.current.messagesLoading).toBe(false);
 		});
-		expect(mockUnreadMessagesList).toHaveBeenCalledWith(7, { limit: 50 });
+		expect(mockUnreadMessagesList).toHaveBeenCalledWith({ limit: 50 });
 		expect(result.current.allMessages).toEqual(msgs);
 	});
 
-	it("returns empty for Unread without identity", async () => {
-		const { result } = renderHook(() =>
-			useMessagePagination({
-				effectiveLabelId: null,
-				effectiveIdentityId: null,
-				isAllMail: false,
-				isUnread: true,
-			}),
-		);
+	it("allMessages API is called without identity requirement", async () => {
+		const msgs = [makeMessage(1)];
+		mockAllMessagesList.mockResolvedValue(msgs);
 
-		await waitFor(() => {
-			expect(result.current.messagesLoading).toBe(false);
-		});
-		expect(result.current.allMessages).toEqual([]);
-		expect(mockUnreadMessagesList).not.toHaveBeenCalled();
-	});
-
-	it("returns empty for All Mail without identity", async () => {
 		const { result } = renderHook(() =>
 			useMessagePagination({
 				effectiveLabelId: -1,
-				effectiveIdentityId: null,
 				isAllMail: true,
 			}),
 		);
@@ -167,7 +155,27 @@ describe("useMessagePagination", () => {
 		await waitFor(() => {
 			expect(result.current.messagesLoading).toBe(false);
 		});
-		expect(result.current.allMessages).toEqual([]);
+		// allMessages is global — always fetches regardless of identity
+		expect(mockAllMessagesList).toHaveBeenCalled();
+		expect(result.current.allMessages).toEqual(msgs);
+	});
+
+	it("unreadMessages API is called without identity requirement", async () => {
+		mockUnreadMessagesList.mockResolvedValue([]);
+
+		const { result } = renderHook(() =>
+			useMessagePagination({
+				effectiveLabelId: null,
+				isAllMail: false,
+				isUnread: true,
+			}),
+		);
+
+		await waitFor(() => {
+			expect(result.current.messagesLoading).toBe(false);
+		});
+		// unreadMessages is global — always fetches regardless of identity
+		expect(mockUnreadMessagesList).toHaveBeenCalled();
 	});
 
 	it("handleLoadMore appends next page", async () => {
@@ -176,7 +184,7 @@ describe("useMessagePagination", () => {
 		mockLabelMessages.mockResolvedValueOnce(page1).mockResolvedValueOnce(page2);
 
 		const { result } = renderHook(() =>
-			useMessagePagination({ effectiveLabelId: 1, effectiveIdentityId: 1, isAllMail: false }),
+			useMessagePagination({ effectiveLabelId: 1, isAllMail: false }),
 		);
 
 		await waitFor(() => {
@@ -195,7 +203,7 @@ describe("useMessagePagination", () => {
 		mockLabelMessages.mockResolvedValueOnce(page1).mockRejectedValueOnce(new Error("fail"));
 
 		const { result } = renderHook(() =>
-			useMessagePagination({ effectiveLabelId: 1, effectiveIdentityId: 1, isAllMail: false }),
+			useMessagePagination({ effectiveLabelId: 1, isAllMail: false }),
 		);
 
 		await waitFor(() => {
@@ -211,7 +219,6 @@ describe("useMessagePagination", () => {
 		const { result } = renderHook(() =>
 			useMessagePagination({
 				effectiveLabelId: null,
-				effectiveIdentityId: 1,
 				isAllMail: false,
 			}),
 		);
@@ -231,7 +238,6 @@ describe("useMessagePagination", () => {
 		const { result } = renderHook(() =>
 			useMessagePagination({
 				effectiveLabelId: -5,
-				effectiveIdentityId: 1,
 				isAllMail: false,
 				isUnread: false,
 			}),

@@ -90,10 +90,16 @@ export function App() {
 	// Labels are global — not per-identity
 	const { data: labels, refetch: refetchLabels } = useAsync(() => api.labels.list(), []);
 
-	// Also fetch folders (still needed for move-to-folder in MessageDetail)
+	// Fetch all folders (needed for move-to-folder in MessageDetail)
 	const { data: folders } = useAsync(
-		() => (effectiveIdentityId ? api.folders.list(effectiveIdentityId) : Promise.resolve([])),
-		[effectiveIdentityId],
+		() => (containerState === "unlocked" ? api.folders.listAll() : Promise.resolve([])),
+		[containerState],
+	);
+
+	// Fetch inbound connectors (needed for per-connector labels in unified inbox view)
+	const { data: inboundConnectors } = useAsync(
+		() => (containerState === "unlocked" ? api.connectors.inbound.list() : Promise.resolve([])),
+		[containerState],
 	);
 
 	// Resolve the default view. In multi-identity mode the primary navigation is
@@ -150,18 +156,16 @@ export function App() {
 		[suggestForLabelId],
 	);
 
-	// Fetch "All Mail" count for the sidebar badge
+	// Fetch "All Mail" count for the sidebar badge (global across all inbound connectors)
 	const { data: allMailCount, refetch: refetchAllMailCount } = useAsync(
-		() =>
-			effectiveIdentityId ? api.allMessages.count(effectiveIdentityId) : Promise.resolve(null),
-		[effectiveIdentityId],
+		() => api.inbox.allMessages.count(),
+		[],
 	);
 
-	// Fetch "Unread" count for the sidebar badge
+	// Fetch "Unread" count for the sidebar badge (global across all inbound connectors)
 	const { data: unreadCount, refetch: refetchUnreadCount } = useAsync(
-		() =>
-			effectiveIdentityId ? api.unreadMessages.count(effectiveIdentityId) : Promise.resolve(null),
-		[effectiveIdentityId],
+		() => api.inbox.unreadMessages.count(),
+		[],
 	);
 
 	// Fetch unified inbox count for the "All Inboxes" sidebar badge (only with multiple identities)
@@ -191,7 +195,6 @@ export function App() {
 		handleLoadMore,
 	} = useMessagePagination({
 		effectiveLabelId: isInbox ? inboxLabelId : effectiveLabelId,
-		effectiveIdentityId,
 		isAllMail,
 		isUnread,
 		isUnifiedInbox,
@@ -847,7 +850,7 @@ export function App() {
 									setSelectedMessageId(id);
 									setOpenedFromSearch(true);
 								}}
-								identityId={effectiveIdentityId}
+								inboundConnectorId={null}
 								onResultsChange={setSearchResults}
 								onQueryChange={setActiveSearchQuery}
 								initialQuery={initialSearchQuery}
@@ -866,9 +869,9 @@ export function App() {
 								onLoadMore={handleLoadMore}
 								loadingMore={loadingMore}
 								onToggleStar={handleToggleStar}
-								identities={
+								inboundConnectors={
 									isUnifiedInbox || isUnifiedAllMail || isUnifiedUnread || filterLabelIds.length > 1
-										? (identities ?? undefined)
+										? (inboundConnectors ?? undefined)
 										: undefined
 								}
 								totalCount={

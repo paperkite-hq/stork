@@ -54,7 +54,7 @@ function createTestPool(
 			accountConns.length >= ((pool as unknown as { maxPerIdentity: number }).maxPerIdentity ?? 1)
 		) {
 			throw new Error(
-				`Connection limit reached for identity ${identityId} (max: ${(pool as unknown as { maxPerIdentity: number }).maxPerIdentity})`,
+				`Connection limit reached for connector ${identityId} (max: ${(pool as unknown as { maxPerIdentity: number }).maxPerIdentity})`,
 			);
 		}
 
@@ -109,7 +109,7 @@ describe("ConnectionPool — acquire/release lifecycle", () => {
 		const sync = await pool.acquire(1, config);
 		expect(sync).toBeDefined();
 		expect(pool.totalConnections()).toBe(1);
-		expect(pool.identityConnections(1)).toBe(1);
+		expect(pool.connectorConnections(1)).toBe(1);
 	});
 
 	test("release marks connection as idle for reuse", async () => {
@@ -132,7 +132,7 @@ describe("ConnectionPool — acquire/release lifecycle", () => {
 		await pool.acquire(1, config);
 		// Second acquire for same identity should fail (first is still busy)
 		await expect(pool.acquire(1, config)).rejects.toThrow(
-			"Connection limit reached for identity 1",
+			"Connection limit reached for connector 1",
 		);
 	});
 
@@ -163,8 +163,8 @@ describe("ConnectionPool — acquire/release lifecycle", () => {
 		const sync3 = await pool.acquire(3, config);
 		expect(sync3).toBeDefined();
 		expect(pool.totalConnections()).toBe(2);
-		expect(pool.identityConnections(1)).toBe(0); // Evicted
-		expect(pool.identityConnections(3)).toBe(1);
+		expect(pool.connectorConnections(1)).toBe(0); // Evicted
+		expect(pool.connectorConnections(3)).toBe(1);
 	});
 
 	test("multiple accounts can have connections simultaneously", async () => {
@@ -176,9 +176,9 @@ describe("ConnectionPool — acquire/release lifecycle", () => {
 		await pool.acquire(3, config);
 
 		expect(pool.totalConnections()).toBe(3);
-		expect(pool.identityConnections(1)).toBe(1);
-		expect(pool.identityConnections(2)).toBe(1);
-		expect(pool.identityConnections(3)).toBe(1);
+		expect(pool.connectorConnections(1)).toBe(1);
+		expect(pool.connectorConnections(2)).toBe(1);
+		expect(pool.connectorConnections(3)).toBe(1);
 	});
 
 	test("shutdown clears all connections and stops cleanup timer", async () => {
@@ -244,7 +244,7 @@ describe("ConnectionPool — idle eviction (evictIdle)", () => {
 		internal.evictIdle();
 
 		expect(pool.totalConnections()).toBe(0);
-		expect(pool.identityConnections(1)).toBe(0);
+		expect(pool.connectorConnections(1)).toBe(0);
 		expect(mockSync.disconnect).toHaveBeenCalledTimes(1);
 	});
 
@@ -293,7 +293,7 @@ describe("ConnectionPool — idle eviction (evictIdle)", () => {
 
 		// stale idle evicted; identity still exists with 1 connection
 		expect(pool.totalConnections()).toBe(1);
-		expect(pool.identityConnections(1)).toBe(1);
+		expect(pool.connectorConnections(1)).toBe(1);
 		expect(staleSync.disconnect).toHaveBeenCalledTimes(1);
 		expect(activeSync.disconnect).not.toHaveBeenCalled();
 	});
@@ -317,9 +317,9 @@ describe("ConnectionPool — idle eviction (evictIdle)", () => {
 
 		internal.evictIdle();
 
-		expect(pool.identityConnections(1)).toBe(0); // evicted
-		expect(pool.identityConnections(2)).toBe(0); // evicted
-		expect(pool.identityConnections(3)).toBe(1); // kept
+		expect(pool.connectorConnections(1)).toBe(0); // evicted
+		expect(pool.connectorConnections(2)).toBe(0); // evicted
+		expect(pool.connectorConnections(3)).toBe(1); // kept
 		expect(stale1.disconnect).toHaveBeenCalledTimes(1);
 		expect(stale2.disconnect).toHaveBeenCalledTimes(1);
 		expect(fresh.disconnect).not.toHaveBeenCalled();
@@ -365,7 +365,7 @@ describe("ConnectionPool — real acquire() limit checks", () => {
 		const config = { host: "localhost", port: 993, secure: true, auth: { user: "u", pass: "p" } };
 		// Acquire should throw: account is at maxPerIdentity=1 with no idle connection to discard
 		await expect(pool.acquire(1, config)).rejects.toThrow(
-			"Connection limit reached for identity 1 (max: 1)",
+			"Connection limit reached for connector 1 (max: 1)",
 		);
 
 		await pool.shutdown();

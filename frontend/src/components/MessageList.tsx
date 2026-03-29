@@ -1,5 +1,5 @@
 import { type RefObject, memo, useEffect, useRef } from "react";
-import type { Folder, Identity, LabelSummary, MessageSummary } from "../api";
+import type { Folder, InboundConnector, LabelSummary, MessageSummary } from "../api";
 import { isFlagged, isUnread } from "../utils";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { AlertCircleIcon, InboxEmptyIcon, PaperclipIcon, RefreshIcon, StarIcon } from "./Icons";
@@ -259,8 +259,8 @@ interface MessageListProps {
 	loadingMore?: boolean;
 	totalCount?: number;
 	onToggleStar?: (id: number) => void;
-	/** Pass identities to show per-identity labels in unified inbox view */
-	identities?: Identity[];
+	/** Pass inbound connectors to show per-connector labels in unified inbox view */
+	inboundConnectors?: InboundConnector[];
 	// Bulk selection
 	selectedIds?: Set<number>;
 	onToggleSelect?: (id: number) => void;
@@ -290,7 +290,7 @@ export function MessageList({
 	onLoadMore,
 	loadingMore,
 	onToggleStar,
-	identities,
+	inboundConnectors,
 	selectedIds,
 	onToggleSelect,
 	onSelectAll,
@@ -442,9 +442,9 @@ export function MessageList({
 					</div>
 				)}
 				{messages.map((msg, idx) => {
-					const identity =
-						identities && msg.identity_id
-							? identities.find((a) => a.id === msg.identity_id)
+					const connector =
+						inboundConnectors && msg.inbound_connector_id
+							? inboundConnectors.find((c) => c.id === msg.inbound_connector_id)
 							: undefined;
 					return (
 						<MessageListItem
@@ -459,7 +459,7 @@ export function MessageList({
 							onToggleStar={onToggleStar}
 							onToggleSelect={onToggleSelect}
 							selectedRef={msg.id === selectedId ? selectedRef : undefined}
-							identityLabel={identity ? identity.name || identity.email : undefined}
+							identityLabel={connector ? connector.name : undefined}
 						/>
 					);
 				})}

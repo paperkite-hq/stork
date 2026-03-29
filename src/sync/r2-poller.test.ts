@@ -88,23 +88,6 @@ function createR2Connector(
 	return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
 }
 
-/** Create an identity linked to the given inbound connector */
-function createIdentity(db: Database.Database, connectorId: number): number {
-	db.prepare(`
-		INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
-		VALUES ('SMTP', 'smtp', 'smtp.example.com', 587, 1, 'u', 'p')
-	`).run();
-	const outboundId = Number(
-		(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-	);
-
-	db.prepare(`
-		INSERT INTO identities (name, email, inbound_connector_id, outbound_connector_id)
-		VALUES ('Test', 'test@example.com', ?, ?)
-	`).run(connectorId, outboundId);
-	return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
-}
-
 describe("parseListObjectsKeys", () => {
 	test("extracts keys from ListObjectsV2 XML", () => {
 		const xml = buildListXml(["pending/a.json", "pending/b.json"]);
@@ -182,7 +165,6 @@ describe("R2Poller", () => {
 
 	test("pollNow returns 0 when bucket is empty", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		makeFetchResponses([{ body: buildListXml([]) }]);
 
@@ -196,7 +178,6 @@ describe("R2Poller", () => {
 
 	test("pollNow processes an object, stores message, then deletes from R2", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		const raw = buildRawEmail({ messageId: "<unique-msg-1@test.com>" });
 		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw, rawSize: 100 });
@@ -226,7 +207,6 @@ describe("R2Poller", () => {
 
 	test("does NOT delete from R2 if DB is closed (transient DB error)", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		const raw = buildRawEmail({ messageId: "<transient-fail@example.com>" });
 		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw, rawSize: 100 });
@@ -255,7 +235,6 @@ describe("R2Poller", () => {
 
 	test("deletes from R2 when object has invalid JSON (unrecoverable)", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		makeFetchResponses([
 			{ body: buildListXml(["pending/bad-json.json"]) }, // LIST
@@ -276,7 +255,6 @@ describe("R2Poller", () => {
 
 	test("deduplicates: does not store same message-id twice", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		const messageId = "<dedup-test@example.com>";
 		const raw = buildRawEmail({ messageId });
@@ -360,7 +338,6 @@ describe("R2Poller", () => {
 
 	test("onPollComplete callback is called with stored count", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		const raw = buildRawEmail({ messageId: "<callback-test@example.com>" });
 		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw, rawSize: 100 });
@@ -414,7 +391,6 @@ describe("R2Poller", () => {
 
 	test("deletes from R2 when payload is valid JSON but missing raw field", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		// Valid JSON but no 'raw' field
 		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com" });
@@ -436,7 +412,6 @@ describe("R2Poller", () => {
 
 	test("deleteObject logs error for non-404 failure without throwing", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		const raw = buildRawEmail({ messageId: "<delete-500-fail@example.com>" });
 		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw, rawSize: 100 });
@@ -457,7 +432,6 @@ describe("R2Poller", () => {
 
 	test("stores two distinct messages for same account in one poll cycle", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		const raw1 = buildRawEmail({ messageId: "<first-msg@example.com>", subject: "First" });
 		const payload1 = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw: raw1, rawSize: 100 });
@@ -501,7 +475,6 @@ describe("R2Poller", () => {
 
 	test("R2 GET failure on object download causes poll to fail", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		makeFetchResponses([
 			{ body: buildListXml(["pending/msg.json"]) }, // LIST succeeds
@@ -516,7 +489,6 @@ describe("R2Poller", () => {
 
 	test("addConnector after start() triggers immediate poll", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		makeFetchResponses([{ body: buildListXml([]) }]); // empty bucket for immediate poll
 
@@ -556,7 +528,6 @@ describe("R2Poller", () => {
 
 	test("HTML email is stored with html_body populated", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		const raw = buildRawEmail({
 			messageId: "<html-email@example.com>",
@@ -582,7 +553,6 @@ describe("R2Poller", () => {
 
 	test("email without Date header uses current timestamp", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		const raw = buildRawEmail({ messageId: "<no-date@example.com>", noDate: true });
 		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw, rawSize: 50 });
@@ -601,7 +571,6 @@ describe("R2Poller", () => {
 
 	test("email with References header stores refs in DB", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		const raw = buildRawEmail({
 			messageId: "<with-refs@example.com>",
@@ -628,7 +597,6 @@ describe("R2Poller", () => {
 
 	test("email without To header stores null to_addresses", async () => {
 		const connId = createR2Connector(db);
-		createIdentity(db, connId);
 
 		const raw = buildRawEmail({ messageId: "<no-to@example.com>", noTo: true });
 		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw, rawSize: 50 });

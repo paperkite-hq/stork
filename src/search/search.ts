@@ -12,7 +12,7 @@ export interface SearchResult {
 }
 
 export interface SearchOptions {
-	identityId?: number;
+	inboundConnectorId?: number;
 	folderId?: number;
 	limit?: number;
 	offset?: number;
@@ -79,7 +79,7 @@ export class MessageSearch {
 	 * and Gmail-style operators (from:, to:, subject:, has:, is:, before:, after:, label:).
 	 */
 	search(query: string, options: SearchOptions = {}): SearchResult[] {
-		const { identityId, folderId, limit = 50, offset = 0 } = options;
+		const { inboundConnectorId, folderId, limit = 50, offset = 0 } = options;
 		const { ftsQuery, filters } = parseSearchQuery(query);
 
 		const conditions: string[] = [];
@@ -93,9 +93,9 @@ export class MessageSearch {
 			params.push(ftsQuery);
 		}
 
-		if (identityId) {
-			conditions.push("m.identity_id = ?");
-			params.push(identityId);
+		if (inboundConnectorId) {
+			conditions.push("m.inbound_connector_id = ?");
+			params.push(inboundConnectorId);
 		}
 		if (folderId) {
 			conditions.push("m.folder_id = ?");

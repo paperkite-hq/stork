@@ -7,7 +7,7 @@ import {
 	createTestContext,
 	createTestDb,
 	createTestFolder,
-	createTestIdentity,
+	createTestInboundConnector,
 	createTestLabel,
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
@@ -42,7 +42,7 @@ describe("Labels API", () => {
 		let identityId: number;
 
 		beforeEach(() => {
-			identityId = createTestIdentity(db);
+			identityId = createTestInboundConnector(db);
 		});
 
 		test("GET /api/identities/:id/labels returns empty array initially", async () => {
@@ -88,7 +88,7 @@ describe("Labels API", () => {
 		});
 
 		test("GET /api/identities/:id/labels returns same labels regardless of account", async () => {
-			const identityId2 = createTestIdentity(db, { email: "second@example.com" });
+			const identityId2 = createTestInboundConnector(db, { email: "second@example.com" });
 			createTestLabel(db, "Shared");
 
 			const { body: labels1 } = await jsonRequest(`/api/identities/${identityId}/labels`);
@@ -263,7 +263,7 @@ describe("Labels API", () => {
 		let folderId: number;
 
 		beforeEach(() => {
-			identityId = createTestIdentity(db);
+			identityId = createTestInboundConnector(db);
 			folderId = createTestFolder(db, identityId, "INBOX");
 		});
 
@@ -354,7 +354,7 @@ describe("Labels API", () => {
 		let folderId: number;
 
 		beforeEach(() => {
-			identityId = createTestIdentity(db);
+			identityId = createTestInboundConnector(db);
 			folderId = createTestFolder(db, identityId, "INBOX");
 		});
 
@@ -420,7 +420,7 @@ describe("Labels API", () => {
 		let folderId: number;
 
 		beforeEach(() => {
-			identityId = createTestIdentity(db);
+			identityId = createTestInboundConnector(db);
 			folderId = createTestFolder(db, identityId, "INBOX");
 		});
 
@@ -515,7 +515,7 @@ describe("Labels API", () => {
 		let folderId: number;
 
 		beforeEach(() => {
-			identityId = createTestIdentity(db);
+			identityId = createTestInboundConnector(db);
 			folderId = createTestFolder(db, identityId, "INBOX");
 		});
 

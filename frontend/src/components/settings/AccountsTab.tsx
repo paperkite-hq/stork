@@ -3,7 +3,6 @@ import { api } from "../../api";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { toast } from "../Toast";
 import { AccountForm } from "./AccountForm";
-import { SyncStatusPanel } from "./SyncStatusPanel";
 import { TrustedSendersPanel } from "./TrustedSendersPanel";
 
 export function AccountsTab({
@@ -11,15 +10,11 @@ export function AccountsTab({
 	editingIdentityId,
 	onEdit,
 	onRefetch,
-	syncStatusIdentityId,
-	onShowSync,
 }: {
 	identities: { id: number; name: string; email: string }[];
 	editingIdentityId: number | "new" | null;
 	onEdit: (id: number | "new" | null) => void;
 	onRefetch: () => void;
-	syncStatusIdentityId: number | null;
-	onShowSync: (id: number | null) => void;
 }) {
 	const [deleteTarget, setDeleteTarget] = useState<{
 		id: number;
@@ -63,10 +58,6 @@ export function AccountsTab({
 							identity={identity}
 							onEdit={() => onEdit(identity.id)}
 							onDelete={() => setDeleteTarget(identity)}
-							showSync={syncStatusIdentityId === identity.id}
-							onToggleSync={() =>
-								onShowSync(syncStatusIdentityId === identity.id ? null : identity.id)
-							}
 						/>
 					)}
 				</div>
@@ -112,14 +103,10 @@ function IdentityCard({
 	identity,
 	onEdit,
 	onDelete,
-	showSync,
-	onToggleSync,
 }: {
 	identity: { id: number; name: string; email: string };
 	onEdit: () => void;
 	onDelete: () => void;
-	showSync: boolean;
-	onToggleSync: () => void;
 }) {
 	const [showTrustedSenders, setShowTrustedSenders] = useState(false);
 
@@ -131,14 +118,6 @@ function IdentityCard({
 					<p className="text-xs text-gray-500 dark:text-gray-400">{identity.email}</p>
 				</div>
 				<div className="flex items-center gap-2">
-					<button
-						type="button"
-						onClick={onToggleSync}
-						className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-1 rounded transition-colors"
-						title="View sync status"
-					>
-						Sync Status
-					</button>
 					<button
 						type="button"
 						onClick={() => setShowTrustedSenders((v) => !v)}
@@ -163,7 +142,6 @@ function IdentityCard({
 					</button>
 				</div>
 			</div>
-			{showSync && <SyncStatusPanel identityId={identity.id} />}
 			{showTrustedSenders && <TrustedSendersPanel onClose={() => setShowTrustedSenders(false)} />}
 		</div>
 	);

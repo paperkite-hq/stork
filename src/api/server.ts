@@ -101,7 +101,7 @@ export function createApp(context: ContainerContext): { app: Hono } {
 		return context.r2Poller;
 	}
 
-	api.route("/identities", identityRoutes(getDb, getScheduler));
+	api.route("/identities", identityRoutes(getDb));
 	api.route("/connectors", connectorRoutes(getDb, getScheduler, getR2Poller));
 	api.route("/inbox", inboxRoutes(getDb));
 	api.route("/messages", messageRoutes(getDb));

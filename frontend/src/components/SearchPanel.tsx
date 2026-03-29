@@ -16,7 +16,7 @@ import { toast } from "./Toast";
 interface SearchPanelProps {
 	onClose: () => void;
 	onSelectMessage: (id: number) => void;
-	identityId: number | null;
+	inboundConnectorId: number | null;
 	onResultsChange?: (results: SearchResult[]) => void;
 	onQueryChange?: (query: string) => void;
 	initialQuery?: string;
@@ -82,7 +82,7 @@ function buildQueryWithFilters(text: string, filters: ActiveFilter[]): string {
 export function SearchPanel({
 	onClose,
 	onSelectMessage,
-	identityId,
+	inboundConnectorId,
 	onResultsChange,
 	onQueryChange,
 	initialQuery = "",
@@ -125,7 +125,10 @@ export function SearchPanel({
 			setActiveQuery(fullQuery);
 			setLoading(true);
 			api
-				.search(fullQuery, { identityId: identityId ?? undefined, limit: SEARCH_PAGE_SIZE })
+				.search(fullQuery, {
+					inboundConnectorId: inboundConnectorId ?? undefined,
+					limit: SEARCH_PAGE_SIZE,
+				})
 				.then((r) => {
 					setResults(r);
 					setSearched(true);
@@ -140,7 +143,7 @@ export function SearchPanel({
 				})
 				.finally(() => setLoading(false));
 		},
-		[identityId],
+		[inboundConnectorId],
 	);
 
 	const triggerSearch = useCallback(
@@ -164,7 +167,7 @@ export function SearchPanel({
 		setLoadingMore(true);
 		api
 			.search(lastQueryRef.current, {
-				identityId: identityId ?? undefined,
+				inboundConnectorId: inboundConnectorId ?? undefined,
 				limit: SEARCH_PAGE_SIZE,
 				offset: results.length,
 			})
@@ -176,7 +179,7 @@ export function SearchPanel({
 				toast("Failed to load more results", "error");
 			})
 			.finally(() => setLoadingMore(false));
-	}, [identityId, results.length, loadingMore]);
+	}, [inboundConnectorId, results.length, loadingMore]);
 
 	// Cleanup debounce timeout on unmount
 	useEffect(() => {

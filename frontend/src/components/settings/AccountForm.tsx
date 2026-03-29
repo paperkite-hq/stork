@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
 	type IdentityDetail,
-	type InboundConnector,
 	type OutboundConnector,
 	type UpdateIdentityRequest,
 	api,
@@ -12,7 +11,6 @@ import { FormField } from "./FormField";
 interface IdentityFormData {
 	name: string;
 	email: string;
-	inbound_connector_id: number | null;
 	outbound_connector_id: number | null;
 	default_view: string;
 }
@@ -20,23 +18,16 @@ interface IdentityFormData {
 const emptyForm: IdentityFormData = {
 	name: "",
 	email: "",
-	inbound_connector_id: null,
 	outbound_connector_id: null,
 	default_view: "inbox",
 };
 
-function connectorLabel(c: InboundConnector | OutboundConnector): string {
-	if ("imap_host" in c && c.type === "imap") {
-		return `${c.name} — IMAP (${c.imap_user ?? ""}@${c.imap_host ?? ""})`;
-	}
-	if (c.type === "cloudflare-email") {
-		return `${c.name} — Cloudflare Email`;
-	}
-	if ("smtp_host" in c && c.type === "smtp") {
-		return `${c.name} — SMTP (${(c as OutboundConnector).smtp_user ?? ""}@${(c as OutboundConnector).smtp_host ?? ""})`;
+function outboundConnectorLabel(c: OutboundConnector): string {
+	if (c.type === "smtp") {
+		return `${c.name} — SMTP (${c.smtp_user ?? ""}@${c.smtp_host ?? ""})`;
 	}
 	if (c.type === "ses") {
-		return `${c.name} — AWS SES (${(c as OutboundConnector).ses_region ?? ""})`;
+		return `${c.name} — AWS SES (${c.ses_region ?? ""})`;
 	}
 	return c.name;
 }
@@ -55,7 +46,6 @@ export function AccountForm({
 	const [error, setError] = useState<string | null>(null);
 	const [loaded, setLoaded] = useState(identityId === null);
 
-	const { data: inboundConnectors } = useAsync(() => api.connectors.inbound.list(), []);
 	const { data: outboundConnectors } = useAsync(() => api.connectors.outbound.list(), []);
 
 	const loadIdentity = useCallback(async () => {
@@ -65,7 +55,6 @@ export function AccountForm({
 			setForm({
 				name: detail.name,
 				email: detail.email,
-				inbound_connector_id: detail.inbound_connector_id ?? null,
 				outbound_connector_id: detail.outbound_connector_id ?? null,
 				default_view: detail.default_view ?? "inbox",
 			});
@@ -79,22 +68,8 @@ export function AccountForm({
 		loadIdentity();
 	}, [loadIdentity]);
 
-	// Auto-select first inbound connector when creating a new identity
-	useEffect(() => {
-		if (identityId !== null) return;
-		if (form.inbound_connector_id !== null) return;
-		const first = inboundConnectors?.[0];
-		if (first) {
-			setForm((f) => ({ ...f, inbound_connector_id: first.id }));
-		}
-	}, [inboundConnectors, identityId, form.inbound_connector_id]);
-
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!form.inbound_connector_id) {
-			setError("An inbound connector is required. Set one up in the Connectors tab first.");
-			return;
-		}
 		setLoading(true);
 		setError(null);
 
@@ -103,7 +78,6 @@ export function AccountForm({
 				await api.identities.create({
 					name: form.name,
 					email: form.email,
-					inbound_connector_id: form.inbound_connector_id ?? undefined,
 					...(form.outbound_connector_id
 						? { outbound_connector_id: form.outbound_connector_id }
 						: {}),
@@ -113,7 +87,6 @@ export function AccountForm({
 				const update: UpdateIdentityRequest = {
 					name: form.name,
 					email: form.email,
-					inbound_connector_id: form.inbound_connector_id ?? undefined,
 					outbound_connector_id: form.outbound_connector_id ?? undefined,
 					default_view: form.default_view,
 				};
@@ -135,7 +108,6 @@ export function AccountForm({
 		);
 	}
 
-	const hasInbound = inboundConnectors && inboundConnectors.length > 0;
 	const hasOutbound = outboundConnectors && outboundConnectors.length > 0;
 
 	return (
@@ -198,42 +170,6 @@ export function AccountForm({
 				/>
 			</div>
 
-			{/* Inbound Connector */}
-			<div>
-				<label
-					htmlFor="inbound-connector"
-					className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5"
-				>
-					Inbound Connector <span className="text-red-500">*</span>
-				</label>
-				{!hasInbound ? (
-					<p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded">
-						No inbound connectors configured yet. Go to the <strong>Connectors</strong> tab to add
-						one (IMAP or Cloudflare Email).
-					</p>
-				) : (
-					<select
-						id="inbound-connector"
-						value={form.inbound_connector_id ?? ""}
-						onChange={(e) =>
-							setForm((f) => ({
-								...f,
-								inbound_connector_id: e.target.value ? Number(e.target.value) : null,
-							}))
-						}
-						required
-						className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100"
-					>
-						<option value="">Select inbound connector…</option>
-						{inboundConnectors?.map((c) => (
-							<option key={c.id} value={c.id}>
-								{connectorLabel(c)}
-							</option>
-						))}
-					</select>
-				)}
-			</div>
-
 			{/* Outbound Connector */}
 			<div>
 				<label
@@ -262,7 +198,7 @@ export function AccountForm({
 						<option value="">None (receive only)</option>
 						{outboundConnectors?.map((c) => (
 							<option key={c.id} value={c.id}>
-								{connectorLabel(c)}
+								{outboundConnectorLabel(c)}
 							</option>
 						))}
 					</select>
@@ -302,7 +238,7 @@ export function AccountForm({
 				</button>
 				<button
 					type="submit"
-					disabled={loading || !hasInbound}
+					disabled={loading}
 					className="px-4 py-1.5 bg-stork-600 hover:bg-stork-700 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"
 				>
 					{loading ? "Saving..." : identityId === null ? "Add Email Identity" : "Save Changes"}

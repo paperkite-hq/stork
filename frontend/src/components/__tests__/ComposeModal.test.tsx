@@ -35,7 +35,7 @@ function makeIdentity(overrides: Partial<Identity> = {}): Identity {
 		id: 1,
 		name: "Test User",
 		email: "test@example.com",
-		inbound_connector_id: 1,
+
 		outbound_connector_id: 1,
 		created_at: "2026-01-01T00:00:00Z",
 		...overrides,
@@ -563,7 +563,7 @@ describe("ComposeModal", () => {
 						id: 1,
 						name: "Me",
 						email: "me@myaccount.com",
-						inbound_connector_id: 1,
+
 						outbound_connector_id: 1,
 						created_at: "",
 					},
