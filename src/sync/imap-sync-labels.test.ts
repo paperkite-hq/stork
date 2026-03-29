@@ -584,8 +584,8 @@ describe("syncAll — sub-batch label application during large folder sync", () 
 		//   3) final pass at end of syncAll
 		expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2);
 
-		// All 3 messages must be labelled in the end
+		// All 3 messages must be labelled in the end — each gets a folder label + an account label
 		const count = (db.prepare("SELECT COUNT(*) as n FROM message_labels").get() as { n: number }).n;
-		expect(count).toBe(3);
+		expect(count).toBe(6);
 	});
 });

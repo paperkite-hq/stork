@@ -37,10 +37,11 @@ function makeLabel(overrides: Partial<Label> = {}): Label {
 const defaultProps = {
 	accounts: [makeAccount()],
 	labels: [] as Label[],
-	selectedAccountId: 1,
 	selectedLabelId: null,
-	onSelectAccount: vi.fn(),
+	filterLabelIds: [] as number[],
 	onSelectLabel: vi.fn(),
+	onToggleFilterLabel: vi.fn(),
+	onClearFilter: vi.fn(),
 	onCompose: vi.fn(),
 	onSearch: vi.fn(),
 	onSettings: vi.fn(),
@@ -123,11 +124,15 @@ describe("Sidebar", () => {
 			makeAccount({ id: 1, name: "Account 1", email: "a1@test.com" }),
 			makeAccount({ id: 2, name: "Account 2", email: "a2@test.com" }),
 		];
-		render(<Sidebar {...defaultProps} accounts={accounts} />);
-		// Both account names should appear in the Accounts section
+		const labels = [
+			makeLabel({ id: 10, name: "Account 1", source: "account" }),
+			makeLabel({ id: 11, name: "Account 2", source: "account" }),
+		];
+		render(<Sidebar {...defaultProps} accounts={accounts} labels={labels} />);
+		// Both account names should appear as account labels in the Accounts section
 		expect(screen.getByText("Account 1")).toBeInTheDocument();
 		expect(screen.getByText("Account 2")).toBeInTheDocument();
-		// No dropdown (combobox) — accounts are listed as buttons
+		// No dropdown (combobox) — accounts are listed as label buttons
 		expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 	});
 
@@ -236,29 +241,30 @@ describe("Sidebar", () => {
 		expect(screen.getByTitle("Toggle dark mode")).toHaveTextContent(/Light/);
 	});
 
-	it("calls onSelectAccount and onSelectLabel when account button is clicked", async () => {
-		const onSelectAccount = vi.fn();
+	it("calls onSelectLabel with account label id when account label is clicked", async () => {
 		const onSelectLabel = vi.fn();
 		const accounts = [
 			makeAccount({ id: 1, name: "Account 1", email: "a1@test.com" }),
 			makeAccount({ id: 2, name: "Account 2", email: "a2@test.com" }),
 		];
+		const labels = [
+			makeLabel({ id: 1, name: "inbox", unread_count: 0 }),
+			makeLabel({ id: 10, name: "Account 1", source: "account" }),
+			makeLabel({ id: 11, name: "Account 2", source: "account" }),
+		];
 		render(
 			<Sidebar
 				{...defaultProps}
 				accounts={accounts}
-				selectedAccountId={1}
-				onSelectAccount={onSelectAccount}
 				onSelectLabel={onSelectLabel}
-				labels={[makeLabel({ id: 1, name: "inbox", unread_count: 0 })]}
+				labels={labels}
 			/>,
 		);
-		// The "Account 2" button in the Accounts section
+		// The "Account 2" label button in the Accounts section
 		const account2Button = screen.getByRole("button", { name: /Account 2/ });
 		await userEvent.click(account2Button);
-		expect(onSelectAccount).toHaveBeenCalledWith(2);
-		// Also selects INBOX_LABEL_ID
-		expect(onSelectLabel).toHaveBeenCalledWith(INBOX_LABEL_ID);
+		// Clicking an account label calls onSelectLabel with the label id
+		expect(onSelectLabel).toHaveBeenCalledWith(11);
 	});
 
 	it("toggles sync detail panel when sync indicator is clicked", async () => {
@@ -537,11 +543,9 @@ describe("Sidebar", () => {
 		expect(screen.getByText("8")).toBeInTheDocument();
 	});
 
-	it("renders LabelManager when selectedAccountId and onLabelsChanged are provided", () => {
+	it("renders LabelManager when onLabelsChanged is provided", () => {
 		const labels = [makeLabel({ id: 1, name: "Inbox" })];
-		render(
-			<Sidebar {...defaultProps} labels={labels} selectedAccountId={1} onLabelsChanged={vi.fn()} />,
-		);
+		render(<Sidebar {...defaultProps} labels={labels} onLabelsChanged={vi.fn()} />);
 		// LabelManager renders a "+ Create label" button
 		expect(screen.getByText("+ Create label")).toBeInTheDocument();
 	});
@@ -564,9 +568,7 @@ describe("Sidebar", () => {
 			makeLabel({ id: 1, name: "Inbox", source: "imap" }),
 			makeLabel({ id: 2, name: "MyLabel", source: "user" }),
 		];
-		render(
-			<Sidebar {...defaultProps} labels={labels} selectedAccountId={1} onLabelsChanged={vi.fn()} />,
-		);
+		render(<Sidebar {...defaultProps} labels={labels} onLabelsChanged={vi.fn()} />);
 		// Find the user label button in the non-Inbox label list
 		const labelSpan = screen
 			.getAllByText("MyLabel")

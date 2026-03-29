@@ -276,14 +276,26 @@ export class ImapSync {
 
 			const folders = await this.syncFolders();
 
-			// Ensure labels exist for all synced folders
+			// Ensure labels exist for all synced folders and for this account
 			this.ensureLabelsForFolders();
+			this.ensureAccountLabel();
 
-			// Read connector mode setting once per sync run (can change between syncs)
-			const accountRow = this.db
-				.prepare("SELECT sync_delete_from_server FROM accounts WHERE id = ?")
+			// Read connector mode setting from the inbound connector (v16+),
+			// falling back to the account column for pre-migration databases.
+			const connectorRow = this.db
+				.prepare(`
+					SELECT ic.sync_delete_from_server
+					FROM inbound_connectors ic
+					JOIN accounts a ON a.inbound_connector_id = ic.id
+					WHERE a.id = ?
+				`)
 				.get(this.accountId) as { sync_delete_from_server: number } | undefined;
-			const deleteFromServerAfterSync = accountRow?.sync_delete_from_server === 1;
+			const accountRow = connectorRow
+				? undefined
+				: (this.db
+						.prepare("SELECT sync_delete_from_server FROM accounts WHERE id = ?")
+						.get(this.accountId) as { sync_delete_from_server: number } | undefined);
+			const deleteFromServerAfterSync = (connectorRow ?? accountRow)?.sync_delete_from_server === 1;
 
 			const totalFolders = folders.length;
 			let foldersCompleted = 0;
@@ -332,6 +344,7 @@ export class ImapSync {
 
 			// Final pass: catch any messages that may have been missed
 			this.applyFolderLabelsToMessages();
+			this.applyAccountLabelToMessages();
 
 			// Update cached label and account counts so API endpoints stay O(1)
 			// regardless of database size. Runs once per sync cycle.
@@ -1032,6 +1045,66 @@ export class ImapSync {
 			},
 		);
 		applyUpdate(counts);
+	}
+
+	/**
+	 * Ensures a label exists for this account (source='account'), named after the
+	 * account display name. These auto-labels replace the per-account sidebar drill-in,
+	 * enabling label-based account filtering that composes with other label filters.
+	 */
+	ensureAccountLabel(): void {
+		const account = this.db.prepare("SELECT name FROM accounts WHERE id = ?").get(this.accountId) as
+			| { name: string }
+			| undefined;
+		if (!account) return;
+
+		this.db
+			.prepare(`
+				INSERT INTO labels (name, source, color)
+				VALUES (?, 'account', ?)
+				ON CONFLICT(name) DO UPDATE SET source = 'account'
+			`)
+			.run(account.name, this.accountLabelColor());
+	}
+
+	/**
+	 * Applies the account label to all messages from this account that don't have it yet.
+	 * Runs after each sync cycle alongside applyFolderLabelsToMessages().
+	 */
+	applyAccountLabelToMessages(): void {
+		const account = this.db.prepare("SELECT name FROM accounts WHERE id = ?").get(this.accountId) as
+			| { name: string }
+			| undefined;
+		if (!account) return;
+
+		this.db
+			.prepare(`
+				INSERT OR IGNORE INTO message_labels (message_id, label_id)
+				SELECT m.id, l.id
+				FROM messages m
+				JOIN labels l ON l.name = ? AND l.source = 'account'
+				LEFT JOIN message_labels ml ON ml.message_id = m.id AND ml.label_id = l.id
+				WHERE m.account_id = ? AND ml.message_id IS NULL
+			`)
+			.run(account.name, this.accountId);
+	}
+
+	/**
+	 * Returns a color for the account label based on account ID position.
+	 * Uses a curated palette of distinct, accessible colors.
+	 */
+	private accountLabelColor(): string {
+		const palette = [
+			"#3b82f6", // blue
+			"#10b981", // emerald
+			"#f59e0b", // amber
+			"#8b5cf6", // violet
+			"#ef4444", // red
+			"#06b6d4", // cyan
+			"#ec4899", // pink
+			"#84cc16", // lime
+		];
+		return palette[(this.accountId - 1) % palette.length] ?? palette[0];
 	}
 
 	/**

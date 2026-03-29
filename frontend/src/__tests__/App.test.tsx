@@ -340,17 +340,20 @@ describe("App — Main layout", () => {
 				makeAccount({ id: 1, name: "Account One", email: "one@example.com" }),
 				makeAccount({ id: 2, name: "Account Two", email: "two@example.com" }),
 			],
-			[makeLabel()],
+			[
+				makeLabel(),
+				makeLabel({ id: 10, name: "Account One", source: "account" }),
+				makeLabel({ id: 11, name: "Account Two", source: "account" }),
+			],
 		);
 		render(<App />);
 		await waitForAppLayout();
-		// Multiple accounts → Accounts section shows account name buttons.
-		// waitFor needed because accounts load in a second async step after status check.
+		// Multiple accounts → Accounts section shows account label buttons.
 		await waitFor(() => {
 			expect(screen.getByRole("button", { name: /Account One/ })).toBeInTheDocument();
 		});
 		expect(screen.getByRole("button", { name: /Account Two/ })).toBeInTheDocument();
-		// No dropdown — account switching uses buttons now
+		// No dropdown — account switching uses label buttons now
 		expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 	});
 
@@ -1285,24 +1288,28 @@ describe("App — Loading state", () => {
 // ------------------------------------------------------------------
 
 describe("App — Account switching", () => {
-	it("switching account via Accounts section fetches folders for new account", async () => {
+	it("switching account via Accounts section selects the account label", async () => {
 		const accounts = [
 			makeAccount({ id: 1, name: "Account 1" }),
 			makeAccount({ id: 2, name: "Account 2" }),
 		];
 		mockApi.accounts.list.mockResolvedValue(accounts);
-		mockApi.labels.list.mockResolvedValue([makeLabel()]);
+		mockApi.labels.list.mockResolvedValue([
+			makeLabel(),
+			makeLabel({ id: 10, name: "Account 1", source: "account" }),
+			makeLabel({ id: 11, name: "Account 2", source: "account" }),
+		]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByRole("button", { name: /Account 1/ })).toBeInTheDocument();
 		});
-		// Switch account via Accounts section button
+		// Switch account via Accounts section label button
 		await userEvent.click(screen.getByRole("button", { name: /Account 2/ }));
-		// Labels are global — folders should be fetched for the new account
+		// Clicking an account label triggers label-based filtering, which fetches label messages
 		await waitFor(() => {
-			expect(mockApi.folders.list).toHaveBeenCalledWith(2);
+			expect(mockApi.labels.messages).toHaveBeenCalledWith(11, expect.anything());
 		});
 	});
 });

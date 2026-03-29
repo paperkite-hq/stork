@@ -569,6 +569,7 @@ export function useMessagePagination(opts: {
 	isUnifiedInbox?: boolean;
 	isUnifiedAllMail?: boolean;
 	isUnifiedUnread?: boolean;
+	filterLabelIds?: number[];
 }) {
 	const {
 		effectiveLabelId,
@@ -578,6 +579,7 @@ export function useMessagePagination(opts: {
 		isUnifiedInbox,
 		isUnifiedAllMail,
 		isUnifiedUnread,
+		filterLabelIds = [],
 	} = opts;
 
 	const [allMessages, setAllMessages] = useState<MessageSummary[]>([]);
@@ -585,9 +587,18 @@ export function useMessagePagination(opts: {
 	const [loadingMore, setLoadingMore] = useState(false);
 
 	const isAnyUnified = isUnifiedInbox || isUnifiedAllMail || isUnifiedUnread;
+	const isMultiFilter = filterLabelIds.length > 1;
+	// Stable stringified key for dep arrays (avoids re-renders on same-content arrays)
+	const filterKey = filterLabelIds.join(",");
 
 	const getFetchFn = useCallback(
 		(paginationOpts: { limit: number; offset?: number }) => {
+			// Multi-label filter takes priority over all other views
+			if (isMultiFilter) {
+				// Parse IDs from the stable key to avoid referencing the array directly
+				const ids = filterKey.split(",").map(Number);
+				return api.labels.filter(ids, paginationOpts);
+			}
 			if (isUnifiedInbox) {
 				return api.inbox.unified.list(paginationOpts);
 			}
@@ -609,6 +620,8 @@ export function useMessagePagination(opts: {
 			return Promise.resolve([]);
 		},
 		[
+			isMultiFilter,
+			filterKey,
 			isUnifiedInbox,
 			isUnifiedAllMail,
 			isUnifiedUnread,
@@ -624,6 +637,13 @@ export function useMessagePagination(opts: {
 		error: messagesError,
 		refetch: refetchMessages,
 	} = useAsync(() => {
+		if (isMultiFilter) {
+			return getFetchFn({ limit: getPageSize() }).then((msgs) => {
+				setAllMessages(msgs);
+				setHasMore(msgs.length >= getPageSize());
+				return msgs;
+			});
+		}
 		const needsAccount = isAllMail || isUnread;
 		if (isAnyUnified) {
 			return getFetchFn({ limit: getPageSize() }).then((msgs) => {
@@ -642,13 +662,24 @@ export function useMessagePagination(opts: {
 			setHasMore(msgs.length >= getPageSize());
 			return msgs;
 		});
-	}, [effectiveLabelId, isAllMail, isUnread, isAnyUnified, effectiveAccountId, getFetchFn]);
+	}, [
+		effectiveLabelId,
+		isAllMail,
+		isUnread,
+		isAnyUnified,
+		isMultiFilter,
+		filterKey,
+		effectiveAccountId,
+		getFetchFn,
+	]);
 
 	const handleLoadMore = useCallback(() => {
 		if (loadingMore) return;
-		const needsAccount = isAllMail || isUnread;
-		if (!isAnyUnified && !effectiveLabelId && !needsAccount) return;
-		if (!isAnyUnified && needsAccount && !effectiveAccountId) return;
+		if (!isMultiFilter) {
+			const needsAccount = isAllMail || isUnread;
+			if (!isAnyUnified && !effectiveLabelId && !needsAccount) return;
+			if (!isAnyUnified && needsAccount && !effectiveAccountId) return;
+		}
 		setLoadingMore(true);
 		getFetchFn({ limit: getPageSize(), offset: allMessages.length })
 			.then((more) => {
@@ -664,6 +695,7 @@ export function useMessagePagination(opts: {
 		isAllMail,
 		isUnread,
 		isAnyUnified,
+		isMultiFilter,
 		effectiveAccountId,
 		allMessages.length,
 		loadingMore,
