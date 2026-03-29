@@ -9,8 +9,9 @@ Most people who manage multiple email addresses still have one "self" — a work
 Stork is built around this model:
 
 - **One instance, multiple accounts.** Run one Stork container for all your personal email. Only run separate instances when you need true isolation (e.g., employer-mandated separation of work data).
-- **Unified views are first-class.** "Inbox", "Unread", and "All Mail" span every connected account in multi-account mode. Per-account drill-in is available but secondary.
-- **Source-labeled messages.** Every message shows which account it arrived on, so you always know where you are in the unified view.
+- **Unified views are first-class.** "Inbox", "Unread", and "All Mail" span every connected account in multi-account mode.
+- **Auto-labeled by account.** Every incoming message is automatically labeled with its receiving account's name (e.g., "Work", "Personal"). These labels appear in the sidebar alongside other labels, enabling composable filtering.
+- **Multi-label drill-down.** Click an account label to see all its messages. Then Cmd/Ctrl+click another label (like "Inbox") to narrow down further. Labels compose via intersection — you see messages matching ALL selected labels.
 - **Smart reply identity.** When replying, Stork defaults to the account that received the original message, but lets you choose any identity as the sender.
 - **Global labels.** Labels are instance-wide, not per-account. "Needs reply" means the same thing regardless of which account a message arrived on.
 
@@ -18,15 +19,22 @@ Stork is built around this model:
 
 ### Sidebar Navigation
 
-When you have more than one account connected, the top-level sidebar entries — **Inbox**, **Unread**, and **All Mail** — automatically become cross-account unified views. No separate "All Accounts" section needed; those views are just the default.
+When you have more than one account connected, the top-level sidebar entries — **Inbox**, **Unread**, and **All Mail** — automatically become cross-account unified views.
 
-An **Accounts** section at the bottom of the sidebar lists each connected account as a drill-in button for when you want to focus on one account's messages specifically.
+Account labels appear in a dedicated **Accounts** section of the sidebar. Click one to see all messages from that account. Cmd/Ctrl+click to add it to a multi-label filter — for example, click "Work" then Cmd+click "Inbox" to see only Work's inbox messages.
 
 In single-account mode, the sidebar behaves exactly the same — there's no visible change; the unified logic simply has one source.
 
-### Account Badges
+### Multi-Label Filtering
 
-In unified views, each message row shows the account name it belongs to — e.g., "Work" or "Personal" — so you can tell at a glance where a message came from.
+Stork supports filtering by multiple labels simultaneously:
+
+1. **Click** a label to view it exclusively (replaces the current view)
+2. **Cmd/Ctrl+click** a label to add it to the active filter (intersection)
+3. Active filter labels are shown as pills above the label list, each removable with ×
+4. **Clear** removes all filters and returns to the previous single-label view
+
+This makes the account labels especially powerful — you can drill down from "Work" into "Work + Inbox", "Work + Receipts", etc.
 
 ### Sending From the Right Account
 
@@ -48,6 +56,19 @@ Stork separates how mail enters the system from how mail leaves it:
 - **Outbound connectors** handle sending: SMTP, AWS SES
 
 Connectors are configured independently in Settings → Connectors, then referenced by accounts. An account is purely an identity (name + email address) that points to one inbound and one outbound connector. This `n × m` model means you can, for example, receive via Fastmail IMAP but send through your own AWS SES endpoint for better deliverability — without any coupling between the two.
+
+### Mirror vs Connector Mode
+
+This setting lives on the **inbound connector** (not the account), because it's a property of how Stork interacts with the inbound source:
+
+- **Mirror mode** (default): Stork reads alongside your provider. Both hold copies. Actions in Stork are local only. Perfect for trying Stork.
+- **Connector mode**: Stork becomes your permanent encrypted email home. Messages are removed from the inbound source after each sync. Back up your database.
+
+This setting only applies to IMAP connectors — for push-based connectors (like Cloudflare Email), messages are delivered once and there's nothing to "delete from server."
+
+Configure this in Settings → Connectors → edit the inbound IMAP connector.
+
+### Adding a New Connector Type
 
 Adding a new connector type only requires implementing the `IngestConnector` or `SendConnector` interface and registering it in the connector registry.
 

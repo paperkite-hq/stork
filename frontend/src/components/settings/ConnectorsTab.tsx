@@ -19,6 +19,7 @@ interface InboundFormData {
 	imap_user: string;
 	imap_pass: string;
 	cf_email_webhook_secret: string;
+	sync_delete_from_server: number;
 }
 
 function defaultInboundForm(): InboundFormData {
@@ -31,6 +32,7 @@ function defaultInboundForm(): InboundFormData {
 		imap_user: "",
 		imap_pass: "",
 		cf_email_webhook_secret: "",
+		sync_delete_from_server: 0,
 	};
 }
 
@@ -54,6 +56,7 @@ function InboundConnectorForm({
 					imap_user: initial.imap_user ?? "",
 					imap_pass: "",
 					cf_email_webhook_secret: initial.cf_email_webhook_secret ?? "",
+					sync_delete_from_server: initial.sync_delete_from_server ?? 0,
 				}
 			: defaultInboundForm(),
 	);
@@ -68,6 +71,7 @@ function InboundConnectorForm({
 			const payload: CreateInboundConnectorRequest = {
 				name: form.name,
 				type: form.type,
+				sync_delete_from_server: form.sync_delete_from_server,
 				...(form.type === "imap"
 					? {
 							imap_host: form.imap_host,
@@ -215,6 +219,44 @@ function InboundConnectorForm({
 							onChange={(e) => setForm({ ...form, imap_pass: e.target.value })}
 							className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm dark:bg-gray-800 dark:text-gray-100"
 						/>
+					</div>
+					{/* Mirror vs Connector mode — only applies to IMAP connectors */}
+					<div className="space-y-2 pt-1">
+						<label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+							<input
+								type="checkbox"
+								checked={form.sync_delete_from_server === 1}
+								onChange={(e) =>
+									setForm({ ...form, sync_delete_from_server: e.target.checked ? 1 : 0 })
+								}
+								className="rounded border-gray-300 dark:border-gray-600 mt-0.5 shrink-0"
+							/>
+							<span>
+								<span className="font-medium">Connector mode</span> — after syncing, remove messages
+								from the IMAP server so Stork becomes your permanent encrypted email home
+							</span>
+						</label>
+						{form.sync_delete_from_server === 1 ? (
+							<div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded px-3 py-2">
+								<p className="font-medium">
+									Connector mode — Stork is your permanent encrypted email home.
+								</p>
+								<p>
+									Messages are removed from the IMAP server after each sync. Back up your Stork
+									database.
+								</p>
+							</div>
+						) : (
+							<div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-2">
+								<p className="font-medium">
+									Mirror mode — Stork reads alongside your IMAP provider.
+								</p>
+								<p>
+									Your provider stays authoritative; both hold copies. Actions in Stork are local
+									only.
+								</p>
+							</div>
+						)}
 					</div>
 				</>
 			)}

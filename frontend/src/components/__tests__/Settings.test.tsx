@@ -339,7 +339,7 @@ describe("Settings", () => {
 		expect(screen.getByPlaceholderText("you@example.com")).toBeInTheDocument();
 		expect(screen.getByText("Inbound Connector")).toBeInTheDocument();
 		expect(screen.getByText("Outbound Connector")).toBeInTheDocument();
-		expect(screen.getByText("Sync Preferences")).toBeInTheDocument();
+		expect(screen.getByText("Preferences")).toBeInTheDocument();
 	});
 
 	it("shows philosophy intro callout when adding a new account", async () => {
@@ -523,7 +523,7 @@ describe("Settings", () => {
 		});
 	});
 
-	it("shows Connector mode checkbox in add account form", async () => {
+	it("does not show Connector mode checkbox in add account form (moved to ConnectorsTab)", async () => {
 		render(<Settings onClose={vi.fn()} />);
 		await waitFor(() => {
 			expect(screen.getByText("+ Add Account")).toBeInTheDocument();
@@ -532,13 +532,12 @@ describe("Settings", () => {
 		await waitFor(() =>
 			expect(screen.getByRole("heading", { name: "Add Account" })).toBeInTheDocument(),
 		);
-		const checkboxes = screen.getAllByRole("checkbox");
-		// Should have the Connector mode checkbox
+		const checkboxes = screen.queryAllByRole("checkbox");
+		// Connector mode checkbox should NOT be in AccountForm — it moved to ConnectorsTab
 		const connectorModeCheckbox = checkboxes.find((cb) =>
 			cb.closest("label")?.textContent?.includes("Connector mode"),
 		);
-		expect(connectorModeCheckbox).toBeInTheDocument();
-		expect(connectorModeCheckbox).not.toBeChecked();
+		expect(connectorModeCheckbox).toBeUndefined();
 	});
 
 	it("changes messages per page selection", async () => {
@@ -1158,16 +1157,13 @@ describe("Settings — AccountForm field interactions", () => {
 		);
 	}
 
-	it("toggles sync deletions checkbox", async () => {
+	it("shows default view select in add account form preferences", async () => {
 		await openAddAccountForm();
-		const syncCheckboxes = screen.getAllByRole("checkbox");
-		const syncDeleteCheckbox = syncCheckboxes.find((cb) =>
-			cb.closest("fieldset")?.textContent?.includes("Connector mode"),
-		) as HTMLInputElement | undefined;
-		if (!syncDeleteCheckbox) throw new Error("Sync delete checkbox not found");
-		expect(syncDeleteCheckbox.checked).toBe(false);
-		await userEvent.click(syncDeleteCheckbox);
-		expect(syncDeleteCheckbox.checked).toBe(true);
+		// The Preferences fieldset should have a default view selector
+		expect(screen.getByText("Preferences")).toBeInTheDocument();
+		const viewSelect = screen.getByLabelText(/Default view on open/i) as HTMLSelectElement;
+		expect(viewSelect).toBeInTheDocument();
+		expect(viewSelect.value).toBe("inbox");
 	});
 
 	it("switches to General tab via desktop sidebar tab button", async () => {

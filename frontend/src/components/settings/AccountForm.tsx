@@ -274,43 +274,11 @@ export function AccountForm({
 				)}
 			</div>
 
-			{/* Sync Preferences */}
+			{/* View Preferences */}
 			<fieldset className="space-y-3">
 				<legend className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-					Sync Preferences
+					Preferences
 				</legend>
-				<label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-					<input
-						type="checkbox"
-						checked={form.sync_delete_from_server === 1}
-						onChange={(e) =>
-							setForm((f) => ({ ...f, sync_delete_from_server: e.target.checked ? 1 : 0 }))
-						}
-						className="rounded border-gray-300 dark:border-gray-600 mt-0.5 shrink-0"
-					/>
-					<span>
-						<span className="font-medium">Connector mode</span> — after syncing, remove messages
-						from the inbound source so Stork becomes your permanent encrypted email home
-					</span>
-				</label>
-				{form.sync_delete_from_server === 1 ? (
-					<div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded px-3 py-2">
-						<p className="font-medium">
-							Connector mode is on — Stork is your permanent encrypted email home.
-						</p>
-						<p>
-							Messages are removed from the inbound source after each sync. Make sure your Stork
-							database is backed up.
-						</p>
-					</div>
-				) : (
-					<div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-2">
-						<p className="font-medium">Mirror mode is on — Stork reads alongside your provider.</p>
-						<p>
-							Your provider stays authoritative; both hold copies. Actions in Stork are local only.
-						</p>
-					</div>
-				)}
 				<div className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
 					<label htmlFor="default_view_select" className="whitespace-nowrap">
 						Default view on open

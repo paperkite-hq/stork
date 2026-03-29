@@ -362,11 +362,11 @@ describe("ImapSync integration with mock IMAP server", () => {
 		expect(labelCountsAfterFolder.length).toBeGreaterThan(0);
 		expect(labelCountsAfterFolder[0]).toBeGreaterThan(0);
 
-		// Total message_labels should equal total messages (4)
+		// Total message_labels: 4 messages × (folder label + account label) = 8
 		const totalLabels = (
 			db.prepare("SELECT COUNT(*) as n FROM message_labels").get() as { n: number }
 		).n;
-		expect(totalLabels).toBe(4);
+		expect(totalLabels).toBe(8);
 	});
 });
 

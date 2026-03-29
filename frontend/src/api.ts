@@ -89,6 +89,7 @@ export interface InboundConnector {
 	imap_tls: number;
 	imap_user: string | null;
 	cf_email_webhook_secret: string | null;
+	sync_delete_from_server: number;
 	created_at: string;
 	updated_at: string;
 }
@@ -116,6 +117,7 @@ export interface CreateInboundConnectorRequest {
 	imap_user?: string;
 	imap_pass?: string;
 	cf_email_webhook_secret?: string;
+	sync_delete_from_server?: number;
 }
 
 export interface UpdateInboundConnectorRequest {
@@ -127,6 +129,7 @@ export interface UpdateInboundConnectorRequest {
 	imap_user?: string;
 	imap_pass?: string;
 	cf_email_webhook_secret?: string;
+	sync_delete_from_server?: number;
 }
 
 export interface CreateOutboundConnectorRequest {
@@ -215,7 +218,7 @@ export interface Label {
 	id: number;
 	name: string;
 	color: string | null;
-	source: "imap" | "user";
+	source: "imap" | "user" | "system" | "account";
 	created_at: string;
 	message_count: number;
 	unread_count: number;
@@ -225,7 +228,7 @@ export interface LabelSummary {
 	id: number;
 	name: string;
 	color: string | null;
-	source: "imap" | "user";
+	source: "imap" | "user" | "system" | "account";
 }
 
 export interface SearchResult {
@@ -475,6 +478,18 @@ export const api = {
 			if (opts?.limit) params.set("limit", String(opts.limit));
 			if (opts?.offset) params.set("offset", String(opts.offset));
 			return fetchJSON<MessageSummary[]>(`/labels/${labelId}/messages?${params}`);
+		},
+		filter: (ids: number[], opts?: { limit?: number; offset?: number }) => {
+			const params = new URLSearchParams();
+			params.set("ids", ids.join(","));
+			if (opts?.limit) params.set("limit", String(opts.limit));
+			if (opts?.offset) params.set("offset", String(opts.offset));
+			return fetchJSON<MessageSummary[]>(`/labels/filter?${params}`);
+		},
+		filterCount: (ids: number[]) => {
+			const params = new URLSearchParams();
+			params.set("ids", ids.join(","));
+			return fetchJSON<{ total: number; unread: number }>(`/labels/filter/count?${params}`);
 		},
 	},
 	inbox: {
