@@ -255,23 +255,6 @@ export function Sidebar({
 				</button>
 			</div>
 
-			{/* Account selector */}
-			{accounts.length > 1 && (
-				<div className="px-4 pt-3">
-					<select
-						value={selectedAccountId ?? ""}
-						onChange={(e) => onSelectAccount(Number(e.target.value))}
-						className="w-full text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1"
-					>
-						{accounts.map((a) => (
-							<option key={a.id} value={a.id}>
-								{a.name} ({a.email})
-							</option>
-						))}
-					</select>
-				</div>
-			)}
-
 			{/* Mirror mode nag — shown when any account is in mirror mode (not connector mode) */}
 			{accounts.some((a) => a.sync_delete_from_server === 0) && (
 				<div className="mx-4 mt-3 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
@@ -360,50 +343,68 @@ export function Sidebar({
 
 			{/* Navigation — promoted views + label list */}
 			<nav className="flex-1 overflow-y-auto px-2 py-3">
-				{/* All Inboxes — unified cross-account inbox, only shown with multiple accounts */}
-				{accounts.length > 1 && (
+				{/* Promoted views: Inbox, Unread, All Mail
+				     In multi-account mode these are unified (cross-account) views.
+				     In single-account mode they filter to that account. */}
+				{labels.length > 0 && (
 					<>
-						<p className="px-3 pt-1 pb-1 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">
-							All Accounts
-						</p>
 						<button
 							type="button"
-							onClick={() => onSelectLabel(UNIFIED_INBOX_LABEL_ID)}
+							onClick={() =>
+								onSelectLabel(accounts.length > 1 ? UNIFIED_INBOX_LABEL_ID : INBOX_LABEL_ID)
+							}
 							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-								selectedLabelId === UNIFIED_INBOX_LABEL_ID
+								selectedLabelId === INBOX_LABEL_ID || selectedLabelId === UNIFIED_INBOX_LABEL_ID
 									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
 									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
 							}`}
 						>
 							<InboxIcon className="w-4 h-4 flex-shrink-0" />
-							<span className="truncate">All Inboxes</span>
-							{unifiedInboxCount && unifiedInboxCount.unread > 0 && (
+							<span className="truncate">Inbox</span>
+							{accounts.length > 1 ? (
+								unifiedInboxCount && unifiedInboxCount.unread > 0 ? (
+									<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
+										{unifiedInboxCount.unread}
+									</span>
+								) : null
+							) : inboxLabel && inboxLabel.unread_count > 0 ? (
 								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
-									{unifiedInboxCount.unread}
+									{inboxLabel.unread_count}
 								</span>
-							)}
+							) : null}
 						</button>
 						<button
 							type="button"
-							onClick={() => onSelectLabel(UNIFIED_UNREAD_LABEL_ID)}
+							onClick={() =>
+								onSelectLabel(accounts.length > 1 ? UNIFIED_UNREAD_LABEL_ID : UNREAD_LABEL_ID)
+							}
 							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-								selectedLabelId === UNIFIED_UNREAD_LABEL_ID
+								selectedLabelId === UNREAD_LABEL_ID || selectedLabelId === UNIFIED_UNREAD_LABEL_ID
 									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
 									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
 							}`}
 						>
 							<UnreadIcon className="w-4 h-4 flex-shrink-0" />
-							<span className="truncate">All Unread</span>
-							{unifiedUnreadCount && unifiedUnreadCount.total > 0 && (
+							<span className="truncate">Unread</span>
+							{accounts.length > 1 ? (
+								unifiedUnreadCount && unifiedUnreadCount.total > 0 ? (
+									<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
+										{unifiedUnreadCount.total}
+									</span>
+								) : null
+							) : unreadCount && unreadCount.total > 0 ? (
 								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
-									{unifiedUnreadCount.total}
+									{unreadCount.total}
 								</span>
-							)}
+							) : null}
 						</button>
 						<button
 							type="button"
-							onClick={() => onSelectLabel(UNIFIED_ALL_MAIL_LABEL_ID)}
+							onClick={() =>
+								onSelectLabel(accounts.length > 1 ? UNIFIED_ALL_MAIL_LABEL_ID : ALL_MAIL_LABEL_ID)
+							}
 							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+								selectedLabelId === ALL_MAIL_LABEL_ID ||
 								selectedLabelId === UNIFIED_ALL_MAIL_LABEL_ID
 									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
 									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -411,70 +412,46 @@ export function Sidebar({
 						>
 							<MailAllIcon className="w-4 h-4 flex-shrink-0" />
 							<span className="truncate">All Mail</span>
-							{unifiedAllMailCount && unifiedAllMailCount.unread > 0 && (
+							{accounts.length > 1 ? (
+								unifiedAllMailCount && unifiedAllMailCount.unread > 0 ? (
+									<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
+										{unifiedAllMailCount.unread}
+									</span>
+								) : null
+							) : allMailCount && allMailCount.unread > 0 ? (
 								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
-									{unifiedAllMailCount.unread}
+									{allMailCount.unread}
 								</span>
-							)}
+							) : null}
 						</button>
 						<div className="my-2 mx-3 border-t border-gray-200 dark:border-gray-700" />
 					</>
 				)}
 
-				{/* Promoted views: Inbox, Unread, All Mail — always at top */}
-				{labels.length > 0 && (
+				{/* Per-account section — shown with multiple accounts so users can drill into one */}
+				{accounts.length > 1 && (
 					<>
-						<button
-							type="button"
-							onClick={() => onSelectLabel(INBOX_LABEL_ID)}
-							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-								selectedLabelId === INBOX_LABEL_ID
-									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
-									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-							}`}
-						>
-							<InboxIcon className="w-4 h-4 flex-shrink-0" />
-							<span className="truncate">Inbox</span>
-							{inboxLabel && inboxLabel.unread_count > 0 && (
-								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
-									{inboxLabel.unread_count}
-								</span>
-							)}
-						</button>
-						<button
-							type="button"
-							onClick={() => onSelectLabel(UNREAD_LABEL_ID)}
-							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-								selectedLabelId === UNREAD_LABEL_ID
-									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
-									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-							}`}
-						>
-							<UnreadIcon className="w-4 h-4 flex-shrink-0" />
-							<span className="truncate">Unread</span>
-							{unreadCount && unreadCount.total > 0 && (
-								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
-									{unreadCount.total}
-								</span>
-							)}
-						</button>
-						<button
-							type="button"
-							onClick={() => onSelectLabel(ALL_MAIL_LABEL_ID)}
-							className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-								selectedLabelId === ALL_MAIL_LABEL_ID
-									? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
-									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-							}`}
-						>
-							<MailAllIcon className="w-4 h-4 flex-shrink-0" />
-							<span className="truncate">All Mail</span>
-							{allMailCount && allMailCount.unread > 0 && (
-								<span className="ml-auto text-xs font-medium text-stork-600 dark:text-stork-400 bg-stork-100 dark:bg-stork-900 px-1.5 py-0.5 rounded-full">
-									{allMailCount.unread}
-								</span>
-							)}
-						</button>
+						<p className="px-3 pt-1 pb-1 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+							Accounts
+						</p>
+						{accounts.map((a) => (
+							<button
+								key={a.id}
+								type="button"
+								onClick={() => {
+									onSelectAccount(a.id);
+									onSelectLabel(INBOX_LABEL_ID);
+								}}
+								className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+									selectedAccountId === a.id && selectedLabelId === INBOX_LABEL_ID
+										? "bg-stork-100 dark:bg-stork-950 text-stork-700 dark:text-stork-300 font-medium"
+										: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+								}`}
+							>
+								<InboxIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
+								<span className="truncate">{a.name || a.email}</span>
+							</button>
+						))}
 						<div className="my-2 mx-3 border-t border-gray-200 dark:border-gray-700" />
 					</>
 				)}

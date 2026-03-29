@@ -334,7 +334,7 @@ describe("App — Main layout", () => {
 		expect(screen.getByText("Stork")).toBeInTheDocument();
 	});
 
-	it("shows account selector when multiple accounts exist", async () => {
+	it("shows per-account buttons in Accounts section when multiple accounts exist", async () => {
 		setupWithAccounts(
 			[
 				makeAccount({ id: 1, name: "Account One", email: "one@example.com" }),
@@ -344,12 +344,14 @@ describe("App — Main layout", () => {
 		);
 		render(<App />);
 		await waitForAppLayout();
-		// Multiple accounts → select dropdown shows names.
+		// Multiple accounts → Accounts section shows account name buttons.
 		// waitFor needed because accounts load in a second async step after status check.
 		await waitFor(() => {
-			expect(screen.getByText("Account One (one@example.com)")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: /Account One/ })).toBeInTheDocument();
 		});
-		expect(screen.getByText("Account Two (two@example.com)")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /Account Two/ })).toBeInTheDocument();
+		// No dropdown — account switching uses buttons now
+		expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 	});
 
 	it("shows label names in sidebar", async () => {
@@ -1283,7 +1285,7 @@ describe("App — Loading state", () => {
 // ------------------------------------------------------------------
 
 describe("App — Account switching", () => {
-	it("switching account resets label and message selection", async () => {
+	it("switching account via Accounts section fetches folders for new account", async () => {
 		const accounts = [
 			makeAccount({ id: 1, name: "Account 1" }),
 			makeAccount({ id: 2, name: "Account 2" }),
@@ -1294,11 +1296,10 @@ describe("App — Account switching", () => {
 		mockApi.folders.list.mockResolvedValue([]);
 		render(<App />);
 		await waitFor(() => {
-			expect(screen.getByText("Account 1 (test@example.com)")).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: /Account 1/ })).toBeInTheDocument();
 		});
-		// Switch account via select
-		const select = screen.getByRole("combobox");
-		await userEvent.selectOptions(select, "2");
+		// Switch account via Accounts section button
+		await userEvent.click(screen.getByRole("button", { name: /Account 2/ }));
 		// Labels are global — folders should be fetched for the new account
 		await waitFor(() => {
 			expect(mockApi.folders.list).toHaveBeenCalledWith(2);

@@ -131,6 +131,62 @@ Migrations run automatically on startup. The current schema version is tracked i
 npm run db:migrate
 ```
 
+## Cloudflare Email Webhook
+
+Stork exposes a push-based inbound endpoint for [Cloudflare Email Workers](https://developers.cloudflare.com/email-routing/email-workers/):
+
+```
+POST /api/webhook/cloudflare-email/:connectorId
+Authorization: Bearer <webhook_secret>
+Content-Type: application/json
+
+{
+  "from": "sender@example.com",
+  "to": "you@yourdomain.com",
+  "raw": "<base64-encoded RFC 5322 message>",
+  "rawSize": 12345
+}
+```
+
+**Setup:**
+1. In Settings → Connectors, create a new Inbound Connector of type "Cloudflare Email" and generate a random webhook secret.
+2. Deploy a Cloudflare Email Worker that reads the raw email stream, base64-encodes it, and POSTs to `https://your-stork-instance/api/webhook/cloudflare-email/<connectorId>` with `Authorization: Bearer <your-secret>`.
+3. Add an account referencing this inbound connector.
+
+Messages are deduplicated by Message-ID, so Cloudflare's at-least-once delivery doesn't create duplicates. The endpoint returns `503` if Stork is locked, `401` for a wrong secret, and `200 {"ok":true,"stored":N}` on success.
+
+**Example Cloudflare Worker:**
+
+```javascript
+export default {
+  async email(message, env) {
+    const reader = message.raw.getReader();
+    const chunks = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const raw = btoa(String.fromCharCode(...new Uint8Array(
+      chunks.reduce((a, b) => [...a, ...b], [])
+    )));
+    await fetch(`${env.STORK_URL}/api/webhook/cloudflare-email/${env.CONNECTOR_ID}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${env.WEBHOOK_SECRET}`,
+      },
+      body: JSON.stringify({
+        from: message.from,
+        to: message.to,
+        raw,
+        rawSize: message.rawSize,
+      }),
+    });
+  }
+}
+```
+
 ## Sync Settings
 
 Sync behavior is configured per-account via the API or Settings UI.

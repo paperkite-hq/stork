@@ -17,6 +17,7 @@ import { searchRoutes } from "./routes/search.js";
 import { sendRoutes } from "./routes/send.js";
 import { syncRoutes } from "./routes/sync.js";
 import { trustedSenderRoutes } from "./routes/trusted-senders.js";
+import { webhookRoutes } from "./routes/webhook.js";
 
 export function createApp(context: ContainerContext): { app: Hono } {
 	const app = new Hono();
@@ -61,6 +62,9 @@ export function createApp(context: ContainerContext): { app: Hono } {
 
 	// ── Always-accessible endpoints (health, status, setup, unlock) ─────────
 	api.route("/", encryptionRoutes(context));
+
+	// ── Push-based webhook endpoints — bypass lock middleware, handle lock state themselves ──
+	api.route("/webhook", webhookRoutes(context));
 
 	// ── Lock middleware — blocks all data routes until unlocked ──────────────
 	api.use("*", async (c, next) => {
