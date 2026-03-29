@@ -1,5 +1,5 @@
 import { type RefObject, memo, useEffect, useRef } from "react";
-import type { Account, Folder, MessageSummary } from "../api";
+import type { Account, Folder, LabelSummary, MessageSummary } from "../api";
 import { isFlagged, isUnread } from "../utils";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { AlertCircleIcon, InboxEmptyIcon, PaperclipIcon, RefreshIcon, StarIcon } from "./Icons";
@@ -272,6 +272,9 @@ interface MessageListProps {
 	onBulkMove?: (folderId: number) => void;
 	onBulkArchive?: () => void;
 	folders?: Folder[];
+	/** Labels to suggest for intersection filtering — shown as clickable chips above the list */
+	suggestedLabels?: LabelSummary[];
+	onAddFilterLabel?: (id: number) => void;
 }
 
 export function MessageList({
@@ -299,6 +302,8 @@ export function MessageList({
 	onBulkArchive,
 	folders = [],
 	totalCount,
+	suggestedLabels,
+	onAddFilterLabel,
 }: MessageListProps) {
 	const selectedRef = useRef<HTMLButtonElement>(null);
 	const bulkCount = selectedIds?.size ?? 0;
@@ -401,6 +406,31 @@ export function MessageList({
 						folders={folders}
 					/>
 				)}
+
+			{/* Suggested filter labels — shown when there are co-occurring labels to narrow by.
+			    Click any chip to add it to the current view as an intersection filter. */}
+			{suggestedLabels && suggestedLabels.length > 0 && onAddFilterLabel && (
+				<div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center gap-1.5 flex-wrap">
+					<span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">Also view:</span>
+					{suggestedLabels.map((l) => (
+						<button
+							key={l.id}
+							type="button"
+							onClick={() => onAddFilterLabel(l.id)}
+							className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-stork-100 dark:hover:bg-stork-900 hover:text-stork-700 dark:hover:text-stork-300 transition-colors"
+							title={`Filter by ${l.name}`}
+						>
+							{l.color && (
+								<span
+									className="w-2 h-2 rounded-full flex-shrink-0"
+									style={{ backgroundColor: l.color }}
+								/>
+							)}
+							{l.name}
+						</button>
+					))}
+				</div>
+			)}
 
 			{/* Message list */}
 			{/* biome-ignore lint/a11y/useFocusableInteractive: keyboard navigation handled by app-level j/k shortcuts, not native focus */}

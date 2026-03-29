@@ -134,6 +134,22 @@ export function App() {
 	const inboxLabel = labels?.find((l) => l.name.toLowerCase() === "inbox") ?? null;
 	const inboxLabelId = inboxLabel?.id ?? null;
 
+	// Suggested intersection filters: labels that commonly co-occur with messages in the current view.
+	// Only fetched for real labels (positive ID) when not already multi-filtering.
+	// For the promoted "Inbox" virtual view, use the underlying inbox label ID.
+	const suggestForLabelId =
+		filterLabelIds.length === 0
+			? isInbox
+				? inboxLabelId
+				: effectiveLabelId && effectiveLabelId > 0
+					? effectiveLabelId
+					: null
+			: null;
+	const { data: relatedLabels } = useAsync(
+		() => (suggestForLabelId ? api.labels.related(suggestForLabelId, 5) : Promise.resolve(null)),
+		[suggestForLabelId],
+	);
+
 	// Fetch "All Mail" count for the sidebar badge
 	const { data: allMailCount, refetch: refetchAllMailCount } = useAsync(
 		() => (effectiveAccountId ? api.allMessages.count(effectiveAccountId) : Promise.resolve(null)),
@@ -879,6 +895,8 @@ export function App() {
 								onBulkMove={bulk.move}
 								onBulkArchive={!archiveDisabled ? bulk.archive : undefined}
 								folders={folders ?? []}
+								suggestedLabels={relatedLabels ?? undefined}
+								onAddFilterLabel={handleToggleFilterLabel}
 							/>
 						)}
 					</div>
