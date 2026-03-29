@@ -9,18 +9,36 @@ function buildRawEmail(
 		from?: string;
 		subject?: string;
 		messageId?: string;
+		noDate?: boolean;
+		html?: string;
+		references?: string;
+		noTo?: boolean;
 	} = {},
 ): string {
-	const lines = [
+	const lines: string[] = [
 		`From: ${opts.from ?? "sender@example.com"}`,
-		"To: recipient@example.com",
-		`Subject: ${opts.subject ?? "Test"}`,
-		`Message-ID: ${opts.messageId ?? `<test-${Date.now()}@example.com>`}`,
-		"Date: Mon, 01 Jan 2024 12:00:00 +0000",
-		"Content-Type: text/plain",
-		"",
-		"Hello, world!",
 	];
+	if (!opts.noTo) {
+		lines.push("To: recipient@example.com");
+	}
+	lines.push(`Subject: ${opts.subject ?? "Test"}`);
+	lines.push(`Message-ID: ${opts.messageId ?? `<test-${Date.now()}@example.com>`}`);
+	if (!opts.noDate) {
+		lines.push("Date: Mon, 01 Jan 2024 12:00:00 +0000");
+	}
+	if (opts.references) {
+		lines.push(`References: ${opts.references}`);
+	}
+	if (opts.html) {
+		lines.push("MIME-Version: 1.0");
+		lines.push("Content-Type: text/html; charset=utf-8");
+		lines.push("");
+		lines.push(opts.html);
+	} else {
+		lines.push("Content-Type: text/plain");
+		lines.push("");
+		lines.push("Hello, world!");
+	}
 	return Buffer.from(lines.join("\r\n")).toString("base64");
 }
 
@@ -482,5 +500,156 @@ describe("R2Poller", () => {
 		await expect(poller.pollNow(connId)).rejects.toThrow();
 		expect(errorCalls).toHaveLength(1);
 		expect(errorCalls[0].connectorId).toBe(connId);
+	});
+
+	test("R2 GET failure on object download causes poll to fail", async () => {
+		const connId = createR2Connector(db);
+		createAccount(db, connId);
+
+		makeFetchResponses([
+			{ body: buildListXml(["pending/msg.json"]) }, // LIST succeeds
+			{ body: "Access Denied", status: 403 }, // GET fails
+		]);
+
+		const poller = new R2Poller(db);
+		poller.loadConnectorsFromDb();
+
+		await expect(poller.pollNow(connId)).rejects.toThrow(/R2 get failed.*403/);
+	});
+
+	test("addConnector after start() triggers immediate poll", async () => {
+		const connId = createR2Connector(db);
+		createAccount(db, connId);
+
+		makeFetchResponses([{ body: buildListXml([]) }]); // empty bucket for immediate poll
+
+		const completedIds: number[] = [];
+		const poller = new R2Poller(db, {
+			defaultPollIntervalMs: 100_000, // won't fire in test
+			onPollComplete: (id) => completedIds.push(id),
+		});
+		poller.start(); // no connectors yet — just sets started=true
+
+		const row = db
+			.prepare(
+				`SELECT id, cf_r2_account_id, cf_r2_bucket_name,
+					cf_r2_access_key_id, cf_r2_secret_access_key,
+					cf_r2_prefix, cf_r2_poll_interval_ms
+				FROM inbound_connectors WHERE id = ?`,
+			)
+			.get(connId) as {
+			id: number;
+			cf_r2_account_id: string;
+			cf_r2_bucket_name: string;
+			cf_r2_access_key_id: string;
+			cf_r2_secret_access_key: string;
+			cf_r2_prefix: string;
+			cf_r2_poll_interval_ms: number | null;
+		};
+
+		poller.addConnector(row); // this.started=true → calls startConnectorPoll
+		expect(poller.getStatus().size).toBe(1);
+
+		// Wait for the fire-and-forget poll triggered by startConnectorPoll
+		await new Promise((r) => setTimeout(r, 50));
+		expect(completedIds).toContain(connId);
+
+		await poller.stop();
+	});
+
+	test("HTML email is stored with html_body populated", async () => {
+		const connId = createR2Connector(db);
+		createAccount(db, connId);
+
+		const raw = buildRawEmail({
+			messageId: "<html-email@example.com>",
+			html: "<h1>Hello</h1><p>World</p>",
+		});
+		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw, rawSize: 200 });
+
+		makeFetchResponses([
+			{ body: buildListXml(["pending/html.json"]) },
+			{ body: payload },
+			{ body: "", status: 204 },
+		]);
+
+		const poller = new R2Poller(db);
+		poller.loadConnectorsFromDb();
+		await poller.pollNow(connId);
+
+		const msg = db.prepare("SELECT html_body FROM messages").get() as
+			| { html_body: string | null }
+			| undefined;
+		expect(msg?.html_body).toBeTruthy();
+	});
+
+	test("email without Date header uses current timestamp", async () => {
+		const connId = createR2Connector(db);
+		createAccount(db, connId);
+
+		const raw = buildRawEmail({ messageId: "<no-date@example.com>", noDate: true });
+		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw, rawSize: 50 });
+
+		makeFetchResponses([
+			{ body: buildListXml(["pending/no-date.json"]) },
+			{ body: payload },
+			{ body: "", status: 204 },
+		]);
+
+		const poller = new R2Poller(db);
+		poller.loadConnectorsFromDb();
+		const stored = await poller.pollNow(connId);
+		expect(stored).toBe(1);
+	});
+
+	test("email with References header stores refs in DB", async () => {
+		const connId = createR2Connector(db);
+		createAccount(db, connId);
+
+		const raw = buildRawEmail({
+			messageId: "<with-refs@example.com>",
+			references: "<prior-msg@example.com>",
+		});
+		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw, rawSize: 100 });
+
+		makeFetchResponses([
+			{ body: buildListXml(["pending/refs.json"]) },
+			{ body: payload },
+			{ body: "", status: 204 },
+		]);
+
+		const poller = new R2Poller(db);
+		poller.loadConnectorsFromDb();
+		const stored = await poller.pollNow(connId);
+		expect(stored).toBe(1);
+
+		const msg = db.prepare('SELECT "references" FROM messages').get() as
+			| { references: string | null }
+			| undefined;
+		expect(msg?.references).not.toBeNull();
+	});
+
+	test("email without To header stores null to_addresses", async () => {
+		const connId = createR2Connector(db);
+		createAccount(db, connId);
+
+		const raw = buildRawEmail({ messageId: "<no-to@example.com>", noTo: true });
+		const payload = JSON.stringify({ from: "a@b.com", to: "c@d.com", raw, rawSize: 50 });
+
+		makeFetchResponses([
+			{ body: buildListXml(["pending/no-to.json"]) },
+			{ body: payload },
+			{ body: "", status: 204 },
+		]);
+
+		const poller = new R2Poller(db);
+		poller.loadConnectorsFromDb();
+		const stored = await poller.pollNow(connId);
+		expect(stored).toBe(1);
+
+		const msg = db.prepare("SELECT to_addresses FROM messages").get() as
+			| { to_addresses: string | null }
+			| undefined;
+		expect(msg?.to_addresses).toBeNull();
 	});
 });
