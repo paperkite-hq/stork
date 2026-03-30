@@ -916,6 +916,7 @@ export function InboundConnectorsTab() {
 						{editingInbound === "new" ? "New Inbound Connector" : "Edit Inbound Connector"}
 					</h4>
 					<InboundConnectorForm
+						key={editingInbound}
 						initial={inboundEditing}
 						onSave={() => {
 							setEditingInbound(null);
@@ -1109,6 +1110,7 @@ export function OutboundConnectorsTab() {
 						{editingOutbound === "new" ? "New Outbound Connector" : "Edit Outbound Connector"}
 					</h4>
 					<OutboundConnectorForm
+						key={editingOutbound}
 						initial={outboundEditing}
 						onSave={() => {
 							setEditingOutbound(null);
