@@ -938,7 +938,9 @@ export function InboundConnectorsTab() {
 			<ul className="space-y-2">
 				{inbound?.map((c) => (
 					<Fragment key={c.id}>
-						<li className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+						<li
+							className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${editingInbound === c.id ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"}`}
+						>
 							<div className="min-w-0">
 								<div className="flex items-center gap-2">
 									<span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
@@ -1002,9 +1004,9 @@ export function InboundConnectorsTab() {
 												setEditingInbound(c.id);
 												setTestResult(null);
 											}}
-											className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+											className={`text-xs ${editingInbound === c.id ? "text-blue-800 dark:text-blue-300 font-medium" : "text-blue-600 dark:text-blue-400 hover:underline"}`}
 										>
-											Edit
+											{editingInbound === c.id ? "Editing" : "Edit"}
 										</button>
 										<button
 											type="button"
@@ -1138,7 +1140,7 @@ export function OutboundConnectorsTab() {
 					return (
 						<li
 							key={c.id}
-							className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden"
+							className={`rounded-lg border ${editingOutbound === c.id ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"} overflow-hidden`}
 						>
 							<div className="flex items-center justify-between gap-3 p-3">
 								<div className="min-w-0">
@@ -1195,9 +1197,9 @@ export function OutboundConnectorsTab() {
 													setEditingOutbound(c.id);
 													setTestResult(null);
 												}}
-												className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+												className={`text-xs ${editingOutbound === c.id ? "text-blue-800 dark:text-blue-300 font-medium" : "text-blue-600 dark:text-blue-400 hover:underline"}`}
 											>
-												Edit
+												{editingOutbound === c.id ? "Editing" : "Edit"}
 											</button>
 											<button
 												type="button"
