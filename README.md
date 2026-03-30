@@ -188,6 +188,4 @@ npm run lint   # Lint
 
 ## License
 
-AGPL-3.0 — see [LICENSE](LICENSE) for details.
-
-Paperkite Technologies LLC retains the right to offer Stork under alternative license terms (e.g., a commercial license for hosted deployments).
+AGPL-3.0 — see [LICENSE](LICENSE) for details. [Dual licensing](LICENSING.md) is available for commercial use.
