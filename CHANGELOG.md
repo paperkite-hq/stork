@@ -1,15 +1,20 @@
 # Changelog
 
-## Unreleased
+## v0.6.0 (2026-03-31)
 
-- **Accounts → Identities rename** — the "accounts" concept is now "identities" throughout. API endpoints moved from `/api/accounts` to `/api/identities`, `account_id` fields renamed to `identity_id`. Identities are pure name + email pairs that reference connectors. Trusted senders are now global (not per-identity). Label source type `"account"` renamed to `"identity"`.
-- **Cloudflare Email webhook endpoint** — `POST /api/webhook/cloudflare-email/:connectorId` receives push-based mail from a Cloudflare Email Worker, validates the bearer secret, parses the RFC 5322 payload, and stores it in the INBOX for all identities linked to the connector. Deduplication by Message-ID prevents double-delivery from Cloudflare's at-least-once semantics.
-- **Unified-first navigation** — the sidebar identity selector dropdown is removed. In multi-identity mode, the primary "Inbox", "Unread", and "All Mail" navigation items are now cross-identity by default (unified views). Identity labels in the sidebar let you drill into a single identity's messages. Single-identity mode is unchanged.
-- **Unified label store** — labels are now global across all identities rather than per-identity, so you can apply labels like "Needs reply" consistently across a multi-identity setup. Schema migration merges any duplicate label names automatically on upgrade.
-- **Connector-first identity model** — identities are pure name + email pairs that reference independently-configured inbound and outbound connectors. IMAP settings and SMTP settings live in the Connectors tab, not in the identity form. This lets you mix connectors freely: e.g., receive via Cloudflare Email, send via AWS SES.
-- **Connector mode rename** — "Vault mode" is now "Connector mode" throughout the UI and docs. The name better reflects that this is a property of the inbound connector, not the identity.
-- **All Unread + All Mail** — the sidebar now includes All Unread and All Mail views in addition to All Inboxes, all spanning every connected identity.
-- **Onboarding philosophy callout** — restored the "Two minutes to understand how Stork thinks about email" intro on the add-email screen, updated with Connector mode language.
+Connector-first architecture — connectors and identities replace the old accounts model.
+
+- **Connector-first model** — the "accounts" concept is gone. Inbound connectors (IMAP, Cloudflare Email, Cloudflare R2) bring mail in; outbound connectors (SMTP, SES) send mail out. Identities are pure name + email pairs attached to outbound connectors. This lets you mix connectors freely: e.g., receive via Cloudflare Email, send via AWS SES. Database schema, API endpoints, and UI all reflect the new model.
+- **Cloudflare R2 queue connector** — poll-based inbound connector that reads email from a Cloudflare R2 bucket, useful for high-volume or batched ingestion workflows.
+- **Cloudflare Email webhook** — `POST /api/webhook/cloudflare-email/:connectorId` receives push-based mail from a Cloudflare Email Worker with bearer auth and Message-ID deduplication.
+- **Connector mode** — renamed from "Vault mode." The name better reflects that this is a property of the inbound connector: after syncing, remove messages from the source. The onboarding screen explains the philosophy before you flip the switch.
+- **Unified-first navigation** — Inbox, Unread, and All Mail views are cross-identity by default. Identity labels in the sidebar let you drill into a single identity's messages.
+- **Unified label store** — labels are global across all identities, so you can apply labels like "Needs reply" consistently across a multi-identity setup.
+- **Guided setup wizard** — step-by-step flow for adding your first email, replacing the old form-heavy settings page.
+- **Onboarding philosophy callout** — "Two minutes to understand how Stork thinks about email" intro on the add-email screen, updated with Connector mode language.
+- **Dual-license clause moved** — commercial licensing terms moved from README to dedicated LICENSING.md. README license section is now clean open source.
+- **Security fixes** — upgraded nodemailer to v8.0.4 (SMTP injection), patched happy-dom and picomatch (high-severity frontend vulns).
+- **Error batching** — repeated sync errors are now summarized after 3 consecutive identical messages instead of logging each one individually.
 
 ## v0.5.0 (2026-03-26)
 
