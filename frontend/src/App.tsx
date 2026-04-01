@@ -49,9 +49,12 @@ export function App() {
 			.catch(() => setContainerState("unlocked")); // server error — let data routes surface it
 	}, []);
 
-	// Listen for 423 responses — container restarted and is now locked
+	// Listen for 423 responses — container restarted and is now locked (or in setup)
 	useEffect(() => {
-		const handler = () => setContainerState("locked");
+		const handler = (e: Event) => {
+			const state = (e as CustomEvent<{ state: string }>).detail?.state;
+			setContainerState(state === "setup" ? "setup" : "locked");
+		};
 		window.addEventListener("stork-container-locked", handler);
 		return () => window.removeEventListener("stork-container-locked", handler);
 	}, []);
@@ -88,7 +91,10 @@ export function App() {
 	const effectiveIdentityId = selectedIdentityId ?? identities?.[0]?.id ?? null;
 
 	// Labels are global — not per-identity
-	const { data: labels, refetch: refetchLabels } = useAsync(() => api.labels.list(), []);
+	const { data: labels, refetch: refetchLabels } = useAsync(
+		() => (containerState === "unlocked" ? api.labels.list() : Promise.resolve(null)),
+		[containerState],
+	);
 
 	// Fetch all folders (needed for move-to-folder in MessageDetail)
 	const { data: folders } = useAsync(
