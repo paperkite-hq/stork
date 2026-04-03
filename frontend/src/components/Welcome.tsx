@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { type CreateInboundConnectorRequest, api } from "../api";
 import { WELL_KNOWN_PROVIDERS } from "../utils";
 import { MoonIcon, SunIcon } from "./Icons";
@@ -12,7 +12,6 @@ interface WelcomeProps {
 type ConnectorType = "imap" | "cloudflare-r2";
 
 interface ImapFormData {
-	email: string;
 	imap_host: string;
 	imap_port: number;
 	imap_tls: number;
@@ -21,7 +20,6 @@ interface ImapFormData {
 }
 
 interface R2FormData {
-	email: string;
 	cf_r2_account_id: string;
 	cf_r2_bucket_name: string;
 	cf_r2_access_key_id: string;
@@ -33,7 +31,6 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 	const [connectorType, setConnectorType] = useState<ConnectorType>("imap");
 
 	const [imap, setImap] = useState<ImapFormData>({
-		email: "",
 		imap_host: "",
 		imap_port: 993,
 		imap_tls: 1,
@@ -42,7 +39,6 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 	});
 
 	const [r2, setR2] = useState<R2FormData>({
-		email: "",
 		cf_r2_account_id: "",
 		cf_r2_bucket_name: "",
 		cf_r2_access_key_id: "",
@@ -52,36 +48,20 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	// Auto-fill IMAP server settings when email domain is recognized.
-	// imap_user stays in sync with email unless manually customized.
-	const handleImapEmailChange = (email: string) => {
-		const domain = email.split("@")[1]?.toLowerCase();
+	// Auto-fill IMAP server settings when username looks like an email address.
+	const handleImapUserChange = (username: string) => {
+		const domain = username.split("@")[1]?.toLowerCase();
 		if (domain && WELL_KNOWN_PROVIDERS[domain]) {
 			const provider = WELL_KNOWN_PROVIDERS[domain];
 			setImap((f) => ({
 				...f,
-				email,
+				imap_user: username,
 				imap_host: f.imap_host || provider.imap_host,
-				imap_user: !f.imap_user || f.imap_user === f.email ? email : f.imap_user,
 			}));
 		} else {
-			setImap((f) => ({
-				...f,
-				email,
-				imap_user: !f.imap_user || f.imap_user === f.email ? email : f.imap_user,
-			}));
+			setImap((f) => ({ ...f, imap_user: username }));
 		}
 	};
-
-	// Auto-fill R2 email field.
-	const handleR2EmailChange = (email: string) => setR2((f) => ({ ...f, email }));
-
-	// Derive display name from email local part for identity creation.
-	function nameFromEmail(email: string): string {
-		const local = email.split("@")[0];
-		if (!local) return email;
-		return local.replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-	}
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -89,14 +69,11 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 		setError(null);
 
 		try {
-			const email = connectorType === "imap" ? imap.email : r2.email;
-			const name = nameFromEmail(email);
-
 			// Build connector request
 			let connectorReq: CreateInboundConnectorRequest;
 			if (connectorType === "imap") {
 				connectorReq = {
-					name: imap.imap_user || imap.email,
+					name: imap.imap_user || imap.imap_host,
 					type: "imap",
 					imap_host: imap.imap_host,
 					imap_port: imap.imap_port,
@@ -117,8 +94,19 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 				};
 			}
 
-			await api.connectors.inbound.create(connectorReq);
-			await api.identities.create({ name, email });
+			const connector = await api.connectors.inbound.create(connectorReq);
+
+			// Test the connection before closing the wizard
+			const result = await api.connectors.inbound.test(connector.id);
+			if (!result.ok) {
+				// Connection failed — delete the connector and show the error
+				await api.connectors.inbound.delete(connector.id);
+				setError(
+					result.error || "Could not connect — please check your credentials and try again.",
+				);
+				return;
+			}
+
 			onSetupComplete();
 		} catch (err) {
 			setError((err as Error).message);
@@ -157,8 +145,8 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 						Welcome to Stork
 					</h1>
 					<p className="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
-						Stork connects to your existing mail server and stores your messages locally — encrypted
-						and fully under your control. No new server required.
+						Your email, stored locally in an encrypted database — fully under your control. Connect
+						any email source, search everything instantly.
 					</p>
 					<button
 						type="button"
@@ -172,10 +160,10 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 				<div className="w-full max-w-lg animate-fadeIn">
 					<div className="mb-6 text-center">
 						<h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-							Connect Your Email
+							Add a Connector
 						</h2>
 						<p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-							How should Stork receive your email?
+							Where should Stork pull your email from?
 						</p>
 					</div>
 
@@ -216,9 +204,9 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 						)}
 
 						{connectorType === "imap" ? (
-							<ImapForm data={imap} onChange={setImap} onEmailChange={handleImapEmailChange} />
+							<ImapForm data={imap} onChange={setImap} onUserChange={handleImapUserChange} />
 						) : (
-							<R2Form data={r2} onChange={setR2} onEmailChange={handleR2EmailChange} />
+							<R2Form data={r2} onChange={setR2} />
 						)}
 
 						{/* Actions */}
@@ -235,13 +223,13 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 								disabled={loading}
 								className="px-5 py-2 bg-stork-600 hover:bg-stork-700 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-colors"
 							>
-								{loading ? "Connecting..." : "Connect Email"}
+								{loading ? "Testing connection..." : "Connect"}
 							</button>
 						</div>
 
 						<p className="text-xs text-gray-400 dark:text-gray-500 text-center">
 							Credentials are stored encrypted in your local database. Stork never sends your data
-							to any third party. Outgoing mail can be configured in Settings when you're ready.
+							to any third party.
 						</p>
 					</form>
 				</div>
@@ -255,75 +243,55 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 function ImapForm({
 	data,
 	onChange,
-	onEmailChange,
+	onUserChange,
 }: {
 	data: ImapFormData;
 	onChange: (d: ImapFormData) => void;
-	onEmailChange: (email: string) => void;
+	onUserChange: (username: string) => void;
 }) {
-	// Sync imap_user with email when user hasn't customized it
-	useEffect(() => {
-		// no-op: sync is handled in onEmailChange
-	}, []);
-
 	return (
 		<div className="space-y-3">
 			<Field
-				label="Email Address"
-				value={data.email}
-				onChange={onEmailChange}
+				label="Username"
+				value={data.imap_user}
+				onChange={onUserChange}
 				placeholder="you@example.com"
-				type="email"
 				required
 				autoFocus
 			/>
-			<fieldset className="space-y-3">
-				<legend className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-					Incoming Mail (IMAP)
-				</legend>
-				<div className="grid grid-cols-3 gap-3">
-					<div className="col-span-2">
-						<Field
-							label="Server"
-							value={data.imap_host}
-							onChange={(v) => onChange({ ...data, imap_host: v })}
-							placeholder="imap.example.com"
-							required
-						/>
-					</div>
+			<div className="grid grid-cols-3 gap-3">
+				<div className="col-span-2">
 					<Field
-						label="Port"
-						value={String(data.imap_port)}
-						onChange={(v) => onChange({ ...data, imap_port: Number(v) || 993 })}
-						type="number"
-					/>
-				</div>
-				<div className="grid grid-cols-2 gap-3">
-					<Field
-						label="Username"
-						value={data.imap_user}
-						onChange={(v) => onChange({ ...data, imap_user: v })}
-						placeholder="you@example.com"
-						required
-					/>
-					<Field
-						label="Password"
-						value={data.imap_pass}
-						onChange={(v) => onChange({ ...data, imap_pass: v })}
-						type="password"
+						label="Server"
+						value={data.imap_host}
+						onChange={(v) => onChange({ ...data, imap_host: v })}
+						placeholder="imap.example.com"
 						required
 					/>
 				</div>
-				<label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-					<input
-						type="checkbox"
-						checked={data.imap_tls === 1}
-						onChange={(e) => onChange({ ...data, imap_tls: e.target.checked ? 1 : 0 })}
-						className="rounded border-gray-300 dark:border-gray-600"
-					/>
-					Use TLS (recommended)
-				</label>
-			</fieldset>
+				<Field
+					label="Port"
+					value={String(data.imap_port)}
+					onChange={(v) => onChange({ ...data, imap_port: Number(v) || 993 })}
+					type="number"
+				/>
+			</div>
+			<Field
+				label="Password"
+				value={data.imap_pass}
+				onChange={(v) => onChange({ ...data, imap_pass: v })}
+				type="password"
+				required
+			/>
+			<label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+				<input
+					type="checkbox"
+					checked={data.imap_tls === 1}
+					onChange={(e) => onChange({ ...data, imap_tls: e.target.checked ? 1 : 0 })}
+					className="rounded border-gray-300 dark:border-gray-600"
+				/>
+				Use TLS (recommended)
+			</label>
 		</div>
 	);
 }
@@ -333,23 +301,12 @@ function ImapForm({
 function R2Form({
 	data,
 	onChange,
-	onEmailChange,
 }: {
 	data: R2FormData;
 	onChange: (d: R2FormData) => void;
-	onEmailChange: (email: string) => void;
 }) {
 	return (
 		<div className="space-y-3">
-			<Field
-				label="Email Address"
-				value={data.email}
-				onChange={onEmailChange}
-				placeholder="you@example.com"
-				type="email"
-				required
-				autoFocus
-			/>
 			<div className="text-xs text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded px-3 py-2 space-y-1">
 				<p className="font-medium">Cloudflare R2 queue/poll model</p>
 				<p>
@@ -357,42 +314,38 @@ function R2Form({
 					polls the bucket on a regular interval — no public webhook required.
 				</p>
 			</div>
-			<fieldset className="space-y-3">
-				<legend className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-					Cloudflare R2
-				</legend>
+			<Field
+				label="Account ID"
+				value={data.cf_r2_account_id}
+				onChange={(v) => onChange({ ...data, cf_r2_account_id: v })}
+				placeholder="Cloudflare Account ID"
+				required
+				autoFocus
+			/>
+			<Field
+				label="Bucket Name"
+				value={data.cf_r2_bucket_name}
+				onChange={(v) => onChange({ ...data, cf_r2_bucket_name: v })}
+				placeholder="my-email-bucket"
+				required
+			/>
+			<div className="grid grid-cols-2 gap-3">
 				<Field
-					label="Account ID"
-					value={data.cf_r2_account_id}
-					onChange={(v) => onChange({ ...data, cf_r2_account_id: v })}
-					placeholder="Cloudflare Account ID"
+					label="Access Key ID"
+					value={data.cf_r2_access_key_id}
+					onChange={(v) => onChange({ ...data, cf_r2_access_key_id: v })}
+					placeholder="Access Key ID"
 					required
 				/>
 				<Field
-					label="Bucket Name"
-					value={data.cf_r2_bucket_name}
-					onChange={(v) => onChange({ ...data, cf_r2_bucket_name: v })}
-					placeholder="my-email-bucket"
+					label="Secret Access Key"
+					value={data.cf_r2_secret_access_key}
+					onChange={(v) => onChange({ ...data, cf_r2_secret_access_key: v })}
+					type="password"
+					placeholder="Secret Key"
 					required
 				/>
-				<div className="grid grid-cols-2 gap-3">
-					<Field
-						label="Access Key ID"
-						value={data.cf_r2_access_key_id}
-						onChange={(v) => onChange({ ...data, cf_r2_access_key_id: v })}
-						placeholder="Access Key ID"
-						required
-					/>
-					<Field
-						label="Secret Access Key"
-						value={data.cf_r2_secret_access_key}
-						onChange={(v) => onChange({ ...data, cf_r2_secret_access_key: v })}
-						type="password"
-						placeholder="Secret Key"
-						required
-					/>
-				</div>
-			</fieldset>
+			</div>
 		</div>
 	);
 }
