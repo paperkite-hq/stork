@@ -298,3 +298,4 @@ The response includes sync scheduler status for IMAP identities:
 3. **UIDs must be monotonically increasing** within a folder for incremental sync to work.
 4. **Return meaningful errors** from `verify()` and `connect()` — they surface in the health check API.
 5. **Support graceful shutdown** — `disconnect()` should clean up all resources even if a sync is in progress.
+6. **Required capabilities must be in the interface.** If a connector capability is required for correct email processing (e.g., attachment extraction, full message body), it MUST appear as a required (non-optional) field in `RawMessage` or a required method in the interface. Using optional fields or boolean flags (e.g., `hasAttachments?: boolean`) for data that must always be present creates silent gaps — the system silently loses information rather than failing at compile time. When in doubt: if omitting something breaks the product, make it required.
