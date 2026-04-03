@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
 import { ImapIngestConnector } from "../../connectors/imap.js";
+import { decompressMessageRow } from "../../storage/compression.js";
 import { parseIntParam } from "../validation.js";
 
 interface ImapConnectorInfo {
@@ -50,7 +51,7 @@ export function messageRoutes(
 			.get(messageId);
 
 		if (!message) return c.json({ error: "Message not found" }, 404);
-		return c.json(message);
+		return c.json(decompressMessageRow(message as Record<string, unknown>));
 	});
 
 	api.get("/:messageId/thread", (c) => {
@@ -100,7 +101,7 @@ export function messageRoutes(
 					"SELECT m.*, f.path as folder_path, f.name as folder_name FROM messages m JOIN folders f ON f.id = m.folder_id WHERE m.id = ?",
 				)
 				.get(messageId);
-			return c.json(single ? [single] : []);
+			return c.json(single ? [decompressMessageRow(single as Record<string, unknown>)] : []);
 		}
 
 		const placeholders = [...threadIds].map(() => "?").join(",");
@@ -117,7 +118,7 @@ export function messageRoutes(
 			`)
 			.all(message.inbound_connector_id, ...[...threadIds], ...[...threadIds], messageId);
 
-		return c.json(thread);
+		return c.json((thread as Record<string, unknown>[]).map(decompressMessageRow));
 	});
 
 	api.patch("/:messageId/flags", async (c) => {

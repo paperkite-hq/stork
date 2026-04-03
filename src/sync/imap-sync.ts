@@ -2,6 +2,7 @@ import type Database from "better-sqlite3-multiple-ciphers";
 import { ImapFlow } from "imapflow";
 import { type Attachment, type ParsedMail, simpleParser } from "mailparser";
 import { upsertAttachmentBlob } from "../storage/attachment-storage.js";
+import { compressText } from "../storage/compression.js";
 
 export interface ImapConfig {
 	host: string;
@@ -823,11 +824,11 @@ export class ImapSync {
 								? envelope.date
 								: null,
 						typeof parsed.text === "string" ? parsed.text : null,
-						typeof parsed.html === "string" ? parsed.html : null,
+						typeof parsed.html === "string" ? compressText(parsed.html) : null,
 						Array.from(message.flags ?? new Set()).join(","),
 						typeof message.size === "number" ? message.size : null,
 						parsed.attachments.length > 0 ? 1 : 0,
-						formatHeaders(parsed),
+						compressText(formatHeaders(parsed)),
 					);
 
 					// Extract and store attachments

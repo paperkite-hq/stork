@@ -546,7 +546,7 @@ describe("R2Poller", () => {
 		await poller.pollNow(connId);
 
 		const msg = db.prepare("SELECT html_body FROM messages").get() as
-			| { html_body: string | null }
+			| { html_body: Buffer | string | null }
 			| undefined;
 		expect(msg?.html_body).toBeTruthy();
 	});

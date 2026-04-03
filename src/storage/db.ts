@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import { deflateSync } from "node:zlib";
 import Database from "better-sqlite3-multiple-ciphers";
 import { MIGRATIONS, SCHEMA_VERSION } from "./schema.js";
 
@@ -60,7 +61,8 @@ export function ensureSchema(db: Database.Database): void {
  */
 const PRE_MIGRATION_HOOKS: Record<number, (db: Database.Database) => void> = {
 	// v21: Hash existing inline attachment data into attachment_blobs before the
-	// SQL migration drops the data column from attachments.
+	// SQL migration drops the data column from attachments.  Note: array index
+	// aligns with target schema version (1-indexed).
 	21: (db) => {
 		const rows = db
 			.prepare("SELECT id, data FROM attachments WHERE data IS NOT NULL AND content_hash IS NULL")
@@ -74,6 +76,68 @@ const PRE_MIGRATION_HOOKS: Record<number, (db: Database.Database) => void> = {
 			const hash = createHash("sha256").update(row.data).digest("hex");
 			insertBlob.run(hash, row.data);
 			setHash.run(hash, row.id);
+		}
+	},
+
+	// v23: Batch-compress existing html_body, raw_headers, and attachment blobs.
+	23: (db) => {
+		const BATCH_SIZE = 500;
+		const compressOpts = { level: 6 };
+
+		// Compress html_body — only rows where it's a non-null TEXT (typeof string)
+		const htmlRows = db
+			.prepare("SELECT id, html_body FROM messages WHERE html_body IS NOT NULL")
+			.all() as Array<{ id: number; html_body: string | Buffer }>;
+		if (htmlRows.length > 0) {
+			const updateHtml = db.prepare("UPDATE messages SET html_body = ? WHERE id = ?");
+			const htmlTxn = db.transaction((batch: typeof htmlRows) => {
+				for (const row of batch) {
+					if (typeof row.html_body !== "string") continue; // already compressed
+					updateHtml.run(deflateSync(Buffer.from(row.html_body, "utf-8"), compressOpts), row.id);
+				}
+			});
+			for (let i = 0; i < htmlRows.length; i += BATCH_SIZE) {
+				htmlTxn(htmlRows.slice(i, i + BATCH_SIZE));
+			}
+		}
+
+		// Compress raw_headers
+		const headerRows = db
+			.prepare("SELECT id, raw_headers FROM messages WHERE raw_headers IS NOT NULL")
+			.all() as Array<{ id: number; raw_headers: string | Buffer }>;
+		if (headerRows.length > 0) {
+			const updateHeaders = db.prepare("UPDATE messages SET raw_headers = ? WHERE id = ?");
+			const headerTxn = db.transaction((batch: typeof headerRows) => {
+				for (const row of batch) {
+					if (typeof row.raw_headers !== "string") continue;
+					updateHeaders.run(
+						deflateSync(Buffer.from(row.raw_headers, "utf-8"), compressOpts),
+						row.id,
+					);
+				}
+			});
+			for (let i = 0; i < headerRows.length; i += BATCH_SIZE) {
+				headerTxn(headerRows.slice(i, i + BATCH_SIZE));
+			}
+		}
+
+		// Compress attachment blobs
+		const blobRows = db.prepare("SELECT content_hash, data FROM attachment_blobs").all() as Array<{
+			content_hash: string;
+			data: Buffer;
+		}>;
+		if (blobRows.length > 0) {
+			const updateBlob = db.prepare("UPDATE attachment_blobs SET data = ? WHERE content_hash = ?");
+			const blobTxn = db.transaction((batch: typeof blobRows) => {
+				for (const row of batch) {
+					// Skip if already compressed (starts with zlib header 0x78)
+					if (row.data.length >= 2 && row.data[0] === 0x78) continue;
+					updateBlob.run(deflateSync(row.data, compressOpts), row.content_hash);
+				}
+			});
+			for (let i = 0; i < blobRows.length; i += BATCH_SIZE) {
+				blobTxn(blobRows.slice(i, i + BATCH_SIZE));
+			}
 		}
 	},
 };

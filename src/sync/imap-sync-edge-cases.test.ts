@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { decompressBuffer, decompressText } from "../storage/compression.js";
 import {
 	MockImapServer,
 	type MockMailbox,
@@ -228,7 +229,7 @@ describe("IMAP sync edge cases", () => {
 
 		expect(msg.subject).toBe("HTML Newsletter");
 		expect(msg.text_body).toContain("Plain text fallback");
-		expect(msg.html_body).toContain("<h1>Welcome</h1>");
+		expect(decompressText(msg.html_body)).toContain("<h1>Welcome</h1>");
 
 		await sync.disconnect();
 	});
@@ -872,6 +873,6 @@ describe("IMAP sync edge cases", () => {
 		expect(att.filename).toBe("document.txt");
 		expect(att.content_type).toBe("text/plain");
 		expect(att.size).toBeGreaterThan(0);
-		expect(Buffer.from(att.data).toString()).toBe(attachmentData.toString());
+		expect(decompressBuffer(Buffer.from(att.data))?.toString()).toBe(attachmentData.toString());
 	});
 });

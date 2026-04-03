@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
+import { decompressBuffer } from "../../storage/compression.js";
 import { parseIntParam } from "../validation.js";
 
 export function attachmentRoutes(getDb: () => Database.Database): Hono {
@@ -32,7 +33,8 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 		const contentDisposition = hasNonAscii
 			? `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(rawName)}`
 			: `attachment; filename="${safeName}"`;
-		return new Response(attachment.data ? new Uint8Array(attachment.data) : null, {
+		const data = decompressBuffer(attachment.data);
+		return new Response(data ? new Uint8Array(data) : null, {
 			headers: {
 				"Content-Type": contentType,
 				"Content-Disposition": contentDisposition,
@@ -58,7 +60,8 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 		if (!attachment) return c.json({ error: "Attachment not found" }, 404);
 
 		const contentType = attachment.content_type ?? "application/octet-stream";
-		return new Response(attachment.data ? new Uint8Array(attachment.data) : null, {
+		const data = decompressBuffer(attachment.data);
+		return new Response(data ? new Uint8Array(data) : null, {
 			headers: {
 				"Content-Type": contentType,
 				"Cache-Control": "private, max-age=86400",

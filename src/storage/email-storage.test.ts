@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { describe, expect, test } from "vitest";
 import { createTestDb } from "../test-helpers/test-db.js";
+import { decompressText } from "./compression.js";
 import { storeInboundEmail } from "./email-storage.js";
 
 /** Build a minimal RFC 5322 message and return it as base64 */
@@ -275,9 +276,9 @@ describe("storeInboundEmail", () => {
 		expect(result.stored).toBe(1);
 
 		const msg = db.prepare("SELECT html_body FROM messages LIMIT 1").get() as {
-			html_body: string | null;
+			html_body: Buffer | string | null;
 		};
-		expect(msg.html_body).toContain("<h1>Hello</h1>");
+		expect(decompressText(msg.html_body)).toContain("<h1>Hello</h1>");
 	});
 
 	test("stores email with attachment (has_attachments = 1)", async () => {

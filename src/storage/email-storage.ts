@@ -10,6 +10,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { simpleParser } from "mailparser";
 import { upsertAttachmentBlob } from "./attachment-storage.js";
+import { compressText } from "./compression.js";
 
 export interface InboundEmailPayload {
 	/** Envelope sender (fallback if From header is absent) */
@@ -119,7 +120,7 @@ export async function storeInboundEmail(
 		ccAddrs.length > 0 ? JSON.stringify(ccAddrs) : null,
 		parsed.date ? parsed.date.toISOString() : new Date().toISOString(),
 		parsed.text ?? null,
-		typeof parsed.html === "string" ? parsed.html : null,
+		typeof parsed.html === "string" ? compressText(parsed.html) : null,
 		payload.rawSize ?? 0,
 		(parsed.attachments?.length ?? 0) > 0 ? 1 : 0,
 	);

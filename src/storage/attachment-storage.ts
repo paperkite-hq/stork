@@ -8,6 +8,7 @@
 
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3-multiple-ciphers";
+import { compressBuffer } from "./compression.js";
 
 /**
  * Inserts attachment content into attachment_blobs if not already present,
@@ -15,9 +16,10 @@ import type Database from "better-sqlite3-multiple-ciphers";
  */
 export function upsertAttachmentBlob(db: Database.Database, data: Buffer): string {
 	const hash = createHash("sha256").update(data).digest("hex");
+	const compressed = compressBuffer(data) ?? data;
 	db.prepare("INSERT OR IGNORE INTO attachment_blobs (content_hash, data) VALUES (?, ?)").run(
 		hash,
-		data,
+		compressed,
 	);
 	return hash;
 }

@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 21;
+export const SCHEMA_VERSION = 23;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -1063,4 +1063,27 @@ ALTER TABLE identities_v22 RENAME TO identities;
 COMMIT;
 PRAGMA foreign_keys = ON;
 `,
+	// Version 23: Compress html_body, raw_headers, and attachment blob data.
+	//
+	// Emails contain a lot of text that compresses very well. HTML bodies and raw
+	// headers are often 5-10x larger than the information they carry. Compressing
+	// these fields at the application level (zlib deflate) typically reduces the
+	// messages table size by 50-70%.
+	//
+	// What is compressed:
+	//   - messages.html_body: HTML email bodies (not in FTS5 index)
+	//   - messages.raw_headers: full raw MIME headers (not searched)
+	//   - attachment_blobs.data: binary attachment content
+	//
+	// What is NOT compressed:
+	//   - messages.text_body: indexed by FTS5 via content=messages triggers.
+	//     Compressing it would break full-text search.
+	//
+	// SQLite is dynamically typed, so TEXT columns can hold BLOBs. The application
+	// layer detects the type on read: strings pass through (legacy uncompressed),
+	// Buffers are inflated (compressed). No schema DDL changes needed — the
+	// pre-migration JS hook batch-compresses existing data in place.
+	//
+	// This is a no-op SQL migration; all work happens in PRE_MIGRATION_HOOKS[23].
+	"SELECT 1",
 ];
