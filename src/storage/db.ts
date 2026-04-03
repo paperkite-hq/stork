@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { deflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
 import Database from "better-sqlite3-multiple-ciphers";
+import { htmlToText } from "./html-to-text.js";
 import { MIGRATIONS, SCHEMA_VERSION } from "./schema.js";
 
 const DATA_DIR = process.env.STORK_DATA_DIR || "./data";
@@ -138,6 +139,40 @@ const PRE_MIGRATION_HOOKS: Record<number, (db: Database.Database) => void> = {
 			for (let i = 0; i < blobRows.length; i += BATCH_SIZE) {
 				blobTxn(blobRows.slice(i, i + BATCH_SIZE));
 			}
+		}
+	},
+
+	// v24: Backfill text_body for HTML-only messages (html_body present, text_body NULL).
+	// Decompresses html_body, strips HTML to plain text, and stores in text_body for FTS5 indexing.
+	24: (db) => {
+		const BATCH_SIZE = 500;
+
+		const rows = db
+			.prepare(
+				"SELECT id, html_body FROM messages WHERE text_body IS NULL AND html_body IS NOT NULL",
+			)
+			.all() as Array<{ id: number; html_body: string | Buffer }>;
+
+		if (rows.length === 0) return;
+
+		const updateText = db.prepare("UPDATE messages SET text_body = ? WHERE id = ?");
+
+		const txn = db.transaction((batch: typeof rows) => {
+			for (const row of batch) {
+				// Decompress html_body if it's a Buffer (compressed), otherwise use string directly
+				const html =
+					typeof row.html_body === "string"
+						? row.html_body
+						: inflateSync(row.html_body).toString("utf-8");
+				const text = htmlToText(html);
+				if (text) {
+					updateText.run(text, row.id);
+				}
+			}
+		});
+
+		for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+			txn(rows.slice(i, i + BATCH_SIZE));
 		}
 	},
 };

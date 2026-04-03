@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 23;
+export const SCHEMA_VERSION = 24;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -1085,5 +1085,17 @@ PRAGMA foreign_keys = ON;
 	// pre-migration JS hook batch-compresses existing data in place.
 	//
 	// This is a no-op SQL migration; all work happens in PRE_MIGRATION_HOOKS[23].
+	"SELECT 1",
+
+	// Version 24: Backfill text_body for HTML-only messages.
+	//
+	// Emails with only an HTML body (no plain-text MIME part) had text_body = NULL,
+	// making them invisible to FTS5 search. This migration extracts searchable
+	// plain text from html_body for those messages.
+	//
+	// Going forward, the write paths (imap-sync, email-storage, send) use
+	// htmlToText() as a fallback when parsed.text is absent.
+	//
+	// No-op SQL — the pre-migration hook does the work.
 	"SELECT 1",
 ];

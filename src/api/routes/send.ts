@@ -5,6 +5,7 @@ import { SmtpSendConnector } from "../../connectors/smtp.js";
 import type { OutgoingAttachment } from "../../connectors/types.js";
 import { upsertAttachmentBlob } from "../../storage/attachment-storage.js";
 import { compressText } from "../../storage/compression.js";
+import { htmlToText } from "../../storage/html-to-text.js";
 
 interface IdentitySendRow {
 	id: number;
@@ -162,7 +163,7 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 					JSON.stringify(to),
 					cc ? JSON.stringify(cc) : null,
 					bcc ? JSON.stringify(bcc) : null,
-					text_body ?? null,
+					text_body ?? htmlToText(html_body ?? null),
 					compressText(html_body ?? null),
 					(text_body ?? "").length + (html_body ?? "").length,
 					attachments ? 1 : 0,
