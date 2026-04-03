@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 20;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -958,5 +958,29 @@ DROP TABLE identities_v19_temp;
 
 COMMIT;
 PRAGMA foreign_keys = ON;
+`,
+	// Version 20: Hash-based attachment de-duplication.
+	//
+	// The same file is frequently attached to multiple messages (e.g. a logo attached
+	// to every newsletter, or a PDF sent in a thread). Previously each attachment was
+	// stored as an independent BLOB row — N copies of the same bytes for N messages.
+	//
+	// This migration introduces content-addressable attachment storage:
+	//   - attachment_blobs: stores each unique file exactly once, keyed by SHA-256 hash.
+	//   - attachments.content_hash: FK into attachment_blobs. When set, the actual bytes
+	//     are read from attachment_blobs instead of attachments.data.
+	//
+	// Backward-compatibility: existing rows keep their data in attachments.data (not NULL).
+	// The read path falls back to attachments.data when content_hash IS NULL. Going forward,
+	// new attachment writes set content_hash and leave data NULL, saving one copy per dupe.
+	`
+CREATE TABLE IF NOT EXISTS attachment_blobs (
+	content_hash TEXT PRIMARY KEY,
+	data BLOB NOT NULL
+);
+
+ALTER TABLE attachments ADD COLUMN content_hash TEXT REFERENCES attachment_blobs(content_hash);
+
+CREATE INDEX IF NOT EXISTS idx_attachments_content_hash ON attachments(content_hash);
 `,
 ];

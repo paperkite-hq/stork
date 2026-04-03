@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { ImapFlow } from "imapflow";
 import { type Attachment, type ParsedMail, simpleParser } from "mailparser";
+import { upsertAttachmentBlob } from "../storage/attachment-storage.js";
 
 export interface ImapConfig {
 	host: string;
@@ -743,7 +744,7 @@ export class ImapSync {
 		`);
 
 		const insertAttachment = this.db.prepare(`
-			INSERT INTO attachments (message_id, filename, content_type, size, content_id, data)
+			INSERT INTO attachments (message_id, filename, content_type, size, content_id, content_hash)
 			VALUES (?, ?, ?, ?, ?, ?)
 		`);
 
@@ -833,13 +834,15 @@ export class ImapSync {
 					if (dbResult.changes > 0 && parsed.attachments.length > 0) {
 						const messageId = dbResult.lastInsertRowid;
 						for (const att of parsed.attachments) {
+							const content = att.content ?? null;
+							const contentHash = content ? upsertAttachmentBlob(this.db, content) : null;
 							insertAttachment.run(
 								messageId,
 								att.filename ?? null,
 								toStringOrNull(att.contentType) ?? "application/octet-stream",
 								typeof att.size === "number" ? att.size : (att.content?.length ?? 0),
 								att.contentId ?? null,
-								att.content ?? null,
+								contentHash,
 							);
 							result.attachmentsSaved++;
 						}

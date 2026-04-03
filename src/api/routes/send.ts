@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { type SendConnectorType, createSendConnector } from "../../connectors/registry.js";
 import { SmtpSendConnector } from "../../connectors/smtp.js";
 import type { OutgoingAttachment } from "../../connectors/types.js";
+import { upsertAttachmentBlob } from "../../storage/attachment-storage.js";
 
 interface IdentitySendRow {
 	id: number;
@@ -171,16 +172,17 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 			// Save attachments if present
 			if (attachments && attachments.length > 0) {
 				const insertAttachment = db.prepare(
-					"INSERT INTO attachments (message_id, filename, content_type, size, data) VALUES (?, ?, ?, ?, ?)",
+					"INSERT INTO attachments (message_id, filename, content_type, size, content_hash) VALUES (?, ?, ?, ?, ?)",
 				);
 				for (const att of attachments) {
 					const buf = Buffer.from(att.content_base64, "base64");
+					const contentHash = upsertAttachmentBlob(db, buf);
 					insertAttachment.run(
 						Number(msgId.lastInsertRowid),
 						att.filename,
 						att.content_type,
 						buf.length,
-						buf,
+						contentHash,
 					);
 				}
 			}

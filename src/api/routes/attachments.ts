@@ -9,7 +9,12 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 		const attachmentId = parseIntParam(c, "attachmentId", c.req.param("attachmentId"));
 		if (attachmentId instanceof Response) return attachmentId;
 		const attachment = getDb()
-			.prepare("SELECT filename, content_type, data FROM attachments WHERE id = ?")
+			.prepare(
+				`SELECT a.filename, a.content_type, COALESCE(b.data, a.data) AS data
+				FROM attachments a
+				LEFT JOIN attachment_blobs b ON b.content_hash = a.content_hash
+				WHERE a.id = ?`,
+			)
 			.get(attachmentId) as
 			| { filename: string | null; content_type: string | null; data: Buffer | null }
 			| undefined;
@@ -41,7 +46,12 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 		if (messageId instanceof Response) return messageId;
 		const contentId = c.req.param("contentId");
 		const attachment = getDb()
-			.prepare("SELECT content_type, data FROM attachments WHERE message_id = ? AND content_id = ?")
+			.prepare(
+				`SELECT a.content_type, COALESCE(b.data, a.data) AS data
+				FROM attachments a
+				LEFT JOIN attachment_blobs b ON b.content_hash = a.content_hash
+				WHERE a.message_id = ? AND a.content_id = ?`,
+			)
 			.get(messageId, contentId) as
 			| { content_type: string | null; data: Buffer | null }
 			| undefined;

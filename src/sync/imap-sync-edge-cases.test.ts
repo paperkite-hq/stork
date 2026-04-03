@@ -859,7 +859,12 @@ describe("IMAP sync edge cases", () => {
 		expect(msg.has_attachments).toBe(1);
 
 		const att = db
-			.prepare("SELECT filename, content_type, size, data FROM attachments WHERE message_id = ?")
+			.prepare(
+				`SELECT a.filename, a.content_type, a.size, COALESCE(b.data, a.data) AS data
+				FROM attachments a
+				LEFT JOIN attachment_blobs b ON b.content_hash = a.content_hash
+				WHERE a.message_id = ?`,
+			)
 			.get(msg.id) as
 			| { filename: string; content_type: string; size: number; data: Buffer }
 			| undefined;
