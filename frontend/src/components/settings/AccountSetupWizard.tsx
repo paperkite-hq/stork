@@ -989,7 +989,7 @@ export function AccountSetupWizard({
 			aria-modal="true"
 			aria-label="Add Email Identity"
 		>
-			<div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6 flex flex-col min-h-[480px] max-h-[90vh] overflow-y-auto">
+			<div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6 flex flex-col h-[min(680px,90vh)]">
 				<div className="flex items-center justify-between mb-2">
 					<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
 						Add Email Identity
@@ -1006,43 +1006,45 @@ export function AccountSetupWizard({
 
 				<StepIndicator current={step} />
 
-				{step === 1 && (
-					<Step1
-						data={identity}
-						onChange={setIdentity}
-						onNext={() => setStep(2)}
-						onCancel={onCancel}
-					/>
-				)}
-				{step === 2 && (
-					<Step2
-						data={inbound}
-						existingConnectors={existingInbound}
-						onChange={setInbound}
-						onNext={() => setStep(3)}
-						onBack={() => setStep(1)}
-					/>
-				)}
-				{step === 3 && (
-					<Step3
-						data={outbound}
-						existingConnectors={existingOutbound}
-						onChange={setOutbound}
-						onNext={() => setStep(4)}
-						onBack={() => setStep(2)}
-					/>
-				)}
-				{step === 4 && (
-					<Step4
-						identity={identity}
-						inbound={inbound}
-						outbound={outbound}
-						existingInbound={existingInbound}
-						existingOutbound={existingOutbound}
-						onBack={() => setStep(3)}
-						onDone={onDone}
-					/>
-				)}
+				<div className="flex-1 overflow-y-auto min-h-0">
+					{step === 1 && (
+						<Step1
+							data={identity}
+							onChange={setIdentity}
+							onNext={() => setStep(2)}
+							onCancel={onCancel}
+						/>
+					)}
+					{step === 2 && (
+						<Step2
+							data={inbound}
+							existingConnectors={existingInbound}
+							onChange={setInbound}
+							onNext={() => setStep(3)}
+							onBack={() => setStep(1)}
+						/>
+					)}
+					{step === 3 && (
+						<Step3
+							data={outbound}
+							existingConnectors={existingOutbound}
+							onChange={setOutbound}
+							onNext={() => setStep(4)}
+							onBack={() => setStep(2)}
+						/>
+					)}
+					{step === 4 && (
+						<Step4
+							identity={identity}
+							inbound={inbound}
+							outbound={outbound}
+							existingInbound={existingInbound}
+							existingOutbound={existingOutbound}
+							onBack={() => setStep(3)}
+							onDone={onDone}
+						/>
+					)}
+				</div>
 			</div>
 		</div>
 	);
