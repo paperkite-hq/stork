@@ -42,6 +42,14 @@ export interface FolderInfo {
 	flags: string[];
 }
 
+export interface RawAttachment {
+	filename?: string;
+	contentType: string;
+	size?: number;
+	contentId?: string;
+	content: Buffer;
+}
+
 export interface RawMessage {
 	uid: number;
 	messageId?: string;
@@ -55,7 +63,8 @@ export interface RawMessage {
 	htmlBody?: string;
 	flags?: string[];
 	size?: number;
-	hasAttachments?: boolean;
+	/** Attachment list — required so connectors can't silently omit attachment data */
+	attachments: RawAttachment[];
 }
 
 export interface OutgoingMessage {

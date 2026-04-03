@@ -352,4 +352,75 @@ describe("storeInboundEmail", () => {
 		// One message per connector (not per identity)
 		expect(result.stored).toBe(1);
 	});
+
+	test("stores attachment blob when email has an attachment", async () => {
+		const db = createTestDb();
+		const { connectorId } = createR2IdentityAndConnector(db);
+		const raw = buildRaw({
+			from: "sender@example.com",
+			to: "inbox@example.com",
+			subject: "Has attachment",
+			messageId: "<att@example.com>",
+			hasAttachment: true,
+		});
+
+		const result = await storeInboundEmail(db, connectorId, {
+			from: "sender@example.com",
+			to: "inbox@example.com",
+			raw,
+			rawSize: 200,
+		});
+		expect(result.stored).toBe(1);
+
+		const blobs = db.prepare("SELECT * FROM attachment_blobs").all() as { content_hash: string }[];
+		expect(blobs.length).toBe(1);
+
+		const atts = db.prepare("SELECT * FROM attachments").all() as {
+			filename: string;
+			content_hash: string;
+		}[];
+		expect(atts.length).toBe(1);
+		expect(atts[0].filename).toBe("file.txt");
+		expect(atts[0].content_hash).toBe(blobs[0].content_hash);
+	});
+
+	test("deduplicates attachment blobs across messages (R2 path)", async () => {
+		const db = createTestDb();
+		const { connectorId } = createR2IdentityAndConnector(db);
+
+		// Two emails with identical attachment content
+		const raw1 = buildRaw({
+			from: "a@example.com",
+			to: "inbox@example.com",
+			messageId: "<dup1@example.com>",
+			hasAttachment: true,
+		});
+		const raw2 = buildRaw({
+			from: "b@example.com",
+			to: "inbox@example.com",
+			messageId: "<dup2@example.com>",
+			hasAttachment: true,
+		});
+
+		await storeInboundEmail(db, connectorId, {
+			from: "a@example.com",
+			to: "inbox@example.com",
+			raw: raw1,
+			rawSize: 200,
+		});
+		await storeInboundEmail(db, connectorId, {
+			from: "b@example.com",
+			to: "inbox@example.com",
+			raw: raw2,
+			rawSize: 200,
+		});
+
+		// Two attachment rows (one per message)
+		const atts = db.prepare("SELECT * FROM attachments").all();
+		expect(atts.length).toBe(2);
+
+		// But only one blob (identical file content stored once)
+		const blobs = db.prepare("SELECT * FROM attachment_blobs").all();
+		expect(blobs.length).toBe(1);
+	});
 });

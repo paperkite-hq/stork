@@ -167,7 +167,7 @@ describe("ImapIngestConnector", () => {
 		expect(msg1?.from?.address).toContain("alice");
 		expect(msg1?.textBody).toContain("Hello world");
 		expect(msg1?.messageId).toBe("<msg1@example.com>");
-		expect(msg1?.hasAttachments).toBe(false);
+		expect(msg1?.attachments).toEqual([]);
 
 		// Reply with In-Reply-To
 		const msg2 = messages.find((m) => m.uid === 2);
@@ -178,7 +178,7 @@ describe("ImapIngestConnector", () => {
 		// Message with attachment
 		const msg3 = messages.find((m) => m.uid === 3);
 		expect(msg3).toBeDefined();
-		expect(msg3?.hasAttachments).toBe(true);
+		expect(msg3?.attachments.length).toBeGreaterThan(0);
 
 		await connector.disconnect();
 	});

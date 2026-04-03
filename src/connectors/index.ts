@@ -3,6 +3,7 @@ export type {
 	SendConnector,
 	FolderInfo,
 	RawMessage,
+	RawAttachment,
 	OutgoingMessage,
 	OutgoingAttachment,
 	SendResult,

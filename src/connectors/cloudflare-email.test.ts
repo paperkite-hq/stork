@@ -178,11 +178,11 @@ describe("CloudflareEmailIngestConnector", () => {
 			rawSize: Buffer.from(raw, "base64").length,
 		});
 
-		const messages: { hasAttachments?: boolean }[] = [];
+		const messages = [];
 		for await (const msg of connector.fetchMessages("INBOX", 0)) {
 			messages.push(msg);
 		}
-		expect(messages[0].hasAttachments).toBe(true);
+		expect(messages[0].attachments.length).toBeGreaterThan(0);
 	});
 
 	test("acknowledge clears messages up to the given UID", async () => {

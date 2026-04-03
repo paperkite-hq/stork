@@ -136,7 +136,16 @@ export class CloudflareEmailIngestConnector implements IngestConnector {
 			htmlBody: typeof parsed.html === "string" ? parsed.html : undefined,
 			flags: [],
 			size: payload.rawSize,
-			hasAttachments: (parsed.attachments?.length ?? 0) > 0,
+			attachments: (parsed.attachments ?? [])
+				.filter((att) => att.content != null)
+				.map((att) => ({
+					filename: att.filename ?? undefined,
+					contentType:
+						typeof att.contentType === "string" ? att.contentType : "application/octet-stream",
+					size: typeof att.size === "number" ? att.size : att.content.length,
+					contentId: att.contentId ?? undefined,
+					content: att.content,
+				})),
 		};
 
 		this.buffer.push(message);

@@ -9,6 +9,7 @@
 
 import type Database from "better-sqlite3-multiple-ciphers";
 import { simpleParser } from "mailparser";
+import { upsertAttachmentBlob } from "./attachment-storage.js";
 
 export interface InboundEmailPayload {
 	/** Envelope sender (fallback if From header is absent) */
@@ -123,6 +124,27 @@ export async function storeInboundEmail(
 		(parsed.attachments?.length ?? 0) > 0 ? 1 : 0,
 	);
 	const messageRowId = Number(result.lastInsertRowid);
+
+	// Extract and store attachment blobs
+	if (result.changes > 0 && parsed.attachments.length > 0) {
+		const insertAttachment = db.prepare(`
+			INSERT INTO attachments (message_id, filename, content_type, size, content_id, content_hash)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`);
+		for (const att of parsed.attachments) {
+			const content = att.content ?? null;
+			if (!content) continue; // Can't hash without data
+			const contentHash = upsertAttachmentBlob(db, content);
+			insertAttachment.run(
+				messageRowId,
+				att.filename ?? null,
+				typeof att.contentType === "string" ? att.contentType : "application/octet-stream",
+				typeof att.size === "number" ? att.size : content.length,
+				att.contentId ?? null,
+				contentHash,
+			);
+		}
+	}
 
 	// Auto-label with connector name and Inbox
 	const connectorRow = db
