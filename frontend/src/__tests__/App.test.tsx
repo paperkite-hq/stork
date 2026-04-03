@@ -102,7 +102,23 @@ vi.mock("../api", () => ({
 				test: vi.fn().mockResolvedValue({ ok: true }),
 			},
 			outbound: {
-				list: vi.fn().mockResolvedValue([]),
+				// Return one connector by default so compose tests open directly
+				// rather than triggering the outbound-connector setup wizard.
+				list: vi.fn().mockResolvedValue([
+					{
+						id: 1,
+						name: "Test SMTP",
+						type: "smtp",
+						smtp_host: "smtp.example.com",
+						smtp_port: 587,
+						smtp_tls: 1,
+						smtp_user: "test@example.com",
+						ses_region: null,
+						ses_access_key_id: null,
+						created_at: "2024-01-01T00:00:00Z",
+						updated_at: "2024-01-01T00:00:00Z",
+					},
+				]),
 				get: vi.fn(),
 				create: vi.fn().mockResolvedValue({ id: 1 }),
 				update: vi.fn().mockResolvedValue({ ok: true }),

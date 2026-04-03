@@ -5,6 +5,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { DemoBanner } from "./components/DemoBanner";
 import { MessageDetail } from "./components/MessageDetail";
 import { MessageList } from "./components/MessageList";
+import { OutboundConnectorSetupModal } from "./components/OutboundConnectorSetupModal";
 import { SearchPanel } from "./components/SearchPanel";
 import { Settings } from "./components/Settings";
 import { SetupScreen } from "./components/SetupScreen";
@@ -67,6 +68,8 @@ export function App() {
 
 	// UI state
 	const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
+	// Compose mode queued while the outbound-connector setup wizard is open
+	const [pendingComposeMode, setPendingComposeMode] = useState<ComposeMode | null>(null);
 	const [showSearch, setShowSearch] = useState(false);
 	const [initialSearchQuery, setInitialSearchQuery] = useState("");
 	const [openedFromSearch, setOpenedFromSearch] = useState(false);
@@ -106,6 +109,12 @@ export function App() {
 	// and to determine first-run state)
 	const { data: inboundConnectors, refetch: refetchInboundConnectors } = useAsync(
 		() => (containerState === "unlocked" ? api.connectors.inbound.list() : Promise.resolve([])),
+		[containerState],
+	);
+
+	// Fetch outbound connectors — needed to detect zero-connector state for the compose upsell
+	const { data: outboundConnectors, refetch: refetchOutboundConnectors } = useAsync(
+		() => (containerState === "unlocked" ? api.connectors.outbound.list() : Promise.resolve([])),
 		[containerState],
 	);
 
@@ -498,22 +507,43 @@ export function App() {
 		setFilterLabelIds([]);
 	}, []);
 
+	// Dispatch compose: if no outbound connectors exist, queue the mode and show the setup wizard
+	const openOrQueueCompose = useCallback(
+		(mode: ComposeMode) => {
+			if ((outboundConnectors?.length ?? 0) === 0) {
+				setPendingComposeMode(mode);
+			} else {
+				setComposeMode(mode);
+			}
+		},
+		[outboundConnectors],
+	);
+
 	// Compose handlers
 	const handleCompose = useCallback(() => {
-		setComposeMode({ type: "new" });
-	}, []);
+		openOrQueueCompose({ type: "new" });
+	}, [openOrQueueCompose]);
 
-	const handleReply = useCallback((msg: Message) => {
-		setComposeMode({ type: "reply", original: msg });
-	}, []);
+	const handleReply = useCallback(
+		(msg: Message) => {
+			openOrQueueCompose({ type: "reply", original: msg });
+		},
+		[openOrQueueCompose],
+	);
 
-	const handleReplyAll = useCallback((msg: Message) => {
-		setComposeMode({ type: "reply-all", original: msg });
-	}, []);
+	const handleReplyAll = useCallback(
+		(msg: Message) => {
+			openOrQueueCompose({ type: "reply-all", original: msg });
+		},
+		[openOrQueueCompose],
+	);
 
-	const handleForward = useCallback((msg: Message) => {
-		setComposeMode({ type: "forward", original: msg });
-	}, []);
+	const handleForward = useCallback(
+		(msg: Message) => {
+			openOrQueueCompose({ type: "forward", original: msg });
+		},
+		[openOrQueueCompose],
+	);
 
 	const handleSend = useCallback(
 		async (data: {
@@ -996,6 +1026,19 @@ export function App() {
 				</div>
 
 				{/* Modals */}
+				{pendingComposeMode && (
+					<OutboundConnectorSetupModal
+						identities={identities ?? []}
+						onDone={() => {
+							const mode = pendingComposeMode;
+							setPendingComposeMode(null);
+							refetchOutboundConnectors();
+							refetchIdentities();
+							setComposeMode(mode);
+						}}
+						onCancel={() => setPendingComposeMode(null)}
+					/>
+				)}
 				{composeMode && (
 					<ComposeModal
 						mode={composeMode}
