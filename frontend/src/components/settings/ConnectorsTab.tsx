@@ -76,6 +76,15 @@ function InboundConnectorForm({
 	);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [showConnectorWarning, setShowConnectorWarning] = useState(false);
+	const wasInConnectorMode = initial ? (initial.sync_delete_from_server ?? 0) === 1 : false;
+
+	function handleSelectConnectorMode() {
+		setForm((f) => ({ ...f, sync_delete_from_server: 1 }));
+		if (!wasInConnectorMode) {
+			setShowConnectorWarning(true);
+		}
+	}
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault();
@@ -268,20 +277,46 @@ function InboundConnectorForm({
 								</p>
 							</>
 						)}
-						<label className="flex items-start gap-2 text-sm text-stork-800 dark:text-stork-200 cursor-pointer pt-1">
-							<input
-								type="checkbox"
-								checked={form.sync_delete_from_server === 1}
-								onChange={(e) =>
-									setForm({ ...form, sync_delete_from_server: e.target.checked ? 1 : 0 })
-								}
-								className="rounded border-stork-400 dark:border-stork-600 mt-0.5 shrink-0"
-							/>
-							<span>
-								<span className="font-medium">Connector mode</span> — after syncing, remove messages
-								from the IMAP server so Stork becomes your permanent encrypted email home
-							</span>
-						</label>
+						<div className="space-y-1.5 pt-1">
+							<label className="flex items-start gap-2 text-sm text-stork-800 dark:text-stork-200 cursor-pointer">
+								<input
+									type="radio"
+									name="ib-sync-mode"
+									value="mirror"
+									checked={form.sync_delete_from_server === 0}
+									onChange={() => {
+										setForm((f) => ({ ...f, sync_delete_from_server: 0 }));
+										setShowConnectorWarning(false);
+									}}
+									className="mt-0.5 shrink-0"
+								/>
+								<span>
+									<span className="font-medium">Mirror mode</span> — Stork reads alongside your
+									provider; your IMAP mailbox stays intact.
+								</span>
+							</label>
+							<label className="flex items-start gap-2 text-sm text-stork-800 dark:text-stork-200 cursor-pointer">
+								<input
+									type="radio"
+									name="ib-sync-mode"
+									value="connector"
+									checked={form.sync_delete_from_server === 1}
+									onChange={handleSelectConnectorMode}
+									className="mt-0.5 shrink-0"
+								/>
+								<span>
+									<span className="font-medium">Connector mode</span> — After syncing, Stork deletes
+									messages from your IMAP server and becomes your permanent encrypted email home.
+								</span>
+							</label>
+							{showConnectorWarning && (
+								<p className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded px-3 py-2">
+									Great choice! Just so you know: Stork will remove messages from your IMAP mailbox
+									after importing them — Stork becomes the single source of truth for your email.
+									Make sure to keep your Stork database backed up.
+								</p>
+							)}
+						</div>
 					</div>
 				</>
 			)}
