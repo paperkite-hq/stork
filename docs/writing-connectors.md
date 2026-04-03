@@ -61,6 +61,14 @@ interface FolderInfo {
   flags: string[];    // Folder flags (e.g., ["\\HasNoChildren"])
 }
 
+interface RawAttachment {
+  filename?: string;
+  contentType: string;
+  size?: number;
+  contentId?: string;
+  content: Buffer;      // Actual file bytes — required so nothing is silently lost
+}
+
 interface RawMessage {
   uid: number;                                      // Unique ID within the folder
   messageId?: string;                               // RFC 2822 Message-ID
@@ -74,7 +82,7 @@ interface RawMessage {
   htmlBody?: string;
   flags?: string[];                                 // e.g., ["\\Seen", "\\Flagged"]
   size?: number;                                    // Message size in bytes
-  hasAttachments?: boolean;
+  attachments: RawAttachment[];                     // Required — empty array if none
 }
 ```
 
