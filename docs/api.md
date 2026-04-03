@@ -331,7 +331,16 @@ Returns all labels with message and unread counts.
 ]
 ```
 
-The `source` field indicates how the label was created: `imap` for labels auto-created from IMAP folder names, `user` for manually created labels, `identity` for auto-created identity labels, `system` for system labels.
+The `source` field indicates how the label was created:
+
+| Source | Created by | Example | Editable | Shown in drill-downs |
+|--------|-----------|---------|----------|---------------------|
+| `imap` | Auto-created during IMAP sync from folder names | Inbox, Sent, Work | No | Yes |
+| `user` | Manually created by the user | Important, Follow-up | Yes | Yes |
+| `connector` | Auto-created when adding a mail account (one label per account) | alice@gmail.com | No | Yes |
+| `system` | Reserved for built-in labels (demo/seed data only) | Inbox, Sent, Archive | No | No |
+
+System labels are excluded from drill-down suggestions because they're demo fixtures, not real mailbox data. Only `user`-source labels can be renamed, recolored, or deleted by the user — `imap` and `connector` labels are managed automatically by the sync engine.
 
 ### Create label
 
