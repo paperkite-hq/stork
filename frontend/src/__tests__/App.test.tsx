@@ -148,7 +148,7 @@ function makeIdentity(overrides: Partial<Identity> = {}): Identity {
 		id: 1,
 		name: "Test Identity",
 		email: "test@example.com",
-		outbound_connector_id: null,
+		outbound_connector_id: 1,
 		created_at: "2024-01-01T00:00:00Z",
 		...overrides,
 	};

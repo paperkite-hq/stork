@@ -57,7 +57,7 @@ export interface Identity {
 	id: number;
 	name: string;
 	email: string;
-	outbound_connector_id: number | null;
+	outbound_connector_id: number;
 	default_view?: string;
 	created_at: string;
 }

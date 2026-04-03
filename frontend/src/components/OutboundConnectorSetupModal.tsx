@@ -1,11 +1,8 @@
 import { useRef, useState } from "react";
-import type { Identity } from "../api";
 import { api } from "../api";
 import { useFocusTrap } from "../hooks";
 
 interface Props {
-	/** Existing identities the user has configured. */
-	identities: Identity[];
 	/** Called when setup is complete and the user wants to open compose. */
 	onDone: () => void;
 	/** Called if the user dismisses without completing setup. */
@@ -48,7 +45,7 @@ function ConnectorStep({
 	onCreated,
 	onCancel,
 }: {
-	onCreated: (id: number) => void;
+	onCreated: () => void;
 	onCancel: () => void;
 }) {
 	const [form, setForm] = useState<OutboundFormData>(defaultForm());
@@ -80,8 +77,8 @@ function ConnectorStep({
 								? { ses_secret_access_key: form.ses_secret_access_key }
 								: {}),
 						};
-			const { id } = await api.connectors.outbound.create(payload);
-			onCreated(id);
+			await api.connectors.outbound.create(payload);
+			onCreated();
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -267,138 +264,22 @@ function ConnectorStep({
 	);
 }
 
-// ── Step 2: Link connector to identities ───────────────────────────────────
-
-function IdentityLinkStep({
-	connectorId,
-	identities,
-	onDone,
-	onSkip,
-}: {
-	connectorId: number;
-	identities: Identity[];
-	onDone: () => void;
-	onSkip: () => void;
-}) {
-	// Default: all identities selected
-	const [selected, setSelected] = useState<Set<number>>(new Set(identities.map((i) => i.id)));
-	const [saving, setSaving] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-
-	function toggleIdentity(id: number) {
-		setSelected((prev) => {
-			const next = new Set(prev);
-			if (next.has(id)) {
-				next.delete(id);
-			} else {
-				next.add(id);
-			}
-			return next;
-		});
-	}
-
-	async function handleSave() {
-		if (selected.size === 0) {
-			onSkip();
-			return;
-		}
-		setSaving(true);
-		setError(null);
-		try {
-			await Promise.all(
-				[...selected].map((id) =>
-					api.identities.update(id, { outbound_connector_id: connectorId }),
-				),
-			);
-			onDone();
-		} catch (err) {
-			setError(err instanceof Error ? err.message : String(err));
-		} finally {
-			setSaving(false);
-		}
-	}
-
-	return (
-		<div className="space-y-3">
-			<p className="text-sm text-gray-600 dark:text-gray-400">
-				Choose which sending identities should use this connector.
-			</p>
-
-			<div className="space-y-2 max-h-48 overflow-y-auto">
-				{identities.map((identity) => (
-					<label
-						key={identity.id}
-						className="flex items-center gap-3 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-					>
-						<input
-							type="checkbox"
-							checked={selected.has(identity.id)}
-							onChange={() => toggleIdentity(identity.id)}
-							className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
-						/>
-						<span className="text-sm text-gray-900 dark:text-gray-100">
-							{identity.name}{" "}
-							<span className="text-gray-500 dark:text-gray-400">&lt;{identity.email}&gt;</span>
-						</span>
-					</label>
-				))}
-			</div>
-
-			{error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-			<div className="flex gap-2 pt-1">
-				<button
-					type="button"
-					onClick={handleSave}
-					disabled={saving}
-					className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
-				>
-					{saving ? "Saving…" : selected.size === 0 ? "Skip" : "Apply"}
-				</button>
-				<button
-					type="button"
-					onClick={onSkip}
-					className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-				>
-					Skip
-				</button>
-			</div>
-		</div>
-	);
-}
-
 // ── Main modal ─────────────────────────────────────────────────────────────
 
-type Step = "connector" | "identity" | "done";
+type Step = "connector" | "done";
 
 /**
  * Upsell wizard shown when the user tries to compose/reply but has no outbound
- * connectors configured. Walks through creating a connector and optionally
- * linking it to their existing identities.
+ * connectors configured. Walks through creating a connector, then opens compose.
  */
-export function OutboundConnectorSetupModal({ identities, onDone, onCancel }: Props) {
+export function OutboundConnectorSetupModal({ onDone, onCancel }: Props) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 	useFocusTrap(dialogRef);
 
 	const [step, setStep] = useState<Step>("connector");
-	const [connectorId, setConnectorId] = useState<number | null>(null);
-
-	// Identities that don't already have an outbound connector
-	const unlinkedIdentities = identities.filter((i) => i.outbound_connector_id === null);
-
-	function handleConnectorCreated(id: number) {
-		setConnectorId(id);
-		// If there are identities to link, go to step 2; otherwise done
-		if (unlinkedIdentities.length > 0) {
-			setStep("identity");
-		} else {
-			setStep("done");
-		}
-	}
 
 	const stepLabel: Record<Step, string> = {
-		connector: "Step 1 of 2 — Create connector",
-		identity: "Step 2 of 2 — Link identities",
+		connector: "Set up outbound email",
 		done: "All set!",
 	};
 
@@ -415,16 +296,11 @@ export function OutboundConnectorSetupModal({ identities, onDone, onCancel }: Pr
 			>
 				{/* Header */}
 				<div className="mb-5">
-					<p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">
-						{stepLabel[step]}
-					</p>
 					<h2
 						id="obs-modal-title"
 						className="text-lg font-semibold text-gray-900 dark:text-gray-100"
 					>
-						{step === "connector" && "Set up outbound email"}
-						{step === "identity" && "Link your sending identities"}
-						{step === "done" && "Ready to send!"}
+						{stepLabel[step]}
 					</h2>
 					{step === "connector" && (
 						<p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
@@ -441,16 +317,7 @@ export function OutboundConnectorSetupModal({ identities, onDone, onCancel }: Pr
 
 				{/* Step content */}
 				{step === "connector" && (
-					<ConnectorStep onCreated={handleConnectorCreated} onCancel={onCancel} />
-				)}
-
-				{step === "identity" && connectorId !== null && (
-					<IdentityLinkStep
-						connectorId={connectorId}
-						identities={unlinkedIdentities}
-						onDone={() => setStep("done")}
-						onSkip={() => setStep("done")}
-					/>
+					<ConnectorStep onCreated={() => setStep("done")} onCancel={onCancel} />
 				)}
 
 				{step === "done" && (

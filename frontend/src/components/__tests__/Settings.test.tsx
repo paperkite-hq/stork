@@ -529,7 +529,7 @@ describe("Settings", () => {
 			id: 1,
 			name: "Work Email",
 			email: "work@example.com",
-			outbound_connector_id: null,
+			outbound_connector_id: 1,
 			default_view: "inbox",
 		});
 	});

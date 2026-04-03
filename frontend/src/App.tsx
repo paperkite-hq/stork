@@ -1028,7 +1028,6 @@ export function App() {
 				{/* Modals */}
 				{pendingComposeMode && (
 					<OutboundConnectorSetupModal
-						identities={identities ?? []}
 						onDone={() => {
 							const mode = pendingComposeMode;
 							setPendingComposeMode(null);

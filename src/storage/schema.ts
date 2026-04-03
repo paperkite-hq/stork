@@ -1027,4 +1027,40 @@ CREATE INDEX IF NOT EXISTS idx_attachments_content_hash ON attachments(content_h
 COMMIT;
 PRAGMA foreign_keys = ON;
 `,
+	// Version 22: Enforce connector-identity schema invariant.
+	//
+	// Every identity must be created alongside an outbound connector — there is
+	// no "identity without a connector" state. This migration tightens the schema:
+	//
+	//   - outbound_connector_id becomes NOT NULL (was nullable).
+	//   - ON DELETE CASCADE added so deleting a connector removes its identities.
+	//
+	// Pre-release cleanup: no real users, so any identities with a NULL
+	// outbound_connector_id are deleted rather than migrated (they are orphans).
+	`
+PRAGMA foreign_keys = OFF;
+BEGIN;
+
+DELETE FROM identities WHERE outbound_connector_id IS NULL;
+
+CREATE TABLE identities_v22 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	email TEXT NOT NULL,
+	outbound_connector_id INTEGER NOT NULL REFERENCES outbound_connectors(id) ON DELETE CASCADE,
+	default_view TEXT NOT NULL DEFAULT 'inbox',
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT INTO identities_v22 (id, name, email, outbound_connector_id, default_view, created_at, updated_at)
+SELECT id, name, email, outbound_connector_id, default_view, created_at, updated_at
+FROM identities;
+
+DROP TABLE identities;
+ALTER TABLE identities_v22 RENAME TO identities;
+
+COMMIT;
+PRAGMA foreign_keys = ON;
+`,
 ];

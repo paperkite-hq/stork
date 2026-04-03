@@ -102,7 +102,7 @@ describe("AccountsTab", () => {
 			id: 1,
 			name: "Work",
 			email: "work@example.com",
-			outbound_connector_id: null,
+			outbound_connector_id: 1,
 			default_view: "inbox",
 		});
 		render(

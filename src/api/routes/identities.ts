@@ -34,16 +34,16 @@ export function identityRoutes(getDb: () => Database.Database): Hono {
 			return c.json({ error: "Invalid email address format" }, 400);
 		}
 
-		const outboundConnectorId: number | null = body.outbound_connector_id ?? null;
+		if (!body.outbound_connector_id) {
+			return c.json({ error: "Missing required field: outbound_connector_id" }, 400);
+		}
+		const outboundConnectorId: number = body.outbound_connector_id;
 
-		// outbound_connector_id is optional (receive-only identities are allowed)
-		if (outboundConnectorId !== null) {
-			const ocExists = db
-				.prepare("SELECT id FROM outbound_connectors WHERE id = ?")
-				.get(outboundConnectorId);
-			if (!ocExists) {
-				return c.json({ error: `Outbound connector ${outboundConnectorId} not found` }, 400);
-			}
+		const ocExists = db
+			.prepare("SELECT id FROM outbound_connectors WHERE id = ?")
+			.get(outboundConnectorId);
+		if (!ocExists) {
+			return c.json({ error: `Outbound connector ${outboundConnectorId} not found` }, 400);
 		}
 
 		const result = db

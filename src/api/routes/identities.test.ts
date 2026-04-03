@@ -44,12 +44,20 @@ describe("Identities API", () => {
 		});
 
 		test("POST /api/identities creates an identity", async () => {
+			db.prepare(`
+				INSERT INTO outbound_connectors (name, type, smtp_host, smtp_port, smtp_tls, smtp_user, smtp_pass)
+				VALUES ('SMTP', 'smtp', 'smtp.example.com', 587, 0, 'user', 'pass')
+			`).run();
+			const outboundId = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
 			const { status, body } = await jsonRequest("/api/identities", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					name: "Test",
 					email: "test@example.com",
+					outbound_connector_id: outboundId,
 				}),
 			});
 			expect(status).toBe(201);

@@ -144,7 +144,7 @@ describe("AccountForm", () => {
 			id: 5,
 			name: "Old Name",
 			email: "old@example.com",
-			outbound_connector_id: null,
+			outbound_connector_id: 1,
 			default_view: "inbox",
 		});
 		mockApi.identities.update.mockResolvedValue({ ok: true });

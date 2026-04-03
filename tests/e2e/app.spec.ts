@@ -334,10 +334,25 @@ test.describe("API integration", () => {
 		expect(inboundRes.ok()).toBeTruthy();
 		const inbound = await inboundRes.json();
 
+		const outboundRes = await request.post("/api/connectors/outbound", {
+			data: {
+				name: "E2E Outbound",
+				type: "smtp",
+				smtp_host: "127.0.0.1",
+				smtp_port: 587,
+				smtp_tls: 0,
+				smtp_user: "newuser",
+				smtp_pass: "newpass",
+			},
+		});
+		expect(outboundRes.ok()).toBeTruthy();
+		const outbound = await outboundRes.json();
+
 		const response = await request.post("/api/identities", {
 			data: {
 				name: "New E2E Identity",
 				email: "new@test.local",
+				outbound_connector_id: outbound.id,
 			},
 		});
 		expect(response.status()).toBe(201);
