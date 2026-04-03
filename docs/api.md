@@ -209,9 +209,9 @@ POST /api/identities
 Content-Type: application/json
 ```
 
-**Required fields**: `name`, `email`
+**Required fields**: `name`, `email`, `outbound_connector_id`
 
-**Optional fields**: `inbound_connector_id`, `outbound_connector_id`, `default_view`
+**Optional fields**: `default_view`
 
 **Request body**:
 ```json
