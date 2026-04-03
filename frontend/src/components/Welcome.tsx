@@ -195,7 +195,7 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 
 					<form
 						onSubmit={handleSubmit}
-						className="bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6 space-y-5"
+						className="bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6 space-y-5 min-h-[28rem]"
 					>
 						<p className="text-xs text-gray-500 dark:text-gray-400 text-center">
 							Credentials never leave your machine. Stork connects directly from your device.
