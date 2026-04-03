@@ -195,6 +195,7 @@ See [Writing Custom Connectors](./writing-connectors.md) for a guide on implemen
 - FTS5 uses porter tokenizer with unicode61 for language-aware stemming.
 - FTS5 content table syncs via INSERT/UPDATE/DELETE triggers on the messages table.
 - Attachments store binary data directly in SQLite BLOBs — simple and avoids filesystem management.
+- **Identities are always created alongside a connector — it is a schema invariant that every identity has an outbound connector.** There is no "identity without a connector" state. Identities are not shared between connectors; each identity belongs to exactly one connector. Deleting a connector cascades to delete its identities. The UI wizard for adding a connector always collects both connector config and identity config together.
 
 ### REST API (`src/api/`)
 
