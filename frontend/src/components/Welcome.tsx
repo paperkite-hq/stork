@@ -145,8 +145,8 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 						Welcome to Stork
 					</h1>
 					<p className="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
-						Your email, stored locally in an encrypted database — fully under your control. Connect
-						any email source, search everything instantly.
+						Your inbox, on your terms. Stork syncs email from any source into an encrypted local
+						database — private by default, searchable in seconds.
 					</p>
 					<button
 						type="button"
@@ -160,7 +160,7 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 				<div className="w-full max-w-lg animate-fadeIn">
 					<div className="mb-6 text-center">
 						<h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-							Add a Connector
+							Connect Your Email
 						</h2>
 						<p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
 							Where should Stork pull your email from?
@@ -197,6 +197,10 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 						onSubmit={handleSubmit}
 						className="bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6 space-y-5"
 					>
+						<p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+							Credentials never leave your machine. Stork connects directly from your device.
+						</p>
+
 						{error && (
 							<div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-md">
 								{error}
@@ -226,11 +230,6 @@ export function Welcome({ onSetupComplete, dark, onToggleDark }: WelcomeProps) {
 								{loading ? "Testing connection..." : "Connect"}
 							</button>
 						</div>
-
-						<p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-							Credentials are stored encrypted in your local database. Stork never sends your data
-							to any third party.
-						</p>
 					</form>
 				</div>
 			)}

@@ -67,7 +67,7 @@ describe("Welcome", () => {
 	it("navigates to form when Get Started is clicked", async () => {
 		render(<Welcome {...defaultProps} />);
 		await userEvent.click(screen.getByText("Get Started"));
-		expect(screen.getByText("Add a Connector")).toBeInTheDocument();
+		expect(screen.getByText("Connect Your Email")).toBeInTheDocument();
 	});
 
 	it("shows IMAP form fields by default on form step", async () => {
@@ -128,7 +128,7 @@ describe("Welcome", () => {
 	it("shows privacy note on form", async () => {
 		render(<Welcome {...defaultProps} />);
 		await userEvent.click(screen.getByText("Get Started"));
-		expect(screen.getByText(/stored encrypted/)).toBeInTheDocument();
+		expect(screen.getByText(/never leave your machine/)).toBeInTheDocument();
 	});
 
 	it("shows Connect submit button", async () => {
