@@ -102,8 +102,9 @@ export function App() {
 		[containerState],
 	);
 
-	// Fetch inbound connectors (needed for per-connector labels in unified inbox view)
-	const { data: inboundConnectors } = useAsync(
+	// Fetch inbound connectors (needed for per-connector labels in unified inbox view,
+	// and to determine first-run state)
+	const { data: inboundConnectors, refetch: refetchInboundConnectors } = useAsync(
 		() => (containerState === "unlocked" ? api.connectors.inbound.list() : Promise.resolve([])),
 		[containerState],
 	);
@@ -766,9 +767,20 @@ export function App() {
 		);
 	}
 
-	// First-run: show welcome screen when no identities exist yet
-	if (Array.isArray(identities) && identities.length === 0) {
-		return <Welcome onIdentityCreated={refetchIdentities} dark={dark} onToggleDark={toggleDark} />;
+	// First-run: show welcome screen when no inbound connectors exist yet.
+	// Checking connectors (not identities) means users who configure a connector
+	// manually via Settings won't see the welcome screen again.
+	if (Array.isArray(inboundConnectors) && inboundConnectors.length === 0) {
+		return (
+			<Welcome
+				onSetupComplete={() => {
+					refetchIdentities();
+					refetchInboundConnectors();
+				}}
+				dark={dark}
+				onToggleDark={toggleDark}
+			/>
+		);
 	}
 
 	return (

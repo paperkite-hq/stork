@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
-import type { Identity, Label, Message, MessageSummary } from "../api";
+import type { Identity, InboundConnector, Label, Message, MessageSummary } from "../api";
 import { useSyncPoller } from "../hooks";
 
 // ------------------------------------------------------------------
@@ -132,9 +132,29 @@ function makeIdentity(overrides: Partial<Identity> = {}): Identity {
 		id: 1,
 		name: "Test Identity",
 		email: "test@example.com",
-		inbound_connector_id: 1,
 		outbound_connector_id: null,
 		created_at: "2024-01-01T00:00:00Z",
+		...overrides,
+	};
+}
+
+function makeInboundConnector(overrides: Partial<InboundConnector> = {}): InboundConnector {
+	return {
+		id: 1,
+		name: "Test Connector",
+		type: "imap",
+		imap_host: "imap.example.com",
+		imap_port: 993,
+		imap_tls: 1,
+		imap_user: "test@example.com",
+		sync_delete_from_server: 0,
+		cf_r2_account_id: null,
+		cf_r2_bucket_name: null,
+		cf_r2_access_key_id: null,
+		cf_r2_prefix: null,
+		cf_r2_poll_interval_ms: null,
+		created_at: "2024-01-01T00:00:00Z",
+		updated_at: "2024-01-01T00:00:00Z",
 		...overrides,
 	};
 }
@@ -217,6 +237,10 @@ function setupWithIdentities(
 	mockApi.labels.list.mockResolvedValue(labels);
 	mockApi.labels.messages.mockResolvedValue(messages);
 	mockApi.folders.list.mockResolvedValue([]);
+	// Provide a non-empty connector list so the first-run Welcome screen is skipped
+	(
+		api as unknown as { connectors: { inbound: { list: ReturnType<typeof vi.fn> } } }
+	).connectors.inbound.list.mockResolvedValue([makeInboundConnector()]);
 }
 
 /** Wait for the main app layout (not Welcome screen) to be ready */
@@ -230,6 +254,11 @@ async function waitForAppLayout() {
 beforeEach(() => {
 	vi.clearAllMocks();
 	document.title = "Stork Mail";
+	// Default to a non-empty connector so the first-run Welcome screen is bypassed in most tests.
+	// Tests that specifically test the Welcome screen must explicitly set connectors to [].
+	(
+		api as unknown as { connectors: { inbound: { list: ReturnType<typeof vi.fn> } } }
+	).connectors.inbound.list.mockResolvedValue([makeInboundConnector()]);
 });
 
 // ------------------------------------------------------------------
@@ -262,6 +291,9 @@ describe("App — Container state", () => {
 		mockApi.labels.list.mockResolvedValue([makeLabel()]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
+		(mockApiModule.connectors.inbound.list as ReturnType<typeof vi.fn>).mockResolvedValue([
+			makeInboundConnector(),
+		]);
 		render(<App />);
 		await waitForAppLayout();
 	});
@@ -278,6 +310,9 @@ describe("App — Container state", () => {
 		mockApi.labels.list.mockResolvedValue([makeLabel()]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
+		(mockApiModule.connectors.inbound.list as ReturnType<typeof vi.fn>).mockResolvedValue([
+			makeInboundConnector(),
+		]);
 		render(<App />);
 
 		// Complete setup flow
@@ -304,6 +339,9 @@ describe("App — Container state", () => {
 		mockApi.labels.list.mockResolvedValue([makeLabel()]);
 		mockApi.labels.messages.mockResolvedValue([]);
 		mockApi.folders.list.mockResolvedValue([]);
+		(mockApiModule.connectors.inbound.list as ReturnType<typeof vi.fn>).mockResolvedValue([
+			makeInboundConnector(),
+		]);
 		render(<App />);
 
 		await waitFor(() => expect(screen.getByText("Unlock Stork")).toBeInTheDocument());
@@ -323,16 +361,23 @@ describe("App — Container state", () => {
 // ------------------------------------------------------------------
 
 describe("App — Welcome screen", () => {
-	it("shows Welcome when no identities exist", async () => {
+	function setupFirstRun() {
 		mockApi.identities.list.mockResolvedValue([]);
+		(
+			api as unknown as { connectors: { inbound: { list: ReturnType<typeof vi.fn> } } }
+		).connectors.inbound.list.mockResolvedValue([]);
+	}
+
+	it("shows Welcome when no inbound connectors exist", async () => {
+		setupFirstRun();
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Welcome to Stork")).toBeInTheDocument();
 		});
 	});
 
-	it("does not show main layout when no identities", async () => {
-		mockApi.identities.list.mockResolvedValue([]);
+	it("does not show main layout when no inbound connectors", async () => {
+		setupFirstRun();
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Welcome to Stork")).toBeInTheDocument();
@@ -1847,9 +1892,13 @@ describe("App — Sync trigger errors", () => {
 // Tests: Send with reply threading headers
 // ------------------------------------------------------------------
 
-describe("App — Welcome screen", () => {
-	it("shows welcome screen when no identities exist", async () => {
-		setupWithIdentities([], []);
+describe("App — Welcome screen (second check)", () => {
+	it("shows welcome screen when no inbound connectors exist", async () => {
+		// Empty connectors triggers first-run; identity list doesn't matter
+		mockApi.identities.list.mockResolvedValue([]);
+		(
+			api as unknown as { connectors: { inbound: { list: ReturnType<typeof vi.fn> } } }
+		).connectors.inbound.list.mockResolvedValue([]);
 		render(<App />);
 		await waitFor(() => {
 			expect(screen.getByText("Welcome to Stork")).toBeInTheDocument();
