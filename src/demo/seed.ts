@@ -33,9 +33,9 @@ const DEMO_IDENTITY = {
 };
 
 const DEMO_LABELS = [
-	{ name: "Inbox", color: "#3b82f6", source: "system" },
-	{ name: "Sent", color: "#10b981", source: "system" },
-	{ name: "Archive", color: "#6b7280", source: "system" },
+	{ name: "Inbox", color: "#3b82f6", source: "imap" },
+	{ name: "Sent", color: "#10b981", source: "imap" },
+	{ name: "Archive", color: "#6b7280", source: "imap" },
 	{ name: "Work", color: "#f59e0b", source: "user" },
 	{ name: "Open Source", color: "#8b5cf6", source: "user" },
 	{ name: "Receipts", color: "#ef4444", source: "user" },
@@ -460,9 +460,9 @@ const DEMO_IDENTITY_2 = {
 };
 
 const DEMO_LABELS_2 = [
-	{ name: "Inbox", color: "#3b82f6", source: "system" },
-	{ name: "Sent", color: "#10b981", source: "system" },
-	{ name: "Archive", color: "#6b7280", source: "system" },
+	{ name: "Inbox", color: "#3b82f6", source: "imap" },
+	{ name: "Sent", color: "#10b981", source: "imap" },
+	{ name: "Archive", color: "#6b7280", source: "imap" },
 	{ name: "Code Reviews", color: "#f59e0b", source: "user" },
 	{ name: "Announcements", color: "#8b5cf6", source: "user" },
 ];
@@ -624,8 +624,8 @@ export function seedDemoData(db: Database.Database): void {
 		"INSERT OR IGNORE INTO labels (name, color, source) VALUES (?, ?, ?)",
 	);
 	const lookupLabel = db.prepare("SELECT id FROM labels WHERE name = ?");
-	// Create connector label (auto-label all messages with the email address)
-	const connectorLabel1Name = DEMO_IDENTITY.email;
+	// Create connector label (named after the connector, not an email address)
+	const connectorLabel1Name = "Alex' work IMAP";
 	insertLabel.run(connectorLabel1Name, "#3b82f6", "connector");
 	for (const label of DEMO_LABELS) {
 		insertLabel.run(label.name, label.color, label.source);
@@ -743,7 +743,7 @@ export function seedDemoData(db: Database.Database): void {
 	const folderId2 = folder2Result.lastInsertRowid as number;
 
 	// Create connector label for second inbound connector
-	const connectorLabel2Name = DEMO_IDENTITY_2.email;
+	const connectorLabel2Name = "Alex personal Cloudflare";
 	insertLabel.run(connectorLabel2Name, "#10b981", "connector");
 	const connectorLabel2Row = lookupLabel.get(connectorLabel2Name) as { id: number };
 	const connectorLabel2Id = connectorLabel2Row.id;

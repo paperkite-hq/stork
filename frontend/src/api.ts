@@ -219,7 +219,7 @@ export interface Label {
 	id: number;
 	name: string;
 	color: string | null;
-	source: "imap" | "user" | "system" | "connector";
+	source: "imap" | "user" | "connector";
 	created_at: string;
 	message_count: number;
 	unread_count: number;
@@ -229,7 +229,7 @@ export interface LabelSummary {
 	id: number;
 	name: string;
 	color: string | null;
-	source: "imap" | "user" | "system" | "connector";
+	source: "imap" | "user" | "connector";
 }
 
 export interface SearchResult {

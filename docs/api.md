@@ -337,10 +337,9 @@ The `source` field indicates how the label was created:
 |--------|-----------|---------|----------|---------------------|
 | `imap` | Auto-created during IMAP sync from folder names | Inbox, Sent, Work | No | Yes |
 | `user` | Manually created by the user | Important, Follow-up | Yes | Yes |
-| `connector` | Auto-created when adding a mail account (one label per account) | alice@gmail.com | No | Yes |
-| `system` | Reserved for built-in labels (demo/seed data only) | Inbox, Sent, Archive | No | No |
+| `connector` | Auto-created when adding a mail account (one label per account) | work-imap | No | Yes |
 
-System labels are excluded from drill-down suggestions because they're demo fixtures, not real mailbox data. Only `user`-source labels can be renamed, recolored, or deleted by the user — `imap` and `connector` labels are managed automatically by the sync engine.
+Only `user`-source labels can be renamed, recolored, or deleted by the user — `imap` and `connector` labels are managed automatically by the sync engine.
 
 ### Create label
 

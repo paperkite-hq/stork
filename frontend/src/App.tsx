@@ -171,9 +171,7 @@ export function App() {
 	const virtualViewSuggestions =
 		isVirtualAllView && labels
 			? labels
-					.filter(
-						(l) => l.message_count > 0 && l.source !== "system" && !filterLabelIds.includes(l.id),
-					)
+					.filter((l) => l.message_count > 0 && !filterLabelIds.includes(l.id))
 					.sort((a, b) => b.message_count - a.message_count)
 					.slice(0, 5)
 					.map((l) => ({ id: l.id, name: l.name, color: l.color, source: l.source }))

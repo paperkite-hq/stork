@@ -220,6 +220,12 @@ function Step1({
 
 // ── Step 2: Inbound connector ──────────────────────────────────────────────
 
+/** Derive a default connector name from IMAP credentials: username@hostname */
+function defaultConnectorName(user: string, host: string): string {
+	if (!user) return "";
+	return user.includes("@") ? user : host ? `${user}@${host}` : user;
+}
+
 function Step2({
 	data,
 	existingConnectors,
@@ -234,6 +240,8 @@ function Step2({
 	onBack: () => void;
 }) {
 	const [showConnectorWarning, setShowConnectorWarning] = useState(false);
+	// Track whether user has manually typed a connector name
+	const [nameManuallySet, setNameManuallySet] = useState(data.connectorName !== "");
 
 	function handleSelectConnectorMode() {
 		onChange({ ...data, sync_delete_from_server: 1 });
@@ -297,9 +305,12 @@ function Step2({
 							id="wiz-ib-name"
 							type="text"
 							required
-							placeholder="My IMAP"
+							placeholder={defaultConnectorName(data.imap_user, data.imap_host) || "My IMAP"}
 							value={data.connectorName}
-							onChange={(e) => onChange({ ...data, connectorName: e.target.value })}
+							onChange={(e) => {
+								setNameManuallySet(e.target.value !== "");
+								onChange({ ...data, connectorName: e.target.value });
+							}}
 							className={inputCls}
 						/>
 					</Field>
@@ -351,7 +362,13 @@ function Step2({
 									required
 									placeholder="imap.example.com"
 									value={data.imap_host}
-									onChange={(e) => onChange({ ...data, imap_host: e.target.value })}
+									onChange={(e) => {
+										const host = e.target.value;
+										const updated = { ...data, imap_host: host };
+										if (!nameManuallySet)
+											updated.connectorName = defaultConnectorName(data.imap_user, host);
+										onChange(updated);
+									}}
 									className={inputCls}
 								/>
 							</Field>
@@ -383,7 +400,13 @@ function Step2({
 									type="text"
 									required
 									value={data.imap_user}
-									onChange={(e) => onChange({ ...data, imap_user: e.target.value })}
+									onChange={(e) => {
+										const user = e.target.value;
+										const updated = { ...data, imap_user: user };
+										if (!nameManuallySet)
+											updated.connectorName = defaultConnectorName(user, data.imap_host);
+										onChange(updated);
+									}}
 									className={inputCls}
 								/>
 							</Field>
