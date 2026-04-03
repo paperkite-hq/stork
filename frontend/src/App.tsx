@@ -162,7 +162,7 @@ export function App() {
 		[suggestForLabelId],
 	);
 
-	// For virtual "all" views, suggest top labels by message count (user + connector labels)
+	// For virtual "all" views, suggest top labels by message count (all non-system labels)
 	const isVirtualAllView =
 		filterLabelIds.length === 0 &&
 		!suggestForLabelId &&
@@ -171,10 +171,7 @@ export function App() {
 		isVirtualAllView && labels
 			? labels
 					.filter(
-						(l) =>
-							l.message_count > 0 &&
-							(l.source === "user" || l.source === "connector") &&
-							!filterLabelIds.includes(l.id),
+						(l) => l.message_count > 0 && l.source !== "system" && !filterLabelIds.includes(l.id),
 					)
 					.sort((a, b) => b.message_count - a.message_count)
 					.slice(0, 5)
