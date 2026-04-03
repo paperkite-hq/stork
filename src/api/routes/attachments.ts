@@ -10,9 +10,9 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 		if (attachmentId instanceof Response) return attachmentId;
 		const attachment = getDb()
 			.prepare(
-				`SELECT a.filename, a.content_type, COALESCE(b.data, a.data) AS data
+				`SELECT a.filename, a.content_type, b.data
 				FROM attachments a
-				LEFT JOIN attachment_blobs b ON b.content_hash = a.content_hash
+				JOIN attachment_blobs b ON b.content_hash = a.content_hash
 				WHERE a.id = ?`,
 			)
 			.get(attachmentId) as
@@ -47,9 +47,9 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 		const contentId = c.req.param("contentId");
 		const attachment = getDb()
 			.prepare(
-				`SELECT a.content_type, COALESCE(b.data, a.data) AS data
+				`SELECT a.content_type, b.data
 				FROM attachments a
-				LEFT JOIN attachment_blobs b ON b.content_hash = a.content_hash
+				JOIN attachment_blobs b ON b.content_hash = a.content_hash
 				WHERE a.message_id = ? AND a.content_id = ?`,
 			)
 			.get(messageId, contentId) as

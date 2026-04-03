@@ -1,6 +1,7 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import { simpleParser } from "mailparser";
 import { beforeEach, describe, expect, test } from "vitest";
+import { upsertAttachmentBlob } from "../storage/attachment-storage.js";
 import { ensureSchema } from "../storage/db.js";
 import { MIGRATIONS, SCHEMA_VERSION } from "../storage/schema.js";
 
@@ -229,11 +230,12 @@ describe("database operations", () => {
 
 		const messageId = result.lastInsertRowid;
 
-		// Insert attachment
+		// Insert attachment via blob-based path
+		const attHash = upsertAttachmentBlob(db, Buffer.from("Hello"));
 		db.prepare(`
-			INSERT INTO attachments (message_id, filename, content_type, size, content_id, data)
-			VALUES (?, 'test.pdf', 'application/pdf', 1024, null, X'48656C6C6F')
-		`).run(messageId);
+			INSERT INTO attachments (message_id, filename, content_type, size, content_id, content_hash)
+			VALUES (?, 'test.pdf', 'application/pdf', 1024, null, ?)
+		`).run(messageId, attHash);
 
 		const att = db.prepare("SELECT * FROM attachments WHERE message_id = ?").get(messageId) as {
 			filename: string;

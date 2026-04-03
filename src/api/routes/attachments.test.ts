@@ -11,6 +11,49 @@ import {
 	createTestMessage,
 } from "../../test-helpers/test-db.js";
 
+/** Insert an attachment via the blob-based path (matches production schema v21+). */
+function insertAttachment(
+	db: Database.Database,
+	msgId: number,
+	opts: {
+		filename?: string | null;
+		contentType?: string | null;
+		size?: number;
+		data?: Buffer | null;
+		contentId?: string | null;
+	},
+): number {
+	const data = opts.data ?? null;
+	if (data) {
+		const hash = upsertAttachmentBlob(db, data);
+		db.prepare(
+			"INSERT INTO attachments (message_id, filename, content_type, size, content_id, content_hash) VALUES (?, ?, ?, ?, ?, ?)",
+		).run(
+			msgId,
+			opts.filename ?? null,
+			opts.contentType ?? null,
+			opts.size ?? data?.length ?? 0,
+			opts.contentId ?? null,
+			hash,
+		);
+	} else {
+		// For "no data" tests, insert a placeholder blob so content_hash NOT NULL is satisfied
+		const placeholder = Buffer.alloc(0);
+		const hash = upsertAttachmentBlob(db, placeholder);
+		db.prepare(
+			"INSERT INTO attachments (message_id, filename, content_type, size, content_id, content_hash) VALUES (?, ?, ?, ?, ?, ?)",
+		).run(
+			msgId,
+			opts.filename ?? null,
+			opts.contentType ?? null,
+			opts.size ?? 0,
+			opts.contentId ?? null,
+			hash,
+		);
+	}
+	return Number((db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id);
+}
+
 describe("Attachments API", () => {
 	let db: Database.Database;
 	let app: Hono;
@@ -47,10 +90,12 @@ describe("Attachments API", () => {
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1, { hasAttachments: 1 });
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data)
-				VALUES (?, 'test.pdf', 'application/pdf', 1024, X'48656C6C6F')
-			`).run(msgId);
+			insertAttachment(db, msgId, {
+				filename: "test.pdf",
+				contentType: "application/pdf",
+				size: 1024,
+				data: Buffer.from("Hello"),
+			});
 
 			const { status, body } = await jsonRequest(`/api/messages/${msgId}/attachments`);
 			expect(status).toBe(200);
@@ -64,14 +109,12 @@ describe("Attachments API", () => {
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data)
-				VALUES (?, 'test.txt', 'text/plain', 5, X'48656C6C6F')
-			`).run(msgId);
-
-			const attId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			const attId = insertAttachment(db, msgId, {
+				filename: "test.txt",
+				contentType: "text/plain",
+				size: 5,
+				data: Buffer.from("Hello"),
+			});
 
 			const res = await request(`/api/attachments/${attId}`);
 			expect(res.status).toBe(200);
@@ -94,10 +137,13 @@ describe("Attachments API", () => {
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data, content_id)
-				VALUES (?, 'logo.png', 'image/png', 5, X'89504E47', 'logo123')
-			`).run(msgId);
+			insertAttachment(db, msgId, {
+				filename: "logo.png",
+				contentType: "image/png",
+				size: 4,
+				data: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+				contentId: "logo123",
+			});
 
 			const res = await request(`/api/attachments/by-cid/${msgId}/logo123`);
 			expect(res.status).toBe(200);
@@ -117,46 +163,50 @@ describe("Attachments API", () => {
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data, content_id)
-				VALUES (?, 'data.bin', NULL, 3, X'414243', 'cid-null')
-			`).run(msgId);
+			insertAttachment(db, msgId, {
+				filename: "data.bin",
+				contentType: null,
+				size: 3,
+				data: Buffer.from("ABC"),
+				contentId: "cid-null",
+			});
 
 			const res = await request(`/api/attachments/by-cid/${msgId}/cid-null`);
 			expect(res.status).toBe(200);
 			expect(res.headers.get("Content-Type")).toBe("application/octet-stream");
 		});
 
-		test("null data returns empty response", async () => {
+		test("empty data returns empty response", async () => {
 			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data, content_id)
-				VALUES (?, 'empty.bin', 'application/octet-stream', 0, NULL, 'cid-empty')
-			`).run(msgId);
+			insertAttachment(db, msgId, {
+				filename: "empty.bin",
+				contentType: "application/octet-stream",
+				size: 0,
+				data: null,
+				contentId: "cid-empty",
+			});
 
 			const res = await request(`/api/attachments/by-cid/${msgId}/cid-empty`);
 			expect(res.status).toBe(200);
 		});
 	});
 
-	// ─── Null data in download endpoint ─────────────────────
-	describe("Null data handling", () => {
-		test("GET /api/attachments/:id returns response for null data", async () => {
+	// ─── Empty data in download endpoint ─────────────────────
+	describe("Empty data handling", () => {
+		test("GET /api/attachments/:id returns response for empty data", async () => {
 			const identityId = createTestInboundConnector(db);
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data)
-				VALUES (?, 'empty.txt', 'text/plain', 0, NULL)
-			`).run(msgId);
-
-			const attId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			const attId = insertAttachment(db, msgId, {
+				filename: "empty.txt",
+				contentType: "text/plain",
+				size: 0,
+				data: null,
+			});
 
 			const res = await request(`/api/attachments/${attId}`);
 			expect(res.status).toBe(200);
@@ -171,14 +221,12 @@ describe("Attachments API", () => {
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data)
-				VALUES (?, '../../../etc/passwd', 'text/plain', 5, X'48656C6C6F')
-			`).run(msgId);
-
-			const attId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			const attId = insertAttachment(db, msgId, {
+				filename: "../../../etc/passwd",
+				contentType: "text/plain",
+				size: 5,
+				data: Buffer.from("Hello"),
+			});
 
 			const res = await request(`/api/attachments/${attId}`);
 			expect(res.status).toBe(200);
@@ -192,14 +240,12 @@ describe("Attachments API", () => {
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data)
-				VALUES (?, 'C:\\Windows\\evil.exe', 'application/octet-stream', 5, X'48656C6C6F')
-			`).run(msgId);
-
-			const attId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			const attId = insertAttachment(db, msgId, {
+				filename: "C:\\Windows\\evil.exe",
+				contentType: "application/octet-stream",
+				size: 5,
+				data: Buffer.from("Hello"),
+			});
 
 			const res = await request(`/api/attachments/${attId}`);
 			const disposition = res.headers.get("Content-Disposition") ?? "";
@@ -211,14 +257,12 @@ describe("Attachments API", () => {
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data)
-				VALUES (?, ?, 'text/plain', 5, X'48656C6C6F')
-			`).run(msgId, 'file"name.txt');
-
-			const attId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			const attId = insertAttachment(db, msgId, {
+				filename: 'file"name.txt',
+				contentType: "text/plain",
+				size: 5,
+				data: Buffer.from("Hello"),
+			});
 
 			const res = await request(`/api/attachments/${attId}`);
 			const disposition = res.headers.get("Content-Disposition") ?? "";
@@ -230,14 +274,12 @@ describe("Attachments API", () => {
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data)
-				VALUES (?, NULL, 'application/octet-stream', 5, X'48656C6C6F')
-			`).run(msgId);
-
-			const attId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			const attId = insertAttachment(db, msgId, {
+				filename: null,
+				contentType: "application/octet-stream",
+				size: 5,
+				data: Buffer.from("Hello"),
+			});
 
 			const res = await request(`/api/attachments/${attId}`);
 			const disposition = res.headers.get("Content-Disposition") ?? "";
@@ -249,14 +291,12 @@ describe("Attachments API", () => {
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data)
-				VALUES (?, 'data.bin', NULL, 5, X'48656C6C6F')
-			`).run(msgId);
-
-			const attId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			const attId = insertAttachment(db, msgId, {
+				filename: "data.bin",
+				contentType: null,
+				size: 5,
+				data: Buffer.from("Hello"),
+			});
 
 			const res = await request(`/api/attachments/${attId}`);
 			expect(res.headers.get("Content-Type")).toBe("application/octet-stream");
@@ -268,13 +308,12 @@ describe("Attachments API", () => {
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 			const unicodeName = "дайджест.pdf"; // Russian
 
-			db.prepare(
-				"INSERT INTO attachments (message_id, filename, content_type, size, data) VALUES (?, ?, 'application/pdf', 5, X'48656C6C6F')",
-			).run(msgId, unicodeName);
-
-			const attId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			const attId = insertAttachment(db, msgId, {
+				filename: unicodeName,
+				contentType: "application/pdf",
+				size: 5,
+				data: Buffer.from("Hello"),
+			});
 
 			const res = await request(`/api/attachments/${attId}`);
 			expect(res.status).toBe(200);
@@ -291,14 +330,12 @@ describe("Attachments API", () => {
 			const folderId = createTestFolder(db, identityId, "INBOX");
 			const msgId = createTestMessage(db, identityId, folderId, 1);
 
-			db.prepare(`
-				INSERT INTO attachments (message_id, filename, content_type, size, data)
-				VALUES (?, 'report.pdf', 'application/pdf', 5, X'48656C6C6F')
-			`).run(msgId);
-
-			const attId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
+			const attId = insertAttachment(db, msgId, {
+				filename: "report.pdf",
+				contentType: "application/pdf",
+				size: 5,
+				data: Buffer.from("Hello"),
+			});
 
 			const res = await request(`/api/attachments/${attId}`);
 			const disposition = res.headers.get("Content-Disposition") ?? "";
@@ -396,25 +433,6 @@ describe("Attachments API", () => {
 			const res2 = await request(`/api/attachments/${att2Id}`);
 			expect(Buffer.from(await res1.arrayBuffer()).toString()).toBe("shared attachment");
 			expect(Buffer.from(await res2.arrayBuffer()).toString()).toBe("shared attachment");
-		});
-
-		test("legacy attachment with inline data still serves correctly", async () => {
-			const identityId = createTestInboundConnector(db);
-			const folderId = createTestFolder(db, identityId, "INBOX");
-			const msgId = createTestMessage(db, identityId, folderId, 1);
-
-			// Insert legacy-style row: data in column, no content_hash
-			db.prepare(
-				"INSERT INTO attachments (message_id, filename, content_type, size, data) VALUES (?, ?, ?, ?, ?)",
-			).run(msgId, "legacy.txt", "text/plain", 6, Buffer.from("legacy"));
-
-			const attId = Number(
-				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
-			);
-
-			const res = await request(`/api/attachments/${attId}`);
-			expect(res.status).toBe(200);
-			expect(Buffer.from(await res.arrayBuffer()).toString()).toBe("legacy");
 		});
 	});
 });

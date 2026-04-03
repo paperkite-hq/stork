@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import Database from "better-sqlite3-multiple-ciphers";
 import { MIGRATIONS, SCHEMA_VERSION } from "./schema.js";
@@ -45,11 +46,37 @@ export function ensureSchema(db: Database.Database): void {
 
 	if (currentVersion < SCHEMA_VERSION) {
 		for (let i = currentVersion; i < SCHEMA_VERSION; i++) {
+			const hook = PRE_MIGRATION_HOOKS[i + 1];
+			if (hook) hook(db);
 			db.exec(MIGRATIONS[i]);
 		}
 		db.prepare("UPDATE schema_version SET version = ?").run(SCHEMA_VERSION);
 	}
 }
+
+/**
+ * Pre-migration hooks: JS code that must run before a specific migration's SQL.
+ * Keyed by target schema version (1-indexed, matching SCHEMA_VERSION).
+ */
+const PRE_MIGRATION_HOOKS: Record<number, (db: Database.Database) => void> = {
+	// v21: Hash existing inline attachment data into attachment_blobs before the
+	// SQL migration drops the data column from attachments.
+	21: (db) => {
+		const rows = db
+			.prepare("SELECT id, data FROM attachments WHERE data IS NOT NULL AND content_hash IS NULL")
+			.all() as Array<{ id: number; data: Buffer }>;
+		if (rows.length === 0) return;
+		const insertBlob = db.prepare(
+			"INSERT OR IGNORE INTO attachment_blobs (content_hash, data) VALUES (?, ?)",
+		);
+		const setHash = db.prepare("UPDATE attachments SET content_hash = ? WHERE id = ?");
+		for (const row of rows) {
+			const hash = createHash("sha256").update(row.data).digest("hex");
+			insertBlob.run(hash, row.data);
+			setHash.run(hash, row.id);
+		}
+	},
+};
 
 export type { Database };
 export default Database;

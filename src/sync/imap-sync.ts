@@ -835,12 +835,13 @@ export class ImapSync {
 						const messageId = dbResult.lastInsertRowid;
 						for (const att of parsed.attachments) {
 							const content = att.content ?? null;
-							const contentHash = content ? upsertAttachmentBlob(this.db, content) : null;
+							if (!content) continue; // Can't store without hashable data
+							const contentHash = upsertAttachmentBlob(this.db, content);
 							insertAttachment.run(
 								messageId,
 								att.filename ?? null,
 								toStringOrNull(att.contentType) ?? "application/octet-stream",
-								typeof att.size === "number" ? att.size : (att.content?.length ?? 0),
+								typeof att.size === "number" ? att.size : content.length,
 								att.contentId ?? null,
 								contentHash,
 							);

@@ -860,9 +860,9 @@ describe("IMAP sync edge cases", () => {
 
 		const att = db
 			.prepare(
-				`SELECT a.filename, a.content_type, a.size, COALESCE(b.data, a.data) AS data
+				`SELECT a.filename, a.content_type, a.size, b.data
 				FROM attachments a
-				LEFT JOIN attachment_blobs b ON b.content_hash = a.content_hash
+				JOIN attachment_blobs b ON b.content_hash = a.content_hash
 				WHERE a.message_id = ?`,
 			)
 			.get(msg.id) as

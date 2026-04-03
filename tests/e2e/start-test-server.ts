@@ -4,6 +4,7 @@
  */
 import { serve } from "@hono/node-server";
 import { createApp } from "../../src/api/server.js";
+import { upsertAttachmentBlob } from "../../src/storage/attachment-storage.js";
 import {
 	addMessageLabel,
 	createTestContext,
@@ -155,10 +156,11 @@ const attachMsgId = createTestMessage(db, connectorId, inboxId, 15, {
 inboxMessageIds.push(attachMsgId);
 
 // Add attachment record
+const attHash = upsertAttachmentBlob(db, Buffer.from("fake pdf content"));
 db.prepare(`
-	INSERT INTO attachments (message_id, filename, content_type, size, data)
+	INSERT INTO attachments (message_id, filename, content_type, size, content_hash)
 	VALUES (?, ?, ?, ?, ?)
-`).run(attachMsgId, "document.pdf", "application/pdf", 12345, Buffer.from("fake pdf content"));
+`).run(attachMsgId, "document.pdf", "application/pdf", 12345, attHash);
 
 // Link messages to labels (mirrors what IMAP sync does in production)
 for (const msgId of inboxMessageIds) {

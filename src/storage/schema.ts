@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 20;
+export const SCHEMA_VERSION = 21;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -982,5 +982,49 @@ CREATE TABLE IF NOT EXISTS attachment_blobs (
 ALTER TABLE attachments ADD COLUMN content_hash TEXT REFERENCES attachment_blobs(content_hash);
 
 CREATE INDEX IF NOT EXISTS idx_attachments_content_hash ON attachments(content_hash);
+`,
+	// Version 21: Clean up attachment de-duplication — drop legacy inline data column.
+	//
+	// Pre-release cleanup (no real users yet): removes the dual-storage fallback from v20.
+	// All attachment data now lives exclusively in attachment_blobs. The attachments table
+	// no longer has a data column; content_hash is NOT NULL.
+	//
+	// Migration steps:
+	//   1. Move any existing inline data (attachments.data) into attachment_blobs.
+	//   2. Rebuild the attachments table without the data column, content_hash NOT NULL.
+	//   3. Delete orphaned attachment rows that had no data and no content_hash.
+	`
+PRAGMA foreign_keys = OFF;
+BEGIN;
+
+-- Step 1: Migrate any legacy inline data into attachment_blobs.
+-- Compute SHA-256 would require app code, so we handle this in the JS migration hook.
+-- For pure-SQL, we delete rows that have no data at all (no inline data AND no content_hash).
+DELETE FROM attachments WHERE data IS NULL AND content_hash IS NULL;
+
+-- Step 2: Rebuild attachments without the data column, content_hash NOT NULL.
+CREATE TABLE attachments_v21 (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+	filename TEXT,
+	content_type TEXT,
+	size INTEGER,
+	content_id TEXT,
+	content_hash TEXT NOT NULL REFERENCES attachment_blobs(content_hash)
+);
+
+INSERT INTO attachments_v21 (id, message_id, filename, content_type, size, content_id, content_hash)
+SELECT id, message_id, filename, content_type, size, content_id, content_hash
+FROM attachments
+WHERE content_hash IS NOT NULL;
+
+DROP TABLE attachments;
+ALTER TABLE attachments_v21 RENAME TO attachments;
+
+CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_content_hash ON attachments(content_hash);
+
+COMMIT;
+PRAGMA foreign_keys = ON;
 `,
 ];
