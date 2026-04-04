@@ -91,7 +91,10 @@ export function ToastContainer() {
 function ToastItem({
 	toast: t,
 	onDismiss,
-}: { toast: ToastMessage; onDismiss: (id: number) => void }) {
+}: {
+	toast: ToastMessage;
+	onDismiss: (id: number) => void;
+}) {
 	useEffect(() => {
 		// Action toasts stay longer so the user can click the action
 		const timer = setTimeout(() => onDismiss(t.id), t.action ? 5000 : 3000);

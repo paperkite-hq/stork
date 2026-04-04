@@ -20,8 +20,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createApp } from "../api/server.js";
-import { bootContainer, transitionToUnlocked } from "./lifecycle.js";
 import type { ContainerContext } from "./lifecycle.js";
+import { bootContainer, transitionToUnlocked } from "./lifecycle.js";
 
 // ---------------------------------------------------------------------------
 // Module mocks — names prefixed with "mock" so they survive vi.mock hoisting

@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { type SearchResult, api } from "../api";
+import { api, type SearchResult } from "../api";
 import { extractSearchTerms } from "../utils";
 import {
 	CalendarIcon,

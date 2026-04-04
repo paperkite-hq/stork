@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
-	MockImapServer,
 	buildRawEmail,
 	buildRawEmailWithAttachment,
+	MockImapServer,
 } from "../test-helpers/mock-imap-server.js";
 import { ImapIngestConnector } from "./imap.js";
 

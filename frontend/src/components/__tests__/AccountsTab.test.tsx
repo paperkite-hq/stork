@@ -24,6 +24,7 @@ vi.mock("../../api", () => ({
 
 import { api } from "../../api";
 import { toast } from "../Toast";
+
 const mockApi = api as unknown as {
 	identities: {
 		delete: ReturnType<typeof vi.fn>;

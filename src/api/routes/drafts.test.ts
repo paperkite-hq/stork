@@ -169,7 +169,7 @@ describe("Drafts API", () => {
 		});
 
 		test("requires identity_id on list", async () => {
-			const { status, body } = await jsonRequest("/api/drafts");
+			const { status, body: _body } = await jsonRequest("/api/drafts");
 			expect(status).toBe(400);
 		});
 

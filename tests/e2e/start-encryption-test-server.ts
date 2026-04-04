@@ -54,6 +54,7 @@ app.route("/api", api);
 
 // SPA fallback — serve frontend for non-API routes
 import { serveStatic } from "@hono/node-server/serve-static";
+
 app.use("/assets/*", serveStatic({ root: "./frontend/dist" }));
 app.get("/stork.svg", serveStatic({ root: "./frontend/dist", path: "stork.svg" }));
 app.get("*", serveStatic({ root: "./frontend/dist", path: "index.html" }));

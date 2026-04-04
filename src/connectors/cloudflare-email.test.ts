@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import { CloudflareEmailIngestConnector } from "./cloudflare-email.js";
-import type { CloudflareEmailPayload } from "./cloudflare-email.js";
 
 /** Builds a minimal RFC 5322 message and returns it as base64 */
 function buildRawEmail(opts: {

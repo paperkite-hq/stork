@@ -363,9 +363,9 @@ describe("refreshLabelCounts", () => {
 
 import { afterEach } from "vitest";
 import {
+	buildRawEmail,
 	MockImapServer,
 	type MockMailbox,
-	buildRawEmail,
 } from "../test-helpers/mock-imap-server.js";
 
 describe("syncAll — label pipeline integration", () => {

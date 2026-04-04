@@ -1,10 +1,10 @@
 import { useState } from "react";
 import {
+	api,
 	type CreateInboundConnectorRequest,
 	type CreateOutboundConnectorRequest,
 	type InboundConnector,
 	type OutboundConnector,
-	api,
 } from "../../api";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -948,7 +948,11 @@ function ModeButton({
 	active,
 	onClick,
 	label,
-}: { active: boolean; onClick: () => void; label: string }) {
+}: {
+	active: boolean;
+	onClick: () => void;
+	label: string;
+}) {
 	return (
 		<button
 			type="button"

@@ -1,4 +1,4 @@
-import { type Transporter, createTransport } from "nodemailer";
+import { createTransport, type Transporter } from "nodemailer";
 import type { OutgoingMessage, SendConnector, SendResult } from "./types.js";
 
 export interface SmtpConfig {

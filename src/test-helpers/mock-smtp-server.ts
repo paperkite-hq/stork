@@ -1,4 +1,4 @@
-import { type Server, type Socket, createServer } from "node:net";
+import { createServer, type Server, type Socket } from "node:net";
 
 /**
  * Minimal mock SMTP server for testing email sending.

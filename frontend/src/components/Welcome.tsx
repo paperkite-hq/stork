@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type CreateInboundConnectorRequest, api } from "../api";
+import { api, type CreateInboundConnectorRequest } from "../api";
 import { WELL_KNOWN_PROVIDERS } from "../utils";
 import { MoonIcon, SunIcon } from "./Icons";
 
@@ -297,13 +297,7 @@ function ImapForm({
 
 // ── Cloudflare R2 form ────────────────────────────────────────────────────────
 
-function R2Form({
-	data,
-	onChange,
-}: {
-	data: R2FormData;
-	onChange: (d: R2FormData) => void;
-}) {
+function R2Form({ data, onChange }: { data: R2FormData; onChange: (d: R2FormData) => void }) {
 	return (
 		<div className="space-y-3">
 			<div className="text-xs text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded px-3 py-2 space-y-1">

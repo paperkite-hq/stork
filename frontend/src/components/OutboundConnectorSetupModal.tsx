@@ -41,13 +41,7 @@ function defaultForm(): OutboundFormData {
 
 // ── Step 1: Create Connector ───────────────────────────────────────────────
 
-function ConnectorStep({
-	onCreated,
-	onCancel,
-}: {
-	onCreated: () => void;
-	onCancel: () => void;
-}) {
+function ConnectorStep({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
 	const [form, setForm] = useState<OutboundFormData>(defaultForm());
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);

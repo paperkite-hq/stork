@@ -84,7 +84,7 @@ describe("SyncScheduler", () => {
 	});
 
 	test("loads identities from database", () => {
-		const identityId = createConnector(db, "Identity 1");
+		const _identityId = createConnector(db, "Identity 1");
 		createConnector(db, "Identity 2");
 
 		scheduler = new SyncScheduler(db);

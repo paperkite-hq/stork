@@ -19,20 +19,20 @@
 		"db:migrate": "tsx src/storage/migrate.ts"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.19.11",
+		"@hono/node-server": "^1.19.12",
 		"@noble/hashes": "^2.0.1",
 		"better-sqlite3-multiple-ciphers": "^12.8.0",
 		"bip39": "^3.1.0",
-		"hono": "^4.7.0",
+		"hono": "^4.12.10",
 		"imapflow": "^1.0.171",
 		"mailparser": "^3.9.4",
 		"nodemailer": "^8.0.4"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^1.9.0",
-		"@playwright/test": "^1.58.2",
+		"@biomejs/biome": "^2.4.10",
+		"@playwright/test": "^1.59.1",
 		"@types/mailparser": "^3.4.6",
-		"@types/node": "^22.0.0",
+		"@types/node": "^22.19.17",
 		"@types/nodemailer": "^7.0.11",
 		"@vitest/coverage-v8": "^4.1.0",
 		"esbuild": "^0.25.0",

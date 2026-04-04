@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Identity } from "../api";
 import {
-	type ComposeFormat,
-	type ComposeMode,
 	buildForwardHtmlBody,
 	buildForwardSubject,
 	buildReplyAllCc,
 	buildReplyBody,
 	buildReplyHtmlBody,
 	buildReplySubject,
+	type ComposeFormat,
+	type ComposeMode,
 	clearDraft,
 	draftKey,
 	getInitialFormat,
@@ -255,27 +255,6 @@ export function ComposeModal({
 		[handleSend],
 	);
 
-	const requestFormatSwitch = useCallback(
-		(newFormat: ComposeFormat) => {
-			if (newFormat === format) return;
-			// Warn about formatting loss when switching from HTML to plain text
-			const hasContent =
-				format === "html"
-					? (getEditorHtml() || "")
-							.replace(/<br\s*\/?>/gi, "")
-							.replace(/<[^>]*>/g, "")
-							.trim().length > 0
-					: body.trim().length > 0;
-			if (hasContent && format === "html" && newFormat === "plain") {
-				pendingFormatRef.current = newFormat;
-				setShowFormatWarning(true);
-			} else {
-				switchFormat(newFormat);
-			}
-		},
-		[format, body, getEditorHtml],
-	);
-
 	const switchFormat = useCallback(
 		(newFormat: ComposeFormat) => {
 			if (newFormat === "html" && format === "plain") {
@@ -299,6 +278,27 @@ export function ComposeModal({
 			pendingFormatRef.current = null;
 		},
 		[format, body, getEditorHtml],
+	);
+
+	const requestFormatSwitch = useCallback(
+		(newFormat: ComposeFormat) => {
+			if (newFormat === format) return;
+			// Warn about formatting loss when switching from HTML to plain text
+			const hasContent =
+				format === "html"
+					? (getEditorHtml() || "")
+							.replace(/<br\s*\/?>/gi, "")
+							.replace(/<[^>]*>/g, "")
+							.trim().length > 0
+					: body.trim().length > 0;
+			if (hasContent && format === "html" && newFormat === "plain") {
+				pendingFormatRef.current = newFormat;
+				setShowFormatWarning(true);
+			} else {
+				switchFormat(newFormat);
+			}
+		},
+		[format, body, getEditorHtml, switchFormat],
 	);
 
 	const handleEditorInput = useCallback(() => {

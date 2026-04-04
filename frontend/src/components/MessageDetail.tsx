@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { type Folder, type Message, type TrustedSender, api } from "../api";
+import { api, type Folder, type Message, type TrustedSender } from "../api";
 import { isUnread } from "../utils";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MailOpenIcon } from "./Icons";

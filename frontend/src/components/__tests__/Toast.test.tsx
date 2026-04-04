@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ToastContainer, _resetToastDedup, toast } from "../Toast";
+import { _resetToastDedup, ToastContainer, toast } from "../Toast";
 
 describe("ToastContainer", () => {
 	beforeEach(() => {

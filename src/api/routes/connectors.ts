@@ -1,10 +1,10 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
 import {
-	type IngestConnectorType,
-	type SendConnectorType,
 	createIngestConnector,
 	createSendConnector,
+	type IngestConnectorType,
+	type SendConnectorType,
 } from "../../connectors/registry.js";
 import type { R2Poller } from "../../sync/r2-poller.js";
 import { signR2Request } from "../../sync/r2-sigv4.js";

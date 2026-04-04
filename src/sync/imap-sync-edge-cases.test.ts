@@ -2,10 +2,10 @@ import type Database from "better-sqlite3-multiple-ciphers";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { decompressBuffer, decompressText } from "../storage/compression.js";
 import {
-	MockImapServer,
-	type MockMailbox,
 	buildRawEmail,
 	buildRawEmailWithAttachment,
+	MockImapServer,
+	type MockMailbox,
 } from "../test-helpers/mock-imap-server.js";
 import { createTestDb } from "../test-helpers/test-db.js";
 import { ImapSync } from "./imap-sync.js";
@@ -508,7 +508,7 @@ describe("IMAP sync edge cases", () => {
 		// Second sync — should detect the flag change
 		const sync2 = makeSync();
 		await sync2.connect();
-		const result2 = await sync2.syncAll();
+		const _result2 = await sync2.syncAll();
 
 		const flagsAfter = db
 			.prepare("SELECT flags FROM messages WHERE inbound_connector_id = ? AND uid = 1")

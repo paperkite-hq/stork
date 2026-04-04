@@ -1,13 +1,9 @@
 import { useEffect, useState } from "react";
-import { type TrustedSender, api } from "../../api";
+import { api, type TrustedSender } from "../../api";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { toast } from "../Toast";
 
-export function TrustedSendersPanel({
-	onClose,
-}: {
-	onClose: () => void;
-}) {
+export function TrustedSendersPanel({ onClose }: { onClose: () => void }) {
 	const [senders, setSenders] = useState<TrustedSender[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [deleteConfirm, setDeleteConfirm] = useState<TrustedSender | null>(null);

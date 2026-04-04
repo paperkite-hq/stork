@@ -32,6 +32,7 @@ vi.mock("../../api", () => ({
 }));
 
 import { api } from "../../api";
+
 const mockApi = api as unknown as {
 	connectors: {
 		outbound: { list: ReturnType<typeof vi.fn> };

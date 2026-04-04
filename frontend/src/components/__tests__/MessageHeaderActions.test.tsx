@@ -23,7 +23,10 @@ vi.mock("../LabelManager", () => ({
 	MessageLabelPicker: ({
 		messageId,
 		onLabelsChanged,
-	}: { messageId: number; onLabelsChanged?: () => void }) => (
+	}: {
+		messageId: number;
+		onLabelsChanged?: () => void;
+	}) => (
 		<div data-testid={`label-picker-${messageId}`}>
 			<button type="button" onClick={onLabelsChanged}>
 				Change Labels

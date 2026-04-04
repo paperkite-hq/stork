@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type ContainerState, type Message, type SearchResult, api } from "./api";
+import { api, type ContainerState, type Message, type SearchResult } from "./api";
 import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { DemoBanner } from "./components/DemoBanner";

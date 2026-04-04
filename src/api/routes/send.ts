@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
-import { type SendConnectorType, createSendConnector } from "../../connectors/registry.js";
+import { createSendConnector, type SendConnectorType } from "../../connectors/registry.js";
 import { SmtpSendConnector } from "../../connectors/smtp.js";
 import type { OutgoingAttachment } from "../../connectors/types.js";
 import { upsertAttachmentBlob } from "../../storage/attachment-storage.js";

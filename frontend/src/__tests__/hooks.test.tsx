@@ -1,5 +1,4 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { useRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -35,7 +34,7 @@ describe("useAsync", () => {
 			resolveFirst = r;
 		});
 		let callCount = 0;
-		const fn = vi.fn((signal: AbortSignal) => {
+		const fn = vi.fn((_signal: AbortSignal) => {
 			callCount++;
 			if (callCount === 1) return firstPromise;
 			return Promise.resolve("second");
@@ -452,11 +451,7 @@ describe("useHistoryNavigation", () => {
 	it("replaces initial history entry with current state when identityId becomes non-null", () => {
 		const onNavigate = vi.fn();
 		const { rerender } = renderHook(
-			(props: {
-				identityId: number | null;
-				labelId: number | null;
-				messageId: number | null;
-			}) =>
+			(props: { identityId: number | null; labelId: number | null; messageId: number | null }) =>
 				useHistoryNavigation({
 					...props,
 					onNavigate,
@@ -482,11 +477,7 @@ describe("useHistoryNavigation", () => {
 		const pushSpy = vi.spyOn(history, "pushState");
 
 		const { rerender } = renderHook(
-			(props: {
-				identityId: number | null;
-				labelId: number | null;
-				messageId: number | null;
-			}) =>
+			(props: { identityId: number | null; labelId: number | null; messageId: number | null }) =>
 				useHistoryNavigation({
 					...props,
 					onNavigate,
@@ -512,11 +503,7 @@ describe("useHistoryNavigation", () => {
 		const pushSpy = vi.spyOn(history, "pushState");
 
 		const { rerender } = renderHook(
-			(props: {
-				identityId: number | null;
-				labelId: number | null;
-				messageId: number | null;
-			}) =>
+			(props: { identityId: number | null; labelId: number | null; messageId: number | null }) =>
 				useHistoryNavigation({
 					...props,
 					onNavigate,
@@ -580,11 +567,7 @@ describe("useHistoryNavigation", () => {
 		const pushSpy = vi.spyOn(history, "pushState");
 
 		const { rerender } = renderHook(
-			(props: {
-				identityId: number | null;
-				labelId: number | null;
-				messageId: number | null;
-			}) =>
+			(props: { identityId: number | null; labelId: number | null; messageId: number | null }) =>
 				useHistoryNavigation({
 					...props,
 					onNavigate,

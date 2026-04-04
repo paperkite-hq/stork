@@ -1,6 +1,7 @@
 import type { Message } from "../api";
 import { formatFullDate, hasRemoteImages, sanitizeEmailHtml } from "../email-sanitizer";
 import { formatAddressList } from "../utils";
+import { AttachmentList } from "./AttachmentList";
 import {
 	ChevronDownIcon,
 	ChevronRightIcon,
@@ -9,10 +10,8 @@ import {
 	ReplyAllIcon,
 	ReplyIcon,
 } from "./Icons";
-import { highlightText } from "./SearchPanel";
-
-import { AttachmentList } from "./AttachmentList";
 import { SandboxedEmail } from "./SandboxedEmail";
+import { highlightText } from "./SearchPanel";
 
 interface ThreadMessageProps {
 	msg: Message;

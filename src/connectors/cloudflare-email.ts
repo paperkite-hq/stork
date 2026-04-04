@@ -70,7 +70,7 @@ export class CloudflareEmailIngestConnector implements IngestConnector {
 		];
 	}
 
-	async *fetchMessages(folder: string, sinceUid: number): AsyncIterable<RawMessage> {
+	async *fetchMessages(_folder: string, sinceUid: number): AsyncIterable<RawMessage> {
 		for (const msg of this.buffer) {
 			if (msg.uid > sinceUid) {
 				yield msg;

@@ -1,8 +1,8 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ensureSchema } from "../storage/db.js";
-import { ConnectionPool } from "./connection-pool.js";
 import type { PooledConnection } from "./connection-pool.js";
+import { ConnectionPool } from "./connection-pool.js";
 import type { ImapSync } from "./imap-sync.js";
 
 function createTestDb(): Database.Database {

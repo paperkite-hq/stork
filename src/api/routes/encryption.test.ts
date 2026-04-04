@@ -4,8 +4,8 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../api/server.js";
 import { keysFileExists } from "../../crypto/keys.js";
-import { bootContainer, transitionToUnlocked } from "../../crypto/lifecycle.js";
 import type { ContainerContext } from "../../crypto/lifecycle.js";
+import { bootContainer, transitionToUnlocked } from "../../crypto/lifecycle.js";
 
 let dataDir: string;
 

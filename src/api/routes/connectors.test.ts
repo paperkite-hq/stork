@@ -648,7 +648,7 @@ describe("Connectors API", () => {
 		});
 
 		test("DELETE /api/connectors/outbound/:id returns 409 when in use by identity", async () => {
-			const { body: inConn } = await post("/api/connectors/inbound", {
+			const { body: _inConn } = await post("/api/connectors/inbound", {
 				name: "In",
 				type: "imap",
 				imap_host: "imap.example.com",

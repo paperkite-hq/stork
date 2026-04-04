@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type Label, type LabelSummary, api } from "../api";
+import { api, type Label, type LabelSummary } from "../api";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { XIcon } from "./Icons";
 import { toast } from "./Toast";

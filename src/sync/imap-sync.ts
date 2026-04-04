@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { ImapFlow } from "imapflow";
-import { type Attachment, type ParsedMail, simpleParser } from "mailparser";
+import { type ParsedMail, simpleParser } from "mailparser";
 import { upsertAttachmentBlob } from "../storage/attachment-storage.js";
 import { compressText } from "../storage/compression.js";
 import { htmlToText } from "../storage/html-to-text.js";

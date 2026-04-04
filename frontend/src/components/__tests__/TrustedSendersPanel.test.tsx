@@ -17,6 +17,7 @@ vi.mock("../../api", () => ({
 
 import { api } from "../../api";
 import { toast } from "../Toast";
+
 const mockApi = api as unknown as {
 	trustedSenders: {
 		list: ReturnType<typeof vi.fn>;

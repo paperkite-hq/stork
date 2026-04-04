@@ -332,7 +332,7 @@ test.describe("API integration", () => {
 			},
 		});
 		expect(inboundRes.ok()).toBeTruthy();
-		const inbound = await inboundRes.json();
+		const _inbound = await inboundRes.json();
 
 		const outboundRes = await request.post("/api/connectors/outbound", {
 			data: {

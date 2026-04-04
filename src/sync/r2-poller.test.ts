@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createTestDb } from "../test-helpers/test-db.js";
-import { R2Poller, parseListObjectsKeys } from "./r2-poller.js";
+import { parseListObjectsKeys, R2Poller } from "./r2-poller.js";
 
 /** Minimal RFC 5322 email, base64-encoded */
 function buildRawEmail(

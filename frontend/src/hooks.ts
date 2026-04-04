@@ -16,7 +16,6 @@ export function useAsync<T>(
 	const [error, setError] = useState<string | null>(null);
 	const abortRef = useRef<AbortController | null>(null);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: fn is intentionally controlled by caller-provided deps
 	const refetch = useCallback(() => {
 		// Abort any previous in-flight request
 		abortRef.current?.abort();
@@ -40,6 +39,7 @@ export function useAsync<T>(
 			.finally(() => {
 				if (!controller.signal.aborted) setLoading(false);
 			});
+		// biome-ignore lint/correctness/useExhaustiveDependencies: fn is intentionally controlled by caller-provided deps
 	}, deps);
 
 	useEffect(() => {

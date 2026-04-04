@@ -1,27 +1,27 @@
-export type {
-	IngestConnector,
-	SendConnector,
-	FolderInfo,
-	RawMessage,
-	RawAttachment,
-	OutgoingMessage,
-	OutgoingAttachment,
-	SendResult,
-} from "./types.js";
-
-export { ImapIngestConnector, type ImapConnectorConfig } from "./imap.js";
-export { SmtpSendConnector, type SmtpConfig } from "./smtp.js";
 export {
-	CloudflareEmailIngestConnector,
 	type CloudflareEmailConfig,
+	CloudflareEmailIngestConnector,
 	type CloudflareEmailPayload,
 } from "./cloudflare-email.js";
-export { SesSendConnector, type SesConfig } from "./ses.js";
+
+export { type ImapConnectorConfig, ImapIngestConnector } from "./imap.js";
 export {
 	createIngestConnector,
 	createSendConnector,
 	type IngestConnectorConfig,
-	type SendConnectorConfig,
 	type IngestConnectorType,
+	type SendConnectorConfig,
 	type SendConnectorType,
 } from "./registry.js";
+export { type SesConfig, SesSendConnector } from "./ses.js";
+export { type SmtpConfig, SmtpSendConnector } from "./smtp.js";
+export type {
+	FolderInfo,
+	IngestConnector,
+	OutgoingAttachment,
+	OutgoingMessage,
+	RawAttachment,
+	RawMessage,
+	SendConnector,
+	SendResult,
+} from "./types.js";

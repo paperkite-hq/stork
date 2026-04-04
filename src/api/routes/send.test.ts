@@ -3,13 +3,7 @@ import type { Hono } from "hono";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../api/server.js";
 import { MockSmtpServer } from "../../test-helpers/mock-smtp-server.js";
-import {
-	createTestContext,
-	createTestDb,
-	createTestFolder,
-	createTestIdentity,
-	createTestMessage,
-} from "../../test-helpers/test-db.js";
+import { createTestContext, createTestDb, createTestIdentity } from "../../test-helpers/test-db.js";
 
 describe("Send API", () => {
 	let db: Database.Database;
@@ -210,7 +204,7 @@ describe("Send API", () => {
 		});
 
 		test("returns 404 for non-existent account", async () => {
-			const { status, body } = await jsonRequest("/api/send", {
+			const { status, body: _body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
@@ -415,7 +409,7 @@ describe("Send API", () => {
 				ses_region: "eu-west-1",
 			});
 
-			const { status, body } = await jsonRequest("/api/send", {
+			const { status, body: _body } = await jsonRequest("/api/send", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({

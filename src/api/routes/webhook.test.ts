@@ -143,7 +143,7 @@ describe("Cloudflare Email Webhook", () => {
 	test("stores message for linked identity", async () => {
 		const connectorId = createCloudflareConnector();
 		const outboundId = createOutboundConnector();
-		const identityId = createIdentity("Alice", "alice@example.com", connectorId, outboundId);
+		const _identityId = createIdentity("Alice", "alice@example.com", connectorId, outboundId);
 
 		const raw = buildRawEmail({
 			from: "sender@example.com",
@@ -193,8 +193,8 @@ describe("Cloudflare Email Webhook", () => {
 	test("stores message for multiple identities sharing the same connector", async () => {
 		const connectorId = createCloudflareConnector();
 		const outboundId = createOutboundConnector();
-		const identity1 = createIdentity("Alice", "alice@example.com", connectorId, outboundId);
-		const identity2 = createIdentity("Bob", "bob@example.com", connectorId, outboundId);
+		const _identity1 = createIdentity("Alice", "alice@example.com", connectorId, outboundId);
+		const _identity2 = createIdentity("Bob", "bob@example.com", connectorId, outboundId);
 
 		const raw = buildRawEmail({ subject: "Shared connector test" });
 		const res = await webhookPost(connectorId, {

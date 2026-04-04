@@ -9,6 +9,7 @@ vi.mock("../../api", () => ({
 }));
 
 import { api } from "../../api";
+
 const mockDemo = vi.mocked(api.demo);
 
 describe("DemoBanner", () => {

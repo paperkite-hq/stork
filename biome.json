@@ -1,9 +1,16 @@
 {
-	"$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
 	"files": {
-		"ignore": ["dist/**", "frontend/dist/**", "node_modules/**", "coverage/**", "test-results/**"]
+		"includes": [
+			"**",
+			"!**/dist",
+			"!**/frontend/dist",
+			"!**/node_modules",
+			"!**/coverage",
+			"!**/test-results"
+		]
 	},
-	"organizeImports": { "enabled": true },
+	"assist": { "actions": { "source": { "organizeImports": "on" } } },
 	"formatter": {
 		"indentStyle": "tab",
 		"lineWidth": 100
@@ -17,8 +24,18 @@
 			},
 			"a11y": {
 				"noAutofocus": "off",
-				"useSemanticElements": "off"
+				"useSemanticElements": "off",
+				"noStaticElementInteractions": "off",
+				"useAriaPropsSupportedByRole": "off"
+			},
+			"suspicious": {
+				"noUnknownAtRules": "off"
 			}
+		}
+	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
 		}
 	}
 }

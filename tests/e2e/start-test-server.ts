@@ -41,11 +41,11 @@ const sentId = createTestFolder(db, connectorId, "Sent", {
 	name: "Sent",
 	specialUse: "\\Sent",
 });
-const draftsId = createTestFolder(db, connectorId, "Drafts", {
+const _draftsId = createTestFolder(db, connectorId, "Drafts", {
 	name: "Drafts",
 	specialUse: "\\Drafts",
 });
-const trashId = createTestFolder(db, connectorId, "Trash", {
+const _trashId = createTestFolder(db, connectorId, "Trash", {
 	name: "Trash",
 	specialUse: "\\Trash",
 });

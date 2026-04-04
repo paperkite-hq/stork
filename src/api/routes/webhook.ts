@@ -1,4 +1,3 @@
-import type Database from "better-sqlite3-multiple-ciphers";
 import { Hono } from "hono";
 import type { ContainerContext } from "../../crypto/lifecycle.js";
 import { storeInboundEmail } from "../../storage/email-storage.js";

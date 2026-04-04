@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../../api";
 import type { Label, LabelSummary } from "../../api";
+import { api } from "../../api";
 import { LabelManager, MessageLabelPicker } from "../LabelManager";
 
 vi.mock("../../api", () => ({

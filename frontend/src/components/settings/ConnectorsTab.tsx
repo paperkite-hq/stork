@@ -1,11 +1,11 @@
 import { Fragment, useEffect, useState } from "react";
 import {
+	api,
 	type CreateInboundConnectorRequest,
 	type CreateOutboundConnectorRequest,
 	type Identity,
 	type InboundConnector,
 	type OutboundConnector,
-	api,
 } from "../../api";
 import { useAsync } from "../../hooks";
 import { SyncStatusPanel } from "./SyncStatusPanel";

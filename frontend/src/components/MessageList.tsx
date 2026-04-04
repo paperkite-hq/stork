@@ -1,4 +1,4 @@
-import { type RefObject, memo, useEffect, useRef } from "react";
+import { memo, type RefObject, useEffect, useRef } from "react";
 import type { Folder, InboundConnector, LabelSummary, MessageSummary } from "../api";
 import { isFlagged, isUnread } from "../utils";
 import { BulkActionsBar } from "./BulkActionsBar";
@@ -497,7 +497,6 @@ export function MessageList({
 			)}
 
 			{/* Message list */}
-			{/* biome-ignore lint/a11y/useFocusableInteractive: keyboard navigation handled by app-level j/k shortcuts, not native focus */}
 			<div className="flex-1 overflow-y-auto" role="listbox" aria-label={`${folderName} messages`}>
 				{messages.length === 0 && (
 					<div className="p-8 text-center text-gray-400">

@@ -2,7 +2,7 @@ import type Database from "better-sqlite3-multiple-ciphers";
 import type { Hono } from "hono";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "../../api/server.js";
-import { MockImapServer, buildRawEmail } from "../../test-helpers/mock-imap-server.js";
+import { buildRawEmail, MockImapServer } from "../../test-helpers/mock-imap-server.js";
 import {
 	addMessageLabel,
 	createTestContext,

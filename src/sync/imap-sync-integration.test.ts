@@ -1,9 +1,9 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
+	buildRawEmail,
 	MockImapServer,
 	type MockMailbox,
-	buildRawEmail,
 } from "../test-helpers/mock-imap-server.js";
 import { createTestDb } from "../test-helpers/test-db.js";
 import { ImapSync } from "./imap-sync.js";
@@ -808,7 +808,7 @@ describe("SyncScheduler abort integration with mock IMAP server", () => {
 			INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
 			VALUES ('Test (Inbound)', 'imap', '127.0.0.1', ?, 0, 'testuser', 'testpass')
 		`).run(port);
-		const inboundId = Number(
+		const _inboundId = Number(
 			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
 		);
 	});
@@ -1104,14 +1104,14 @@ describe("archive mode (auto-delete from server after sync)", () => {
 		for (const uid of [1, 2, 3]) {
 			db.prepare(`
 				INSERT OR IGNORE INTO messages (inbound_connector_id, folder_id, uid, subject, flags, pending_archive)
-				VALUES (?, ?, ?, ?, \'\', 1)
+				VALUES (?, ?, ?, ?, '', 1)
 			`).run(identityId, folderRow.id, uid, `Message ${uid}`);
 		}
 
 		// Set last_uid so next sync thinks these were already fetched
 		db.prepare(`
 			INSERT INTO sync_state (inbound_connector_id, folder_id, last_uid, last_synced_at)
-			VALUES (?, ?, 3, datetime(\'now\'))
+			VALUES (?, ?, 3, datetime('now'))
 			ON CONFLICT(inbound_connector_id, folder_id) DO UPDATE SET last_uid = 3
 		`).run(identityId, folderRow.id);
 

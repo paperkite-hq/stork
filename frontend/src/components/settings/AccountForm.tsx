@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+	api,
 	type IdentityDetail,
 	type OutboundConnector,
 	type UpdateIdentityRequest,
-	api,
 } from "../../api";
 import { useAsync } from "../../hooks";
 import { FormField } from "./FormField";

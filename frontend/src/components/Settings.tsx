@@ -118,7 +118,11 @@ function MobileTabButton({
 	active,
 	onClick,
 	label,
-}: { active: boolean; onClick: () => void; label: string }) {
+}: {
+	active: boolean;
+	onClick: () => void;
+	label: string;
+}) {
 	return (
 		<button
 			type="button"
@@ -139,7 +143,12 @@ function TabButton({
 	onClick,
 	label,
 	icon,
-}: { active: boolean; onClick: () => void; label: string; icon: ReactNode }) {
+}: {
+	active: boolean;
+	onClick: () => void;
+	label: string;
+	icon: ReactNode;
+}) {
 	return (
 		<button
 			type="button"
