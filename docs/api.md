@@ -912,3 +912,245 @@ GET /api/identities/:identityId/sync-status
 ```
 
 Returns per-folder sync details including last synced UID.
+
+## Connectors
+
+Connectors are transport adapters — inbound connectors bring mail in, outbound connectors send mail out. Identities reference outbound connectors for sending.
+
+All connector endpoints are prefixed with `/api/connectors`.
+
+### Inbound Connectors
+
+#### List inbound connectors
+
+```
+GET /api/connectors/inbound
+```
+
+Returns all configured inbound connectors. Sensitive fields (passwords, secrets) are omitted.
+
+**Response**: `200 OK`
+```json
+[
+  {
+    "id": 1,
+    "name": "Work IMAP",
+    "type": "imap",
+    "imap_host": "imap.example.com",
+    "imap_port": 993,
+    "imap_tls": 1,
+    "imap_user": "user@example.com",
+    "sync_delete_from_server": 0,
+    "cf_r2_account_id": null,
+    "cf_r2_bucket_name": null,
+    "cf_r2_access_key_id": null,
+    "cf_r2_prefix": "pending/",
+    "cf_r2_poll_interval_ms": null,
+    "created_at": "2026-01-01T00:00:00.000Z",
+    "updated_at": "2026-01-01T00:00:00.000Z"
+  }
+]
+```
+
+Supported types: `imap`, `cloudflare-email`, `cloudflare-r2`.
+
+#### Get inbound connector
+
+```
+GET /api/connectors/inbound/:connectorId
+```
+
+**Response**: `200 OK` | `404 Not Found`
+
+#### Create inbound connector
+
+```
+POST /api/connectors/inbound
+Content-Type: application/json
+```
+
+**Required fields**: `name`, `type`
+
+**IMAP fields**: `imap_host`, `imap_port` (default: 993), `imap_tls` (default: 1), `imap_user`, `imap_pass`, `sync_delete_from_server` (0 = mirror mode, 1 = connector mode)
+
+**Cloudflare R2 fields**: `cf_r2_account_id`, `cf_r2_bucket_name`, `cf_r2_access_key_id`, `cf_r2_secret_access_key`, `cf_r2_prefix` (default: `pending/`), `cf_r2_poll_interval_ms`
+
+**Response**: `201 Created`
+```json
+{ "id": 1 }
+```
+
+#### Update inbound connector
+
+```
+PUT /api/connectors/inbound/:connectorId
+Content-Type: application/json
+```
+
+Partial update — only include fields to change. Password fields are only updated when provided.
+
+**Response**: `200 OK` | `400 Bad Request` | `404 Not Found`
+
+#### Delete inbound connector
+
+```
+DELETE /api/connectors/inbound/:connectorId
+```
+
+**Response**: `200 OK` | `404 Not Found` | `409 Conflict` (connector has linked identities)
+
+#### Test inbound connector
+
+```
+POST /api/connectors/inbound/:connectorId/test
+```
+
+Attempts to connect to the IMAP server and list folders. Returns folder count on success.
+
+**Response**: `200 OK`
+```json
+{ "ok": true, "details": { "folders": 12 } }
+```
+
+```json
+{ "ok": false, "error": "Authentication failed" }
+```
+
+#### Get inbound connector sync status
+
+```
+GET /api/connectors/inbound/:connectorId/sync-status
+```
+
+Returns the current sync scheduler status for this connector.
+
+**Response**: `200 OK`
+```json
+{
+  "running": false,
+  "lastSync": 1737000900000,
+  "lastError": null,
+  "consecutiveErrors": 0
+}
+```
+
+#### Trigger inbound connector sync
+
+```
+POST /api/connectors/inbound/:connectorId/sync
+```
+
+Triggers an immediate sync for the connector.
+
+**Response**: `200 OK` | `404 Not Found`
+
+#### List folders for inbound connector
+
+```
+GET /api/connectors/inbound/:connectorId/folders
+```
+
+Returns all synced folders for this connector.
+
+**Response**: `200 OK` — array of folder objects
+
+#### List messages for folder
+
+```
+GET /api/connectors/inbound/:connectorId/folders/:folderId/messages
+```
+
+Returns paginated messages in the folder. Supports `limit` and `offset` query parameters.
+
+### Outbound Connectors
+
+#### List outbound connectors
+
+```
+GET /api/connectors/outbound
+```
+
+Returns all configured outbound connectors. Sensitive fields (passwords, secrets) are omitted.
+
+**Response**: `200 OK`
+```json
+[
+  {
+    "id": 1,
+    "name": "Work SMTP",
+    "type": "smtp",
+    "smtp_host": "smtp.example.com",
+    "smtp_port": 587,
+    "smtp_tls": 1,
+    "smtp_user": "user@example.com",
+    "ses_region": null,
+    "ses_access_key_id": null,
+    "created_at": "2026-01-01T00:00:00.000Z",
+    "updated_at": "2026-01-01T00:00:00.000Z"
+  }
+]
+```
+
+Supported types: `smtp`, `ses`.
+
+#### Get outbound connector
+
+```
+GET /api/connectors/outbound/:connectorId
+```
+
+**Response**: `200 OK` | `404 Not Found`
+
+#### Create outbound connector
+
+```
+POST /api/connectors/outbound
+Content-Type: application/json
+```
+
+**Required fields**: `name`, `type`
+
+**SMTP fields**: `smtp_host`, `smtp_port` (default: 587), `smtp_tls` (default: 1), `smtp_user`, `smtp_pass`
+
+**SES fields**: `ses_region`, `ses_access_key_id`, `ses_secret_access_key`
+
+**Response**: `201 Created`
+```json
+{ "id": 1 }
+```
+
+#### Update outbound connector
+
+```
+PUT /api/connectors/outbound/:connectorId
+Content-Type: application/json
+```
+
+Partial update — only include fields to change. Credential fields only update when provided.
+
+**Response**: `200 OK` | `400 Bad Request` | `404 Not Found`
+
+#### Delete outbound connector
+
+```
+DELETE /api/connectors/outbound/:connectorId
+```
+
+**Response**: `200 OK` | `404 Not Found` | `409 Conflict` (connector has linked identities)
+
+#### Test outbound connector
+
+```
+POST /api/connectors/outbound/:connectorId/test
+```
+
+Attempts to connect to the SMTP server or verify SES credentials.
+
+**Response**: `200 OK`
+```json
+{ "ok": true }
+```
+
+```json
+{ "ok": false, "error": "Connection refused" }
+```
