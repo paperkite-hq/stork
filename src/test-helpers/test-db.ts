@@ -1,17 +1,15 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import type { ContainerContext } from "../crypto/lifecycle.js";
-import { MIGRATIONS } from "../storage/schema.js";
+import { ensureSchema } from "../storage/db.js";
 import { SyncScheduler } from "../sync/sync-scheduler.js";
 
-/** Creates a fresh in-memory database with all migrations applied */
+/** Creates a fresh in-memory database with all migrations applied (including pre-migration hooks) */
 export function createTestDb(): Database.Database {
 	const db = new Database(":memory:");
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
 	db.exec("PRAGMA busy_timeout = 5000");
-	for (const migration of MIGRATIONS) {
-		db.exec(migration);
-	}
+	ensureSchema(db);
 	return db;
 }
 

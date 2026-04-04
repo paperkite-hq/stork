@@ -1,15 +1,13 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { MIGRATIONS } from "../storage/schema.js";
+import { ensureSchema } from "../storage/db.js";
 import { ConnectionPool } from "./connection-pool.js";
 
 function createTestDb(): Database.Database {
 	const db = new Database(":memory:");
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
-	for (const migration of MIGRATIONS) {
-		db.exec(migration);
-	}
+	ensureSchema(db);
 	return db;
 }
 

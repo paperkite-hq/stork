@@ -169,7 +169,7 @@ export class MessageSearch {
 					m.from_address,
 					m.from_name,
 					m.date,
-					snippet(messages_fts, 4, '<mark>', '</mark>', '...', 40) as snippet,
+					snippet(messages_fts, -1, '<mark>', '</mark>', '...', 40) as snippet,
 					f.path as folder_path,
 					rank
 				FROM messages_fts

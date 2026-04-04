@@ -3,7 +3,7 @@ import { simpleParser } from "mailparser";
 import { beforeEach, describe, expect, test } from "vitest";
 import { upsertAttachmentBlob } from "../storage/attachment-storage.js";
 import { ensureSchema } from "../storage/db.js";
-import { MIGRATIONS, SCHEMA_VERSION } from "../storage/schema.js";
+import { SCHEMA_VERSION } from "../storage/schema.js";
 
 // We test the MIME parsing and helper functions directly since the ImapSync class
 // requires a live IMAP connection. Integration tests with a mock IMAP server
@@ -13,9 +13,7 @@ function createTestDb(): Database.Database {
 	const db = new Database(":memory:");
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
-	for (const migration of MIGRATIONS) {
-		db.exec(migration);
-	}
+	ensureSchema(db);
 	return db;
 }
 

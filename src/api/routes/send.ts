@@ -148,9 +148,9 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 					INSERT INTO messages (
 						identity_id, folder_id, uid, message_id, subject,
 						from_address, from_name, to_addresses, cc_addresses, bcc_addresses,
-						date, text_body, html_body, flags, size, has_attachments,
+						date, text_body, html_text_body, html_body, flags, size, has_attachments,
 						in_reply_to, "references"
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, '\\Seen', ?, ?, ?, ?)
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, '\\Seen', ?, ?, ?, ?)
 				`)
 				.run(
 					identity_id,
@@ -163,7 +163,8 @@ export function sendRoutes(getDb: () => Database.Database): Hono {
 					JSON.stringify(to),
 					cc ? JSON.stringify(cc) : null,
 					bcc ? JSON.stringify(bcc) : null,
-					text_body ?? htmlToText(html_body ?? null),
+					text_body ?? null,
+					htmlToText(html_body ?? null),
 					compressText(html_body ?? null),
 					(text_body ?? "").length + (html_body ?? "").length,
 					attachments ? 1 : 0,

@@ -175,6 +175,40 @@ const PRE_MIGRATION_HOOKS: Record<number, (db: Database.Database) => void> = {
 			txn(rows.slice(i, i + BATCH_SIZE));
 		}
 	},
+
+	// v25: Add html_text_body column and backfill from html_body.
+	// This gives every message with HTML a dedicated searchable text extraction,
+	// separate from text_body (the original plain-text MIME part).
+	25: (db) => {
+		db.exec("ALTER TABLE messages ADD COLUMN html_text_body TEXT");
+
+		const BATCH_SIZE = 500;
+
+		const rows = db
+			.prepare("SELECT id, html_body FROM messages WHERE html_body IS NOT NULL")
+			.all() as Array<{ id: number; html_body: string | Buffer }>;
+
+		if (rows.length === 0) return;
+
+		const updateHtmlText = db.prepare("UPDATE messages SET html_text_body = ? WHERE id = ?");
+
+		const txn = db.transaction((batch: typeof rows) => {
+			for (const row of batch) {
+				const html =
+					typeof row.html_body === "string"
+						? row.html_body
+						: inflateSync(row.html_body).toString("utf-8");
+				const text = htmlToText(html);
+				if (text) {
+					updateHtmlText.run(text, row.id);
+				}
+			}
+		});
+
+		for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+			txn(rows.slice(i, i + BATCH_SIZE));
+		}
+	},
 };
 
 export type { Database };

@@ -741,8 +741,8 @@ export class ImapSync {
 			INSERT OR IGNORE INTO messages (
 				inbound_connector_id, folder_id, uid, message_id, in_reply_to, "references",
 				subject, from_address, from_name, to_addresses, cc_addresses, bcc_addresses,
-				date, text_body, html_body, flags, size, has_attachments, raw_headers
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				date, text_body, html_text_body, html_body, flags, size, has_attachments, raw_headers
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`);
 
 		const insertAttachment = this.db.prepare(`
@@ -824,9 +824,8 @@ export class ImapSync {
 							: typeof envelope.date === "string"
 								? envelope.date
 								: null,
-						typeof parsed.text === "string"
-							? parsed.text
-							: htmlToText(typeof parsed.html === "string" ? parsed.html : null),
+						typeof parsed.text === "string" ? parsed.text : null,
+						htmlToText(typeof parsed.html === "string" ? parsed.html : null),
 						typeof parsed.html === "string" ? compressText(parsed.html) : null,
 						Array.from(message.flags ?? new Set()).join(","),
 						typeof message.size === "number" ? message.size : null,

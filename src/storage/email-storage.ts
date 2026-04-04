@@ -86,8 +86,8 @@ export async function storeInboundEmail(
 		INSERT INTO messages (
 			inbound_connector_id, folder_id, uid, message_id, in_reply_to, "references",
 			subject, from_address, from_name, to_addresses, cc_addresses,
-			date, text_body, html_body, flags, size, has_attachments
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+			date, text_body, html_text_body, html_body, flags, size, has_attachments
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
 	`);
 
 	const ensureConnectorLabel = db.prepare(`
@@ -120,7 +120,8 @@ export async function storeInboundEmail(
 		toAddrs.length > 0 ? JSON.stringify(toAddrs) : null,
 		ccAddrs.length > 0 ? JSON.stringify(ccAddrs) : null,
 		parsed.date ? parsed.date.toISOString() : new Date().toISOString(),
-		parsed.text ?? htmlToText(typeof parsed.html === "string" ? parsed.html : null),
+		parsed.text ?? null,
+		htmlToText(typeof parsed.html === "string" ? parsed.html : null),
 		typeof parsed.html === "string" ? compressText(parsed.html) : null,
 		payload.rawSize ?? 0,
 		(parsed.attachments?.length ?? 0) > 0 ? 1 : 0,

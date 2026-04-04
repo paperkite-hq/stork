@@ -1,6 +1,6 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { MIGRATIONS } from "../storage/schema.js";
+import { ensureSchema } from "../storage/db.js";
 import { ConnectionPool } from "./connection-pool.js";
 import type { PooledConnection } from "./connection-pool.js";
 import type { ImapSync } from "./imap-sync.js";
@@ -9,9 +9,7 @@ function createTestDb(): Database.Database {
 	const db = new Database(":memory:");
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
-	for (const migration of MIGRATIONS) {
-		db.exec(migration);
-	}
+	ensureSchema(db);
 	return db;
 }
 
@@ -339,9 +337,7 @@ describe("ConnectionPool — real acquire() limit checks", () => {
 		db = new Database(":memory:");
 		db.exec("PRAGMA journal_mode = WAL");
 		db.exec("PRAGMA foreign_keys = ON");
-		for (const migration of MIGRATIONS) {
-			db.exec(migration);
-		}
+		ensureSchema(db);
 	});
 
 	afterEach(() => {
@@ -417,9 +413,7 @@ describe("ConnectionPool — evictOldestIdle() direct tests", () => {
 		db = new Database(":memory:");
 		db.exec("PRAGMA journal_mode = WAL");
 		db.exec("PRAGMA foreign_keys = ON");
-		for (const migration of MIGRATIONS) {
-			db.exec(migration);
-		}
+		ensureSchema(db);
 	});
 
 	afterEach(() => {

@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 24;
+export const SCHEMA_VERSION = 25;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -1098,4 +1098,53 @@ PRAGMA foreign_keys = ON;
 	//
 	// No-op SQL — the pre-migration hook does the work.
 	"SELECT 1",
+
+	// Version 25: Add html_text_body column and include it in FTS5.
+	//
+	// Adds a dedicated column for text extracted from HTML bodies, separate from
+	// text_body (the original plain-text MIME part). Both are indexed by FTS5 so
+	// search finds content regardless of which MIME part it lives in. This solves
+	// the case where plain-text is a stub ("click here to view online") but the
+	// HTML body contains the real content.
+	//
+	// The pre-migration hook adds the column and backfills it from html_body.
+	// The SQL migration recreates the FTS table and triggers to include the new
+	// column, then rebuilds the index.
+	`
+	DROP TRIGGER IF EXISTS messages_ai;
+	DROP TRIGGER IF EXISTS messages_ad;
+	DROP TRIGGER IF EXISTS messages_au;
+	DROP TABLE IF EXISTS messages_fts;
+
+	CREATE VIRTUAL TABLE messages_fts USING fts5(
+		subject,
+		from_address,
+		from_name,
+		to_addresses,
+		text_body,
+		html_text_body,
+		content=messages,
+		content_rowid=id,
+		tokenize='porter unicode61'
+	);
+
+	CREATE TRIGGER messages_ai AFTER INSERT ON messages BEGIN
+		INSERT INTO messages_fts(rowid, subject, from_address, from_name, to_addresses, text_body, html_text_body)
+		VALUES (new.id, new.subject, new.from_address, new.from_name, new.to_addresses, new.text_body, new.html_text_body);
+	END;
+
+	CREATE TRIGGER messages_ad AFTER DELETE ON messages BEGIN
+		INSERT INTO messages_fts(messages_fts, rowid, subject, from_address, from_name, to_addresses, text_body, html_text_body)
+		VALUES ('delete', old.id, old.subject, old.from_address, old.from_name, old.to_addresses, old.text_body, old.html_text_body);
+	END;
+
+	CREATE TRIGGER messages_au AFTER UPDATE ON messages BEGIN
+		INSERT INTO messages_fts(messages_fts, rowid, subject, from_address, from_name, to_addresses, text_body, html_text_body)
+		VALUES ('delete', old.id, old.subject, old.from_address, old.from_name, old.to_addresses, old.text_body, old.html_text_body);
+		INSERT INTO messages_fts(rowid, subject, from_address, from_name, to_addresses, text_body, html_text_body)
+		VALUES (new.id, new.subject, new.from_address, new.from_name, new.to_addresses, new.text_body, new.html_text_body);
+	END;
+
+	INSERT INTO messages_fts(messages_fts) VALUES ('rebuild');
+	`,
 ];
