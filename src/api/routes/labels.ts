@@ -130,6 +130,48 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 		return c.json({ total: result.total ?? 0, unread: result.unread ?? 0 });
 	});
 
+	// Multi-label intersection related: labels that co-occur with messages having ALL specified label IDs.
+	// Used for suggesting further narrowing filters when multiple labels are already active — guarantees
+	// that any suggested label actually appears in the current result set (no zero-result paths).
+	// Usage: GET /api/labels/filter/related?ids=1,2&limit=5
+	api.get("/filter/related", (c) => {
+		const idsParam = c.req.query("ids");
+		if (!idsParam) return c.json({ error: "ids query parameter is required" }, 400);
+		const ids = idsParam
+			.split(",")
+			.map((s) => Number(s.trim()))
+			.filter((n) => Number.isInteger(n) && n > 0);
+		if (ids.length === 0) return c.json({ error: "At least one valid label ID is required" }, 400);
+		const limitParam = c.req.query("limit");
+		const limit = limitParam ? Math.min(Math.max(1, Number(limitParam) || 5), 20) : 5;
+
+		const placeholders = ids.map(() => "?").join(",");
+		const related = getDb()
+			.prepare(
+				`
+				SELECT l.id, l.name, l.color, l.source, COUNT(*) as co_count
+				FROM labels l
+				JOIN message_labels ml ON ml.label_id = l.id
+				WHERE l.id NOT IN (${placeholders})
+				AND ml.message_id IN (
+					SELECT m.id
+					FROM messages m
+					WHERE (
+						SELECT COUNT(DISTINCT ml2.label_id)
+						FROM message_labels ml2
+						WHERE ml2.message_id = m.id AND ml2.label_id IN (${placeholders})
+					) = ?
+				)
+				GROUP BY l.id, l.name, l.color, l.source
+				ORDER BY co_count DESC
+				LIMIT ?
+			`,
+			)
+			.all(...ids, ...ids, ids.length, limit);
+
+		return c.json(related);
+	});
+
 	// Related labels: labels that co-occur most frequently with messages having the given label.
 	// Useful for suggesting intersection filters (e.g. "you're in Inbox — also filter by Work or Personal?").
 	api.get("/:labelId/related", (c) => {

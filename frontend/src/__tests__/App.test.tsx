@@ -37,6 +37,7 @@ vi.mock("../api", () => ({
 			delete: vi.fn(),
 			filter: vi.fn().mockResolvedValue([]),
 			filterCount: vi.fn().mockResolvedValue({ total: 0, unread: 0 }),
+			filterRelated: vi.fn().mockResolvedValue([]),
 			related: vi.fn().mockResolvedValue([]),
 		},
 		messages: {
@@ -2707,14 +2708,26 @@ describe("App — suggestForLabelId multi-step drill-down", () => {
 			};
 		};
 
+	// Helper to access filterRelated mock not in the mockApi type alias
+	const labelsFilterRelatedMock = () =>
+		api as unknown as { labels: { filterRelated: ReturnType<typeof vi.fn> } };
+
 	beforeEach(() => {
 		setupWithIdentities([makeIdentity()], [inboxLabel, workLabel, urgentLabel], []);
 
-		// related: inbox → [Work, Urgent]; Work → [Urgent, inbox]; Urgent → [inbox, Work]
+		// related: inbox → [Work, Urgent] (used when no filter labels are active)
 		mockApi.labels.related.mockImplementation((labelId: number) => {
 			if (labelId === 1) return Promise.resolve([workSummary, urgentSummary]);
-			if (labelId === 5) return Promise.resolve([urgentSummary, inboxSummary]);
-			if (labelId === 6) return Promise.resolve([inboxSummary, workSummary]);
+			return Promise.resolve([]);
+		});
+
+		// filterRelated: used when multiple filter labels are active (intersection-aware)
+		labelsFilterRelatedMock().labels.filterRelated.mockImplementation((ids: number[]) => {
+			const key = ids.slice().sort().join(",");
+			// inbox+Work → Urgent appears in their intersection
+			if (key === "1,5") return Promise.resolve([urgentSummary]);
+			// inbox+Work+Urgent → nothing more to suggest
+			if (key === "1,5,6") return Promise.resolve([]);
 			return Promise.resolve([]);
 		});
 
@@ -2727,7 +2740,7 @@ describe("App — suggestForLabelId multi-step drill-down", () => {
 		render(<App />);
 		await waitForAppLayout();
 
-		// App is in Inbox view — suggestForLabelId = inboxLabelId (1)
+		// App is in Inbox view — no filter labels active, so related(inboxLabelId, 5) is called
 		await waitFor(() => expect(mockApi.labels.related).toHaveBeenCalledWith(1, 5));
 
 		// Work and Urgent should appear as suggestion chips
@@ -2737,51 +2750,55 @@ describe("App — suggestForLabelId multi-step drill-down", () => {
 		});
 	});
 
-	it("clicking a chip updates suggestForLabelId to the most recently added filter", async () => {
+	it("clicking a chip switches to intersection-aware suggestions via filterRelated", async () => {
 		render(<App />);
 		await waitForAppLayout();
 
 		// Wait for initial suggestions to render
 		await waitFor(() => expect(screen.getByTitle("Filter by Work")).toBeInTheDocument());
 
-		// Click Work chip
+		// Click Work chip — filterLabelIds becomes [inboxLabelId, Work] = [1, 5]
 		fireEvent.click(screen.getByTitle("Filter by Work"));
 
-		// suggestForLabelId should now be 5 (Work — the most recently added filter)
-		await waitFor(() => expect(mockApi.labels.related).toHaveBeenCalledWith(5, 5));
+		// filterRelated should now be called with the intersection IDs [1, 5]
+		await waitFor(() =>
+			expect(labelsFilterRelatedMock().labels.filterRelated).toHaveBeenCalledWith([1, 5], 5),
+		);
 
 		// Work should NOT appear as a suggestion (it's now an active filter)
 		await waitFor(() => {
 			expect(screen.queryByTitle("Filter by Work")).not.toBeInTheDocument();
 		});
 
-		// Urgent should appear as a new suggestion (co-occurs with Work, not yet active)
+		// Urgent should appear as a new suggestion (returned by filterRelated for [1,5])
 		await waitFor(() => {
 			expect(screen.getByTitle("Filter by Urgent")).toBeInTheDocument();
 		});
 	});
 
-	it("clicking a second chip uses the most recent filter and excludes all active filters", async () => {
+	it("clicking a second chip calls filterRelated with all active filters, excludes them from suggestions", async () => {
 		render(<App />);
 		await waitForAppLayout();
 
 		// Wait for initial suggestions
 		await waitFor(() => expect(screen.getByTitle("Filter by Work")).toBeInTheDocument());
 
-		// First click: Work
+		// First click: Work → filterLabelIds = [1, 5]
 		fireEvent.click(screen.getByTitle("Filter by Work"));
 
 		// Wait for Urgent to appear as next suggestion
 		await waitFor(() => expect(screen.getByTitle("Filter by Urgent")).toBeInTheDocument());
 
-		// Second click: Urgent
+		// Second click: Urgent → filterLabelIds = [1, 5, 6]
 		fireEvent.click(screen.getByTitle("Filter by Urgent"));
 
-		// suggestForLabelId should now be 6 (Urgent — most recently added)
-		await waitFor(() => expect(mockApi.labels.related).toHaveBeenCalledWith(6, 5));
+		// filterRelated should be called with all three active IDs
+		await waitFor(() =>
+			expect(labelsFilterRelatedMock().labels.filterRelated).toHaveBeenCalledWith([1, 5, 6], 5),
+		);
 
 		// Neither Work nor Urgent should appear as suggestion chips
-		// (both are now active filters and are excluded by filteredApiSuggestions)
+		// (filterRelated returns [] for the [1,5,6] intersection)
 		await waitFor(() => {
 			expect(screen.queryByTitle("Filter by Work")).not.toBeInTheDocument();
 			expect(screen.queryByTitle("Filter by Urgent")).not.toBeInTheDocument();

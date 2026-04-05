@@ -159,11 +159,12 @@ export function App() {
 	// Suggested intersection filters: labels that commonly co-occur with messages in the current view.
 	// For real labels (positive ID) and the promoted Inbox view: fetch from the related-labels API.
 	// For virtual views (All Mail, Unread, unified variants): derive from labels by message count.
-	// When filter labels are active, continue suggesting based on the most recently added filter so
-	// users can keep drilling down (rather than hiding all suggestions after the first click).
+	// When multiple filter labels are active, use the intersection-aware endpoint so that every
+	// suggestion is guaranteed to appear in at least one message in the current result set —
+	// this makes it impossible to follow a chip and land on zero results.
 	const suggestForLabelId =
 		filterLabelIds.length > 0
-			? filterLabelIds[filterLabelIds.length - 1]
+			? null // handled separately below via filterRelated
 			: isInbox || isUnifiedInbox
 				? inboxLabelId
 				: effectiveLabelId && effectiveLabelId > 0
@@ -172,6 +173,17 @@ export function App() {
 	const { data: relatedLabelsFromApi } = useAsync(
 		() => (suggestForLabelId ? api.labels.related(suggestForLabelId, 5) : Promise.resolve(null)),
 		[suggestForLabelId],
+	);
+
+	// When filter labels are active, fetch suggestions from the intersection-aware endpoint so that
+	// the suggested chips are the union of labels from messages in the current filtered result set.
+	const filterRelatedKey = filterLabelIds.join(",");
+	const { data: filterRelatedLabels } = useAsync(
+		() =>
+			filterLabelIds.length > 0
+				? api.labels.filterRelated(filterLabelIds, 5)
+				: Promise.resolve(null),
+		[filterRelatedKey],
 	);
 
 	// For virtual "all" views, suggest top labels by message count (all non-system labels)
@@ -188,12 +200,8 @@ export function App() {
 					.map((l) => ({ id: l.id, name: l.name, color: l.color, source: l.source }))
 			: null;
 
-	// Filter out already-active labels from API results so suggestions never repeat active filters
-	const filteredApiSuggestions = relatedLabelsFromApi
-		? relatedLabelsFromApi.filter((l) => !filterLabelIds.includes(l.id))
-		: null;
-
-	const relatedLabels = filteredApiSuggestions ?? virtualViewSuggestions;
+	// filterRelated results are already scoped to the intersection — no need to re-filter by active IDs
+	const relatedLabels = filterRelatedLabels ?? relatedLabelsFromApi ?? virtualViewSuggestions;
 
 	// Fetch "All Mail" count for the sidebar badge (global across all inbound connectors)
 	const { data: allMailCount, refetch: refetchAllMailCount } = useAsync(

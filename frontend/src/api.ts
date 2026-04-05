@@ -490,6 +490,12 @@ export const api = {
 			params.set("ids", ids.join(","));
 			return fetchJSON<{ total: number; unread: number }>(`/labels/filter/count?${params}`);
 		},
+		filterRelated: (ids: number[], limit = 5) => {
+			const params = new URLSearchParams();
+			params.set("ids", ids.join(","));
+			params.set("limit", String(limit));
+			return fetchJSON<LabelSummary[]>(`/labels/filter/related?${params}`);
+		},
 		related: (labelId: number, limit = 5) =>
 			fetchJSON<LabelSummary[]>(`/labels/${labelId}/related?limit=${limit}`),
 	},

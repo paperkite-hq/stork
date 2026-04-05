@@ -346,6 +346,84 @@ describe("Labels API", () => {
 			expect(body.total).toBe(0);
 			expect(body.unread).toBe(0);
 		});
+
+		test("GET /api/labels/filter/related returns only labels from the intersection", async () => {
+			// Scenario: Work+Important filter active. "Personal" appears with "Important" but NOT with both.
+			// Following the "Personal" chip should be impossible — it should not be suggested.
+			const work = createTestLabel(db, "Work");
+			const important = createTestLabel(db, "Important");
+			const personal = createTestLabel(db, "Personal");
+			const urgent = createTestLabel(db, "Urgent");
+
+			// msg1 has Work+Important+Urgent (in the intersection)
+			const msg1 = createTestMessage(db, identityId, folderId, 1, { subject: "Both+Urgent" });
+			addMessageLabel(db, msg1, work);
+			addMessageLabel(db, msg1, important);
+			addMessageLabel(db, msg1, urgent);
+
+			// msg2 has Important+Personal only (NOT in Work+Important intersection)
+			const msg2 = createTestMessage(db, identityId, folderId, 2, {
+				subject: "Important+Personal",
+			});
+			addMessageLabel(db, msg2, important);
+			addMessageLabel(db, msg2, personal);
+
+			const { status, body } = await jsonRequest(
+				`/api/labels/filter/related?ids=${work},${important}`,
+			);
+			expect(status).toBe(200);
+			// Only Urgent is in the intersection — Personal should NOT appear
+			expect(body.map((l: { name: string }) => l.name)).toContain("Urgent");
+			expect(body.map((l: { name: string }) => l.name)).not.toContain("Personal");
+			// The filter labels themselves should not appear
+			expect(body.map((l: { name: string }) => l.name)).not.toContain("Work");
+			expect(body.map((l: { name: string }) => l.name)).not.toContain("Important");
+		});
+
+		test("GET /api/labels/filter/related returns empty when intersection has no additional labels", async () => {
+			const l1 = createTestLabel(db, "Work");
+			const l2 = createTestLabel(db, "Important");
+			const msg1 = createTestMessage(db, identityId, folderId, 1);
+			addMessageLabel(db, msg1, l1);
+			addMessageLabel(db, msg1, l2);
+
+			const { status, body } = await jsonRequest(`/api/labels/filter/related?ids=${l1},${l2}`);
+			expect(status).toBe(200);
+			expect(body).toEqual([]);
+		});
+
+		test("GET /api/labels/filter/related returns 400 when ids missing", async () => {
+			const { status, body } = await jsonRequest("/api/labels/filter/related");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/ids/);
+		});
+
+		test("GET /api/labels/filter/related orders results by co-occurrence frequency", async () => {
+			const base1 = createTestLabel(db, "Base1");
+			const base2 = createTestLabel(db, "Base2");
+			const common = createTestLabel(db, "Common");
+			const rare = createTestLabel(db, "Rare");
+
+			// 3 messages in the intersection, all have Common
+			for (let i = 1; i <= 3; i++) {
+				const msg = createTestMessage(db, identityId, folderId, i);
+				addMessageLabel(db, msg, base1);
+				addMessageLabel(db, msg, base2);
+				addMessageLabel(db, msg, common);
+			}
+			// Only 1 message in the intersection has Rare
+			const msg4 = createTestMessage(db, identityId, folderId, 4);
+			addMessageLabel(db, msg4, base1);
+			addMessageLabel(db, msg4, base2);
+			addMessageLabel(db, msg4, rare);
+
+			const { status, body } = await jsonRequest(
+				`/api/labels/filter/related?ids=${base1},${base2}`,
+			);
+			expect(status).toBe(200);
+			expect(body[0].name).toBe("Common");
+			expect(body[1].name).toBe("Rare");
+		});
 	});
 
 	// ─── Related labels ───────────────────────────────────────
