@@ -401,6 +401,27 @@ export function connectorRoutes(
 		return c.json({ count: row?.count ?? 0 });
 	});
 
+	api.post("/inbound/:connectorId/clean-server", async (c) => {
+		const connectorId = parseIntParam(c, "connectorId", c.req.param("connectorId"));
+		if (connectorId instanceof Response) return connectorId;
+
+		const connector = getDb()
+			.prepare("SELECT type FROM inbound_connectors WHERE id = ?")
+			.get(connectorId) as { type: string } | undefined;
+
+		if (!connector) return c.json({ error: "Connector not found" }, 404);
+		if (connector.type !== "imap")
+			return c.json({ error: "Only IMAP connectors support server-side deletion" }, 400);
+
+		try {
+			const result = await getScheduler().cleanServerNow(connectorId);
+			return c.json(result);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			return c.json({ error: message }, 500);
+		}
+	});
+
 	api.post("/inbound/:connectorId/sync", async (c) => {
 		const connectorId = parseIntParam(c, "connectorId", c.req.param("connectorId"));
 		if (connectorId instanceof Response) return connectorId;

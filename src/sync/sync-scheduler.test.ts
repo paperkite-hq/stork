@@ -83,6 +83,35 @@ describe("SyncScheduler", () => {
 		}
 	});
 
+	test("cleanServerNow throws for unregistered connector", async () => {
+		scheduler = new SyncScheduler(db);
+
+		try {
+			await scheduler.cleanServerNow(999);
+			expect(true).toBe(false); // Should not reach
+		} catch (err) {
+			expect((err as Error).message).toContain("not registered");
+		}
+	});
+
+	test("cleanServerNow returns zero deleted when no messages on server", async () => {
+		const connectorId = createConnector(db, "Clean Connector");
+		scheduler = new SyncScheduler(db);
+		scheduler.addConnector({
+			inboundConnectorId: connectorId,
+			imapConfig: {
+				host: "imap.example.com",
+				port: 993,
+				secure: true,
+				auth: { user: "u", pass: "p" },
+			},
+		});
+
+		// No messages in DB — should short-circuit without opening an IMAP connection
+		const result = await scheduler.cleanServerNow(connectorId);
+		expect(result.deleted).toBe(0);
+	});
+
 	test("loads identities from database", () => {
 		const _identityId = createConnector(db, "Identity 1");
 		createConnector(db, "Identity 2");

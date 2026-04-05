@@ -195,6 +195,53 @@ export class SyncScheduler {
 	}
 
 	/**
+	 * Deletes all locally-synced messages (deleted_from_server = 0) from the IMAP server
+	 * for a specific inbound connector. Used as a one-time cleanup when transitioning
+	 * from mirror mode to connector mode.
+	 *
+	 * Groups messages by folder and uses the existing deleteFromServer() batch-delete
+	 * pattern (100 UIDs at a time) for crash safety.
+	 */
+	async cleanServerNow(inboundConnectorId: number): Promise<{ deleted: number }> {
+		const scheduled = this.connectors.get(inboundConnectorId);
+		if (!scheduled) {
+			throw new Error(`Connector ${inboundConnectorId} is not registered`);
+		}
+
+		const rows = this.db
+			.prepare(
+				`SELECT f.path AS folder_path, m.uid
+				FROM messages m
+				JOIN folders f ON m.folder_id = f.id
+				WHERE m.inbound_connector_id = ? AND m.deleted_from_server = 0
+				ORDER BY f.path`,
+			)
+			.all(inboundConnectorId) as { folder_path: string; uid: number }[];
+
+		if (rows.length === 0) return { deleted: 0 };
+
+		// Group UIDs by folder path
+		const byFolder = new Map<string, number[]>();
+		for (const row of rows) {
+			const uids = byFolder.get(row.folder_path) ?? [];
+			uids.push(row.uid);
+			byFolder.set(row.folder_path, uids);
+		}
+
+		const sync = await this.pool.acquire(inboundConnectorId, scheduled.config.imapConfig);
+		let totalDeleted = 0;
+		try {
+			for (const [folderPath, uids] of byFolder) {
+				totalDeleted += await sync.deleteFromServer(folderPath, uids);
+			}
+		} finally {
+			this.pool.release(inboundConnectorId, sync);
+		}
+
+		return { deleted: totalDeleted };
+	}
+
+	/**
 	 * Returns the status of all scheduled connectors.
 	 */
 	getStatus(): Map<

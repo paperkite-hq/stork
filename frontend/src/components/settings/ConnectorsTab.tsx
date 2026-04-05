@@ -79,6 +79,7 @@ function InboundConnectorForm({
 	const [error, setError] = useState<string | null>(null);
 	const [showConnectorWarning, setShowConnectorWarning] = useState(false);
 	const [showTransitionWizard, setShowTransitionWizard] = useState(false);
+	const [cleanAfterSave, setCleanAfterSave] = useState(false);
 	const wasInConnectorMode = initial ? (initial.sync_delete_from_server ?? 0) === 1 : false;
 
 	function handleSelectConnectorMode() {
@@ -123,6 +124,9 @@ function InboundConnectorForm({
 			};
 			if (initial) {
 				await api.connectors.inbound.update(initial.id, payload);
+				if (cleanAfterSave) {
+					await api.connectors.inbound.cleanServer(initial.id);
+				}
 			} else {
 				await api.connectors.inbound.create(payload);
 			}
@@ -446,13 +450,11 @@ function InboundConnectorForm({
 				<ConnectorTransitionWizard
 					connectorId={initial.id}
 					connectorName={initial.name}
-					onConfirm={(_cleanServer) => {
+					onConfirm={(shouldClean) => {
 						setForm((f) => ({ ...f, sync_delete_from_server: 1 }));
 						setShowConnectorWarning(true);
 						setShowTransitionWizard(false);
-						// cleanServer preference is noted — the actual bulk delete
-						// is handled by a sibling issue (#674 children). For now,
-						// the wizard educates and confirms the mode switch.
+						setCleanAfterSave(shouldClean);
 					}}
 					onCancel={() => setShowTransitionWizard(false)}
 				/>
@@ -919,6 +921,11 @@ export function InboundConnectorsTab() {
 	);
 	const [deleting, setDeleting] = useState<number | null>(null);
 	const [syncStatusConnectorId, setSyncStatusConnectorId] = useState<number | null>(null);
+	const [cleanServer, setCleanServer] = useState<{
+		connectorId: number;
+		step: "loading" | "confirm" | "deleting";
+		count?: number;
+	} | null>(null);
 
 	const inboundEditing =
 		editingInbound === "new" ? undefined : inbound?.find((c) => c.id === editingInbound);
@@ -947,6 +954,27 @@ export function InboundConnectorsTab() {
 		} catch (err) {
 			alert(err instanceof Error ? err.message : String(err));
 		}
+	}
+
+	async function handleInitCleanServer(id: number) {
+		setCleanServer({ connectorId: id, step: "loading" });
+		try {
+			const { count } = await api.connectors.inbound.syncedCount(id);
+			setCleanServer({ connectorId: id, step: "confirm", count });
+		} catch (err) {
+			alert(err instanceof Error ? err.message : String(err));
+			setCleanServer(null);
+		}
+	}
+
+	async function handleConfirmCleanServer(id: number) {
+		setCleanServer((s) => (s ? { ...s, step: "deleting" } : null));
+		try {
+			await api.connectors.inbound.cleanServer(id);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : String(err));
+		}
+		setCleanServer(null);
 	}
 
 	return (
@@ -1039,6 +1067,36 @@ export function InboundConnectorsTab() {
 											No
 										</button>
 									</>
+								) : cleanServer?.connectorId === c.id ? (
+									<>
+										{cleanServer.step === "loading" && (
+											<span className="text-xs text-gray-500 dark:text-gray-400">Loading…</span>
+										)}
+										{cleanServer.step === "confirm" && (
+											<>
+												<span className="text-xs text-orange-700 dark:text-orange-400">
+													~{cleanServer.count} messages on server. Remove? This cannot be undone.
+												</span>
+												<button
+													type="button"
+													onClick={() => handleConfirmCleanServer(c.id)}
+													className="text-xs text-red-600 dark:text-red-400 hover:underline"
+												>
+													Yes, remove
+												</button>
+												<button
+													type="button"
+													onClick={() => setCleanServer(null)}
+													className="text-xs text-gray-500 hover:underline"
+												>
+													Keep
+												</button>
+											</>
+										)}
+										{cleanServer.step === "deleting" && (
+											<span className="text-xs text-gray-500 dark:text-gray-400">Removing…</span>
+										)}
+									</>
 								) : (
 									<>
 										<button
@@ -1067,6 +1125,15 @@ export function InboundConnectorsTab() {
 										>
 											{editingInbound === c.id ? "Editing" : "Edit"}
 										</button>
+										{c.type === "imap" && c.sync_delete_from_server === 1 && (
+											<button
+												type="button"
+												onClick={() => handleInitCleanServer(c.id)}
+												className="text-xs text-orange-500 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-200 px-2 py-1 rounded border border-orange-200 dark:border-orange-700"
+											>
+												Clean Server
+											</button>
+										)}
 										<button
 											type="button"
 											onClick={() => setDeleting(c.id)}

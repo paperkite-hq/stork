@@ -420,6 +420,10 @@ export const api = {
 				}>(`/connectors/inbound/${id}/sync-status`),
 			syncedCount: (id: number) =>
 				fetchJSON<{ count: number }>(`/connectors/inbound/${id}/synced-count`),
+			cleanServer: (id: number) =>
+				fetchJSON<{ deleted: number }>(`/connectors/inbound/${id}/clean-server`, {
+					method: "POST",
+				}),
 			sync: (id: number) =>
 				fetchJSON<{ ok?: boolean; error?: string }>(`/connectors/inbound/${id}/sync`, {
 					method: "POST",
