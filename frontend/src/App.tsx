@@ -159,14 +159,16 @@ export function App() {
 	// Suggested intersection filters: labels that commonly co-occur with messages in the current view.
 	// For real labels (positive ID) and the promoted Inbox view: fetch from the related-labels API.
 	// For virtual views (All Mail, Unread, unified variants): derive from labels by message count.
+	// When filter labels are active, continue suggesting based on the most recently added filter so
+	// users can keep drilling down (rather than hiding all suggestions after the first click).
 	const suggestForLabelId =
-		filterLabelIds.length === 0
-			? isInbox || isUnifiedInbox
+		filterLabelIds.length > 0
+			? filterLabelIds[filterLabelIds.length - 1]
+			: isInbox || isUnifiedInbox
 				? inboxLabelId
 				: effectiveLabelId && effectiveLabelId > 0
 					? effectiveLabelId
-					: null
-			: null;
+					: null;
 	const { data: relatedLabelsFromApi } = useAsync(
 		() => (suggestForLabelId ? api.labels.related(suggestForLabelId, 5) : Promise.resolve(null)),
 		[suggestForLabelId],
@@ -186,7 +188,12 @@ export function App() {
 					.map((l) => ({ id: l.id, name: l.name, color: l.color, source: l.source }))
 			: null;
 
-	const relatedLabels = relatedLabelsFromApi ?? virtualViewSuggestions;
+	// Filter out already-active labels from API results so suggestions never repeat active filters
+	const filteredApiSuggestions = relatedLabelsFromApi
+		? relatedLabelsFromApi.filter((l) => !filterLabelIds.includes(l.id))
+		: null;
+
+	const relatedLabels = filteredApiSuggestions ?? virtualViewSuggestions;
 
 	// Fetch "All Mail" count for the sidebar badge (global across all inbound connectors)
 	const { data: allMailCount, refetch: refetchAllMailCount } = useAsync(
