@@ -46,6 +46,15 @@ export interface SyncAllResult {
 	aborted: boolean;
 }
 
+export interface RelabelResult {
+	/** Number of IMAP folders whose UIDs were compared against local records */
+	foldersScanned: number;
+	/** Number of messages whose folder labels were updated */
+	labelsUpdated: number;
+	/** Number of cross-folder moves detected via Message-ID correlation */
+	crossFolderMovesDetected: number;
+}
+
 export interface SyncProgress {
 	/** Current phase of the sync operation */
 	phase: "listing-folders" | "syncing-folder" | "applying-labels";
@@ -1196,6 +1205,147 @@ export class ImapSync {
 		}
 
 		return totalDeleted;
+	}
+
+	/**
+	 * Reconciles folder labels against current IMAP server state.
+	 *
+	 * For each locally-tracked folder, fetches the current UID list from the
+	 * server (IMAP SEARCH ALL) and compares it against locally-stored UIDs.
+	 * Messages whose UIDs no longer appear in their stored folder are treated
+	 * as potential cross-folder moves: if the same RFC 5322 Message-ID appears
+	 * locally in a different folder, the stale label is removed and the new
+	 * folder's label is confirmed on the destination row.
+	 *
+	 * This is a bounded, on-demand pass — new UIDs not yet in the local DB are
+	 * left for the next incremental sync cycle.
+	 */
+	async relabelFromServer(signal?: AbortSignal): Promise<RelabelResult> {
+		const result: RelabelResult = {
+			foldersScanned: 0,
+			labelsUpdated: 0,
+			crossFolderMovesDetected: 0,
+		};
+
+		const folders = this.db
+			.prepare("SELECT id, path, name FROM folders WHERE inbound_connector_id = ?")
+			.all(this.inboundConnectorId) as { id: number; path: string; name: string }[];
+
+		if (folders.length === 0) return result;
+
+		// Phase 1: collect current server UIDs for each folder
+		const serverUidsByFolderId = new Map<number, Set<number>>();
+
+		for (const folder of folders) {
+			if (signal?.aborted) return result;
+
+			let lock: { release: () => void } | null = null;
+			try {
+				lock = await this.client.getMailboxLock(folder.path);
+			} catch {
+				// Folder inaccessible on server — skip
+				continue;
+			}
+
+			try {
+				const mailboxStatus = this.client.mailbox;
+				if (!mailboxStatus) continue;
+
+				let uids = new Set<number>();
+				if (mailboxStatus.exists > 0) {
+					const searchResult = await this.client
+						.search({ all: true }, { uid: true })
+						.catch(() => false as false);
+					if (searchResult && Array.isArray(searchResult)) {
+						uids = new Set(searchResult as number[]);
+					} else {
+						// Search failed — skip this folder to avoid false positives
+						continue;
+					}
+				}
+				// exists === 0: empty folder, uids stays as empty Set
+				serverUidsByFolderId.set(folder.id, uids);
+				result.foldersScanned++;
+			} finally {
+				try {
+					lock.release();
+				} catch {
+					// Ignore lock release errors
+				}
+			}
+		}
+
+		if (signal?.aborted) return result;
+
+		// Phase 2: find messages missing from their server folder and update labels
+		// via Message-ID cross-folder matching
+		const removeLabelStmt = this.db.prepare(`
+			DELETE FROM message_labels
+			WHERE message_id = ?
+			  AND label_id = (
+			    SELECT l.id FROM labels l
+			    JOIN folders f ON f.name = l.name
+			    WHERE f.id = ? LIMIT 1
+			  )
+		`);
+
+		const addLabelStmt = this.db.prepare(`
+			INSERT OR IGNORE INTO message_labels (message_id, label_id)
+			SELECT ?, l.id FROM labels l
+			JOIN folders f ON f.name = l.name
+			WHERE f.id = ? LIMIT 1
+		`);
+
+		const applyRelabels = this.db.transaction(() => {
+			for (const folder of folders) {
+				const serverUids = serverUidsByFolderId.get(folder.id);
+				if (serverUids === undefined) continue; // Folder was skipped
+
+				const localMessages = this.db
+					.prepare(
+						`SELECT id, uid, message_id FROM messages
+						 WHERE folder_id = ? AND deleted_from_server = 0`,
+					)
+					.all(folder.id) as { id: number; uid: number; message_id: string | null }[];
+
+				for (const msg of localMessages) {
+					if (serverUids.has(msg.uid)) continue;
+					if (!msg.message_id) continue;
+
+					// UID missing from server — look for the same message_id in
+					// another locally-tracked folder (cross-folder move already synced)
+					const movedTo = this.db
+						.prepare(
+							`SELECT id, folder_id FROM messages
+							 WHERE message_id = ?
+							   AND folder_id != ?
+							   AND inbound_connector_id = ?
+							   AND deleted_from_server = 0
+							 LIMIT 1`,
+						)
+						.get(msg.message_id, folder.id, this.inboundConnectorId) as
+						| { id: number; folder_id: number }
+						| undefined;
+
+					if (movedTo) {
+						result.crossFolderMovesDetected++;
+						// Remove stale old-folder label from the original row
+						removeLabelStmt.run(msg.id, folder.id);
+						// Ensure new-folder label is on the destination row
+						addLabelStmt.run(movedTo.id, movedTo.folder_id);
+						result.labelsUpdated++;
+					}
+				}
+			}
+		});
+
+		applyRelabels();
+
+		if (result.labelsUpdated > 0) {
+			this.refreshLabelCounts();
+		}
+
+		return result;
 	}
 }
 

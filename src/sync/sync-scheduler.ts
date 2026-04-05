@@ -1,6 +1,12 @@
 import type Database from "better-sqlite3-multiple-ciphers";
 import { ConnectionPool, type ConnectionPoolOptions } from "./connection-pool.js";
-import type { ImapConfig, SyncAllResult, SyncError, SyncProgress } from "./imap-sync.js";
+import type {
+	ImapConfig,
+	RelabelResult,
+	SyncAllResult,
+	SyncError,
+	SyncProgress,
+} from "./imap-sync.js";
 
 /**
  * Progress snapshot for an actively-running sync, as exposed to callers
@@ -239,6 +245,25 @@ export class SyncScheduler {
 		}
 
 		return { deleted: totalDeleted };
+	}
+
+	/**
+	 * Reconciles folder labels against current server state for a specific
+	 * inbound connector. Detects cross-folder moves via Message-ID and updates
+	 * labels to match the server's current folder memberships.
+	 */
+	async relabelFromServerNow(inboundConnectorId: number): Promise<RelabelResult> {
+		const scheduled = this.connectors.get(inboundConnectorId);
+		if (!scheduled) {
+			throw new Error(`Connector ${inboundConnectorId} is not registered`);
+		}
+
+		const sync = await this.pool.acquire(inboundConnectorId, scheduled.config.imapConfig);
+		try {
+			return await sync.relabelFromServer();
+		} finally {
+			this.pool.release(inboundConnectorId, sync);
+		}
 	}
 
 	/**
