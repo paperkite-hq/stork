@@ -2684,6 +2684,112 @@ describe("App — per-identity default_view label: parsing", () => {
 });
 
 // ------------------------------------------------------------------
+// Tests: suggestForLabelId multi-step label filter drill-down (#681)
+// ------------------------------------------------------------------
+
+describe("App — suggestForLabelId multi-step drill-down", () => {
+	// LabelSummary-shaped objects for the related labels API mock responses
+	const inboxSummary = { id: 1, name: "inbox", color: null, source: "imap" as const };
+	const workSummary = { id: 5, name: "Work", color: null, source: "user" as const };
+	const urgentSummary = { id: 6, name: "Urgent", color: null, source: "user" as const };
+
+	// Full Label objects for api.labels.list
+	const inboxLabel = makeLabel({ id: 1, name: "inbox", source: "imap", message_count: 10 });
+	const workLabel = makeLabel({ id: 5, name: "Work", source: "user", message_count: 5 });
+	const urgentLabel = makeLabel({ id: 6, name: "Urgent", source: "user", message_count: 3 });
+
+	// Helper to access filter/filterCount mocks not in the mockApi type alias
+	const labelsFilterMock = () =>
+		api as unknown as {
+			labels: {
+				filter: ReturnType<typeof vi.fn>;
+				filterCount: ReturnType<typeof vi.fn>;
+			};
+		};
+
+	beforeEach(() => {
+		setupWithIdentities([makeIdentity()], [inboxLabel, workLabel, urgentLabel], []);
+
+		// related: inbox → [Work, Urgent]; Work → [Urgent, inbox]; Urgent → [inbox, Work]
+		mockApi.labels.related.mockImplementation((labelId: number) => {
+			if (labelId === 1) return Promise.resolve([workSummary, urgentSummary]);
+			if (labelId === 5) return Promise.resolve([urgentSummary, inboxSummary]);
+			if (labelId === 6) return Promise.resolve([inboxSummary, workSummary]);
+			return Promise.resolve([]);
+		});
+
+		// filter: return messages matching all label IDs (simplified for unit testing)
+		labelsFilterMock().labels.filter.mockResolvedValue([]);
+		labelsFilterMock().labels.filterCount.mockResolvedValue({ total: 0, unread: 0 });
+	});
+
+	it("shows suggestion chips from related labels when in inbox view", async () => {
+		render(<App />);
+		await waitForAppLayout();
+
+		// App is in Inbox view — suggestForLabelId = inboxLabelId (1)
+		await waitFor(() => expect(mockApi.labels.related).toHaveBeenCalledWith(1, 5));
+
+		// Work and Urgent should appear as suggestion chips
+		await waitFor(() => {
+			expect(screen.getByTitle("Filter by Work")).toBeInTheDocument();
+			expect(screen.getByTitle("Filter by Urgent")).toBeInTheDocument();
+		});
+	});
+
+	it("clicking a chip updates suggestForLabelId to the most recently added filter", async () => {
+		render(<App />);
+		await waitForAppLayout();
+
+		// Wait for initial suggestions to render
+		await waitFor(() => expect(screen.getByTitle("Filter by Work")).toBeInTheDocument());
+
+		// Click Work chip
+		fireEvent.click(screen.getByTitle("Filter by Work"));
+
+		// suggestForLabelId should now be 5 (Work — the most recently added filter)
+		await waitFor(() => expect(mockApi.labels.related).toHaveBeenCalledWith(5, 5));
+
+		// Work should NOT appear as a suggestion (it's now an active filter)
+		await waitFor(() => {
+			expect(screen.queryByTitle("Filter by Work")).not.toBeInTheDocument();
+		});
+
+		// Urgent should appear as a new suggestion (co-occurs with Work, not yet active)
+		await waitFor(() => {
+			expect(screen.getByTitle("Filter by Urgent")).toBeInTheDocument();
+		});
+	});
+
+	it("clicking a second chip uses the most recent filter and excludes all active filters", async () => {
+		render(<App />);
+		await waitForAppLayout();
+
+		// Wait for initial suggestions
+		await waitFor(() => expect(screen.getByTitle("Filter by Work")).toBeInTheDocument());
+
+		// First click: Work
+		fireEvent.click(screen.getByTitle("Filter by Work"));
+
+		// Wait for Urgent to appear as next suggestion
+		await waitFor(() => expect(screen.getByTitle("Filter by Urgent")).toBeInTheDocument());
+
+		// Second click: Urgent
+		fireEvent.click(screen.getByTitle("Filter by Urgent"));
+
+		// suggestForLabelId should now be 6 (Urgent — most recently added)
+		await waitFor(() => expect(mockApi.labels.related).toHaveBeenCalledWith(6, 5));
+
+		// Neither Work nor Urgent should appear as suggestion chips
+		// (both are now active filters and are excluded by filteredApiSuggestions)
+		await waitFor(() => {
+			expect(screen.queryByTitle("Filter by Work")).not.toBeInTheDocument();
+			expect(screen.queryByTitle("Filter by Urgent")).not.toBeInTheDocument();
+		});
+	});
+});
+
+// ------------------------------------------------------------------
 // Tests: useSyncPoller onSyncComplete callback fires refetches (App.tsx lines 179-182)
 // ------------------------------------------------------------------
 

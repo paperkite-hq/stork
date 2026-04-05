@@ -36,7 +36,7 @@ test.describe("App layout and navigation", () => {
 
 	test("shows message count header", async ({ page }) => {
 		await page.goto("/");
-		await expect(page.getByText("15 messages")).toBeVisible();
+		await expect(page.getByText("20 messages")).toBeVisible();
 	});
 
 	test("API health endpoint is reachable", async ({ request }) => {
@@ -429,5 +429,67 @@ test.describe("API integration", () => {
 
 		const verifyRes = await request.get(`/api/messages/${lastMsg.id}`);
 		expect(verifyRes.status()).toBe(404);
+	});
+});
+
+test.describe("Label filter drill-down", () => {
+	test("clicking a suggestion chip narrows message list and shows new suggestions", async ({
+		page,
+	}) => {
+		await page.goto("/");
+
+		// The inbox has Work and Urgent labels co-occurring — Work chip should appear as a suggestion
+		await expect(page.getByTitle("Filter by Work")).toBeVisible();
+
+		// Note message subjects visible before filtering
+		await expect(page.getByText("E2E Test Email #1", { exact: true })).toBeVisible();
+
+		// Click the Work suggestion chip
+		await page.getByTitle("Filter by Work").click();
+
+		// Message list should narrow — only Work-tagged messages visible (5 total: 3 Work+Urgent, 2 Work-only)
+		// Non-work inbox messages should no longer appear
+		await expect(page.getByText("E2E Test Email #1", { exact: true })).not.toBeVisible();
+		await expect(page.getByText("Work Email #1", { exact: true })).toBeVisible();
+
+		// New suggestions should appear based on Work co-occurrences — Urgent co-occurs with Work
+		await expect(page.getByTitle("Filter by Urgent")).toBeVisible();
+
+		// Work itself should NOT appear as a suggestion (it's now an active filter)
+		await expect(page.getByTitle("Filter by Work")).not.toBeVisible();
+	});
+
+	test("clicking second chip further narrows list and shows no duplicate suggestions", async ({
+		page,
+	}) => {
+		await page.goto("/");
+
+		// First filter: click Work
+		await expect(page.getByTitle("Filter by Work")).toBeVisible();
+		await page.getByTitle("Filter by Work").click();
+
+		// Verify Work-tagged messages are visible
+		await expect(page.getByText("Work Email #1", { exact: true })).toBeVisible();
+		// Work-only messages appear, Urgent chip is a suggestion
+		await expect(page.getByTitle("Filter by Urgent")).toBeVisible();
+
+		// Second filter: click Urgent
+		await page.getByTitle("Filter by Urgent").click();
+
+		// Message list should narrow further — only Work+Urgent messages (3 total)
+		// Work-only messages should no longer appear
+		await expect(page.getByText("Work Email #1", { exact: true })).not.toBeVisible();
+		await expect(page.getByText("Work Urgent Email #1", { exact: true })).toBeVisible();
+
+		// Work and Urgent should NOT appear as suggestion chips (they're active filters)
+		await expect(page.getByTitle("Filter by Work")).not.toBeVisible();
+		await expect(page.getByTitle("Filter by Urgent")).not.toBeVisible();
+
+		// "Also view:" label should be hidden when more than 1 filter chip is active
+		await expect(page.getByText("Also view:")).not.toBeVisible();
+
+		// Active filter pills should show both Work and Urgent
+		await expect(page.getByTitle("Remove Work filter")).toBeVisible();
+		await expect(page.getByTitle("Remove Urgent filter")).toBeVisible();
 	});
 });

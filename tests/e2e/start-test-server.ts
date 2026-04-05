@@ -162,6 +162,41 @@ db.prepare(`
 	VALUES (?, ?, ?, ?, ?)
 `).run(attachMsgId, "document.pdf", "application/pdf", 12345, attHash);
 
+// User-defined labels for E2E label filter drill-down tests (#681)
+const workLabelId = createTestLabel(db, "Work", { source: "user" });
+const urgentLabelId = createTestLabel(db, "Urgent", { source: "user" });
+
+// Messages tagged with Work + Urgent (appear in both Work-filtered and Urgent-filtered views)
+for (let i = 0; i < 3; i++) {
+	const msgId = createTestMessage(db, connectorId, inboxId, 16 + i, {
+		subject: `Work Urgent Email #${i + 1}`,
+		fromAddress: `work${i}@example.com`,
+		fromName: `Work Sender ${i + 1}`,
+		toAddresses: '["e2e@test.local"]',
+		date: new Date(now.getTime() - (200_000 + i * 1000)).toISOString(),
+		textBody: `Work urgent email number ${i + 1}.`,
+		flags: "\\Seen",
+	});
+	inboxMessageIds.push(msgId);
+	addMessageLabel(db, msgId, workLabelId);
+	addMessageLabel(db, msgId, urgentLabelId);
+}
+
+// Messages tagged with Work only (appear in Work-filtered view but not Urgent-filtered)
+for (let i = 0; i < 2; i++) {
+	const msgId = createTestMessage(db, connectorId, inboxId, 19 + i, {
+		subject: `Work Email #${i + 1}`,
+		fromAddress: `workonly${i}@example.com`,
+		fromName: `Work Only Sender ${i + 1}`,
+		toAddresses: '["e2e@test.local"]',
+		date: new Date(now.getTime() - (300_000 + i * 1000)).toISOString(),
+		textBody: `Work-only email number ${i + 1}.`,
+		flags: "\\Seen",
+	});
+	inboxMessageIds.push(msgId);
+	addMessageLabel(db, msgId, workLabelId);
+}
+
 // Link messages to labels (mirrors what IMAP sync does in production)
 for (const msgId of inboxMessageIds) {
 	addMessageLabel(db, msgId, inboxLabelId);
@@ -173,7 +208,7 @@ void draftsLabelId;
 
 // Update folder counts
 db.prepare("UPDATE folders SET message_count = ?, unread_count = ? WHERE id = ?").run(
-	15,
+	20,
 	3,
 	inboxId,
 );
