@@ -2690,7 +2690,7 @@ describe("App — per-identity default_view label: parsing", () => {
 
 describe("App — suggestForLabelId multi-step drill-down", () => {
 	// LabelSummary-shaped objects for the related labels API mock responses
-	const inboxSummary = { id: 1, name: "inbox", color: null, source: "imap" as const };
+	const _inboxSummary = { id: 1, name: "inbox", color: null, source: "imap" as const };
 	const workSummary = { id: 5, name: "Work", color: null, source: "user" as const };
 	const urgentSummary = { id: 6, name: "Urgent", color: null, source: "user" as const };
 

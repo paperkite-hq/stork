@@ -725,6 +725,40 @@ describe("Connectors API", () => {
 		});
 	});
 
+	describe("Re-label from server endpoint", () => {
+		test("POST /api/connectors/inbound/:id/re-label-from-server returns 404 for missing connector", async () => {
+			const { status, body } = await post("/api/connectors/inbound/999/re-label-from-server", {});
+			expect(status).toBe(404);
+			expect(body.error).toBeTruthy();
+		});
+
+		test("POST /api/connectors/inbound/:id/re-label-from-server returns 400 for non-IMAP connector", async () => {
+			db.prepare(
+				`INSERT INTO inbound_connectors (name, type) VALUES ('CF Email', 'cloudflare-email')`,
+			).run();
+			const id = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			const { status, body } = await post(`/api/connectors/inbound/${id}/re-label-from-server`, {});
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/IMAP/);
+		});
+
+		test("POST /api/connectors/inbound/:id/re-label-from-server returns 500 when connector not registered in scheduler", async () => {
+			db.prepare(
+				`INSERT INTO inbound_connectors (name, type, imap_host, imap_port, imap_tls, imap_user, imap_pass)
+				VALUES ('Test IMAP', 'imap', 'imap.example.com', 993, 1, 'user@example.com', 'pass')`,
+			).run();
+			const id = Number(
+				(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+			);
+			// Connector exists in DB but is not registered in the scheduler
+			const { status, body } = await post(`/api/connectors/inbound/${id}/re-label-from-server`, {});
+			expect(status).toBe(500);
+			expect(body.error).toMatch(/not registered/);
+		});
+	});
+
 	describe("Clean server endpoint", () => {
 		test("POST /api/connectors/inbound/:id/clean-server returns 404 for missing connector", async () => {
 			const { status, body } = await post("/api/connectors/inbound/999/clean-server", {});
