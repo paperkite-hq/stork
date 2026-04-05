@@ -418,6 +418,8 @@ export const api = {
 					consecutiveErrors: number;
 					progress: SyncProgressStatus | null;
 				}>(`/connectors/inbound/${id}/sync-status`),
+			syncedCount: (id: number) =>
+				fetchJSON<{ count: number }>(`/connectors/inbound/${id}/synced-count`),
 			sync: (id: number) =>
 				fetchJSON<{ ok?: boolean; error?: string }>(`/connectors/inbound/${id}/sync`, {
 					method: "POST",

@@ -8,6 +8,7 @@ import {
 	type OutboundConnector,
 } from "../../api";
 import { useAsync } from "../../hooks";
+import { ConnectorTransitionWizard } from "./ConnectorTransitionWizard";
 import { SyncStatusPanel } from "./SyncStatusPanel";
 
 // ── Inbound Connector Form ─────────────────────────────────────────────────
@@ -77,12 +78,19 @@ function InboundConnectorForm({
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [showConnectorWarning, setShowConnectorWarning] = useState(false);
+	const [showTransitionWizard, setShowTransitionWizard] = useState(false);
 	const wasInConnectorMode = initial ? (initial.sync_delete_from_server ?? 0) === 1 : false;
 
 	function handleSelectConnectorMode() {
-		setForm((f) => ({ ...f, sync_delete_from_server: 1 }));
-		if (!wasInConnectorMode) {
-			setShowConnectorWarning(true);
+		if (!wasInConnectorMode && initial) {
+			// Existing connector switching from mirror → connector: show wizard
+			setShowTransitionWizard(true);
+		} else {
+			// New connector or already in connector mode — just toggle
+			setForm((f) => ({ ...f, sync_delete_from_server: 1 }));
+			if (!wasInConnectorMode) {
+				setShowConnectorWarning(true);
+			}
 		}
 	}
 
@@ -433,6 +441,22 @@ function InboundConnectorForm({
 					Cancel
 				</button>
 			</div>
+
+			{showTransitionWizard && initial && (
+				<ConnectorTransitionWizard
+					connectorId={initial.id}
+					connectorName={initial.name}
+					onConfirm={(_cleanServer) => {
+						setForm((f) => ({ ...f, sync_delete_from_server: 1 }));
+						setShowConnectorWarning(true);
+						setShowTransitionWizard(false);
+						// cleanServer preference is noted — the actual bulk delete
+						// is handled by a sibling issue (#674 children). For now,
+						// the wizard educates and confirms the mode switch.
+					}}
+					onCancel={() => setShowTransitionWizard(false)}
+				/>
+			)}
 		</form>
 	);
 }

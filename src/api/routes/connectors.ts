@@ -387,6 +387,20 @@ export function connectorRoutes(
 		return c.json(status);
 	});
 
+	api.get("/inbound/:connectorId/synced-count", (c) => {
+		const connectorId = parseIntParam(c, "connectorId", c.req.param("connectorId"));
+		if (connectorId instanceof Response) return connectorId;
+
+		const row = getDb()
+			.prepare(
+				`SELECT COUNT(*) as count FROM messages
+				WHERE inbound_connector_id = ? AND deleted_from_server = 0`,
+			)
+			.get(connectorId) as { count: number } | undefined;
+
+		return c.json({ count: row?.count ?? 0 });
+	});
+
 	api.post("/inbound/:connectorId/sync", async (c) => {
 		const connectorId = parseIntParam(c, "connectorId", c.req.param("connectorId"));
 		if (connectorId instanceof Response) return connectorId;
