@@ -398,6 +398,27 @@ describe("Labels API", () => {
 			expect(body.error).toMatch(/ids/);
 		});
 
+		test("GET /api/labels/filter/related returns 400 for all-invalid ids", async () => {
+			const { status, body } = await jsonRequest("/api/labels/filter/related?ids=abc,0,-1");
+			expect(status).toBe(400);
+			expect(body.error).toMatch(/valid label ID/i);
+		});
+
+		test("GET /api/labels/filter/related respects limit parameter", async () => {
+			const base = createTestLabel(db, "BaseFilter");
+			const labels = [];
+			for (let i = 0; i < 6; i++) {
+				labels.push(createTestLabel(db, `RelTag${i}`));
+			}
+			const msg = createTestMessage(db, identityId, folderId, 10);
+			addMessageLabel(db, msg, base);
+			for (const lId of labels) addMessageLabel(db, msg, lId);
+
+			const { status, body } = await jsonRequest(`/api/labels/filter/related?ids=${base}&limit=3`);
+			expect(status).toBe(200);
+			expect(body).toHaveLength(3);
+		});
+
 		test("GET /api/labels/filter/related orders results by co-occurrence frequency", async () => {
 			const base1 = createTestLabel(db, "Base1");
 			const base2 = createTestLabel(db, "Base2");
