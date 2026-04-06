@@ -1,6 +1,6 @@
 {
 	"name": "stork",
-	"version": "0.6.0",
+	"version": "0.7.0",
 	"description": "Self-hosted email client with IMAP sync, local storage, and full-text search",
 	"type": "module",
 	"scripts": {

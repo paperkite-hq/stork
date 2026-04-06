@@ -1,13 +1,22 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 (2026-04-06)
+
+Connector polish, storage compression, and onboarding improvements.
 
 - **Connector mode transition wizard** — guided UX flow when switching from Mirror to Connector mode. Offers "Re-label from server" (reconcile label changes from other clients) and "Clean Server" (batch-remove already-synced messages from your provider). The transition from evaluation to commitment is now a first-class product moment, not a checkbox.
 - **Clean Server action** — one-click removal of already-synced messages from your mail provider. Queries all locally-synced messages grouped by folder and batch-deletes in groups of 100. Available from the transition wizard and as a standalone action in connector settings.
 - **Re-label from server** — on-demand reconciliation pass that detects folder changes made by external IMAP clients since messages were first synced. Fetches current UID lists, compares against locally-stored memberships, and updates labels to match. Detects cross-folder moves via RFC 5322 Message-ID correlation.
 - **zlib compression** — `html_body`, `raw_headers`, and attachment blobs are now zlib-compressed in SQLite, reducing database size for large mailboxes.
 - **HTML text extraction** — new `html_text_body` column extracts plain text from HTML-only emails for FTS5 indexing, so full-text search works on messages that have no text/plain part.
+- **Hash-based attachment deduplication** — identical attachments across messages are stored once, saving disk space in mailboxes with forwarded or repeated attachments.
+- **Outbound connector upsell** — composing a message without an outbound connector configured now guides you through creating one, instead of silently failing.
+- **Welcome wizard improvements** — connector-agnostic copy, R2 connector option on first run, credential testing during setup, auto-generated display names from email address.
+- **Connector mode radio buttons** — replaced the checkbox toggle with clearer radio buttons and a first-time warning explaining the implications.
 - **Filter drill-down fix** — label suggestion chips now work progressively: each active filter drives suggestions for the next, with already-active labels excluded. The related-labels endpoint returns labels from the intersection of all active filters.
+- **Stable wizard height** — step indicator and connector type tabs no longer cause layout jumps when switching steps.
+- **Attachment blob storage** — R2 and webhook ingest paths now enforce attachment data in `RawMessage` and store blobs correctly.
+- **Test coverage** — new tests for ConnectorsTab (inbound + outbound), re-label-from-server endpoint, filter drill-down E2E, and pre-migration hooks.
 
 ## v0.6.0 (2026-03-31)
 
