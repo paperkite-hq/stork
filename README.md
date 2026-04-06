@@ -151,14 +151,18 @@ The UI walks you through this choice when you connect your first email, and surf
 - [x] Label-based organization (Gmail-style)
 - [x] Encryption at rest (AES-256 via SQLCipher, BIP39 recovery key)
 - [x] Pluggable connector architecture
-- [x] Delete-from-server workflow
+- [x] Delete-from-server workflow (connector mode)
 - [x] Multi-identity support (unified inbox)
+- [x] Connector mode transition wizard (clean server, re-label from server)
+- [x] zlib compression for large email bodies and attachments
+- [x] HTML text extraction for full-text search on HTML-only emails
 
-### v0.6.0 (planned)
+### Planned
 
 - [ ] Filter rules and auto-labeling (server-side, applied on sync)
 - [ ] JMAP connector (pluggable alternative to IMAP)
 - [ ] CalDAV calendar integration (read-only events from email invites)
+- [ ] Attachment deduplication
 
 ## Documentation
 
@@ -171,6 +175,7 @@ The UI walks you through this choice when you connect your first email, and surf
 - **[Design Decisions](docs/design-decisions.md)** — labels over folders, and why
 - **[Upgrading](docs/upgrading.md)** — migrations, backups, and version upgrades
 - **[FAQ](docs/faq.md)** — common questions about sync, search, and data safety
+- **[Changelog](CHANGELOG.md)** — release history and what's new
 - **[Contributing](CONTRIBUTING.md)** — development setup, running tests
 
 ## Development

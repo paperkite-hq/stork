@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Connector mode transition wizard** — guided UX flow when switching from Mirror to Connector mode. Offers "Re-label from server" (reconcile label changes from other clients) and "Clean Server" (batch-remove already-synced messages from your provider). The transition from evaluation to commitment is now a first-class product moment, not a checkbox.
+- **Clean Server action** — one-click removal of already-synced messages from your mail provider. Queries all locally-synced messages grouped by folder and batch-deletes in groups of 100. Available from the transition wizard and as a standalone action in connector settings.
+- **Re-label from server** — on-demand reconciliation pass that detects folder changes made by external IMAP clients since messages were first synced. Fetches current UID lists, compares against locally-stored memberships, and updates labels to match. Detects cross-folder moves via RFC 5322 Message-ID correlation.
+- **zlib compression** — `html_body`, `raw_headers`, and attachment blobs are now zlib-compressed in SQLite, reducing database size for large mailboxes.
+- **HTML text extraction** — new `html_text_body` column extracts plain text from HTML-only emails for FTS5 indexing, so full-text search works on messages that have no text/plain part.
+- **Filter drill-down fix** — label suggestion chips now work progressively: each active filter drives suggestions for the next, with already-active labels excluded. The related-labels endpoint returns labels from the intersection of all active filters.
+
 ## v0.6.0 (2026-03-31)
 
 Connector-first architecture — connectors and identities replace the old accounts model.
