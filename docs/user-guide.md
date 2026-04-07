@@ -190,8 +190,18 @@ Sync runs automatically every 5 minutes per identity. You can also trigger a man
 
 ### What Stork Does NOT Do (by default)
 
-- **Stork does not delete mail from your server by default.** The sync is strictly read-only. To use Stork as a permanent local archive, turn on **Connector mode** in Settings > Identities for each identity. With it enabled, Stork automatically removes messages from the IMAP server after syncing them locally — your mail provider becomes a transient delivery edge, and Stork becomes the single source of truth.
+- **Stork does not delete mail from your server by default.** The sync is strictly read-only. To use Stork as a permanent local archive, turn on **Connector mode** in Settings for the inbound connector. With it enabled, Stork automatically removes messages from the IMAP server after syncing them locally — your mail provider becomes a transient delivery edge, and Stork becomes the single source of truth.
 - **Stork does not modify flags on the server.** Marking a message as read in Stork only affects local storage. Your IMAP server's flags remain unchanged.
+
+### Switching to Connector Mode
+
+When you're ready to commit to Stork as your primary mail archive, a **transition wizard** guides you through the switch:
+
+1. **Re-label from server** (optional, recommended) — reconciles any folder changes made by other email clients (Thunderbird, phone apps) since messages were first synced. Stork fetches current folder memberships from the server, compares against locally-stored labels, and updates to match. This ensures your labels reflect the current server state before you commit.
+
+2. **Clean Server** (optional) — removes already-synced messages from your mail provider in batches of 100. This clears your provider's mailbox of mail Stork already has, so your provider becomes a clean delivery endpoint. This is a one-time action and cannot be undone.
+
+Both actions are also available individually from the inbound connector settings at any time.
 
 ### Sync Errors
 

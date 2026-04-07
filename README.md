@@ -156,13 +156,18 @@ The UI walks you through this choice when you connect your first email, and surf
 - [x] Connector mode transition wizard (clean server, re-label from server)
 - [x] zlib compression for large email bodies and attachments
 - [x] HTML text extraction for full-text search on HTML-only emails
+- [x] Hash-based attachment deduplication
 
 ### Planned
 
 - [ ] Filter rules and auto-labeling (server-side, applied on sync)
 - [ ] JMAP connector (pluggable alternative to IMAP)
 - [ ] CalDAV calendar integration (read-only events from email invites)
-- [ ] Attachment deduplication
+- [ ] PGP/S-MIME message encryption and signature verification
+- [ ] Push notifications via IMAP IDLE
+- [ ] Address book with auto-complete from message history
+- [ ] Import from mbox, EML, and Thunderbird profiles
+- [ ] Themes and UI customization
 
 ## Documentation
 
