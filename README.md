@@ -142,6 +142,8 @@ The UI walks you through this choice when you connect your first email, and surf
 
 **Roundcube** is the most mature option with the deepest plugin ecosystem — better for calendar integration or multi-user shared hosting. **Bichon** is focused on email archiving — better for long-term preservation of large mailboxes. **Mailu** is a complete mail server stack — use it if you need to replace your mail infrastructure entirely. Stork is a client that connects to your existing server.
 
+**Detailed comparisons:** [vs Roundcube](docs/comparisons/vs-roundcube.md) · [vs Thunderbird](docs/comparisons/vs-thunderbird.md) · [vs Bichon](docs/comparisons/vs-bichon.md)
+
 ## Roadmap
 
 - [x] IMAP sync engine (incremental, resumable)
