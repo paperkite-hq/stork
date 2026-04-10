@@ -5,6 +5,7 @@
 <h1 align="center">Stork</h1>
 
 <p align="center">
+  <a href="https://github.com/paperkite-hq/stork/releases/latest"><img src="https://img.shields.io/github/v/release/paperkite-hq/stork" alt="Latest Release"></a>
   <a href="https://github.com/paperkite-hq/stork/actions/workflows/ci.yml"><img src="https://github.com/paperkite-hq/stork/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://paperkite-hq.github.io/stork/"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/paperkite-hq/stork/badges/coverage.json" alt="Coverage"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
