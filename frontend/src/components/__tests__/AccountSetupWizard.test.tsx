@@ -71,7 +71,7 @@ describe("AccountSetupWizard", () => {
 				onCancel={onCancel}
 			/>,
 		);
-		expect(screen.getByText("Add Email Identity")).toBeInTheDocument();
+		expect(screen.getByText("Connect Email")).toBeInTheDocument();
 		expect(screen.getByLabelText(/Display Name/i)).toBeInTheDocument();
 		expect(screen.getByLabelText(/Email Address/i)).toBeInTheDocument();
 	});

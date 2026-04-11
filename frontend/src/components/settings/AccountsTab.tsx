@@ -31,14 +31,14 @@ export function AccountsTab({
 					onClick={() => onEdit("new")}
 					className="px-3 py-1.5 bg-stork-600 hover:bg-stork-700 text-white rounded-md text-sm font-medium transition-colors"
 				>
-					+ Add Email Identity
+					+ Connect Email
 				</button>
 			</div>
 
 			{/* Identity list */}
 			{identities.length === 0 && editingIdentityId !== "new" && (
 				<p className="text-sm text-gray-500 dark:text-gray-400 py-8 text-center">
-					No email identities configured. Add one to get started.
+					No email accounts connected. Connect one to get started.
 				</p>
 			)}
 

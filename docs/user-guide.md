@@ -87,9 +87,9 @@ If you suspect your recovery mnemonic has been compromised, rotate it from Setti
 
 If you forget your password but have your recovery mnemonic, use it on the unlock screen. You'll be prompted to set a new password. The recovery mnemonic is not invalidated by this process.
 
-## Adding an Email Identity
+## Connect Your Email
 
-After unlocking, you'll see the Welcome screen prompting you to add an identity.
+After unlocking, you'll see the Welcome screen prompting you to connect your email.
 
 You'll need:
 - **IMAP server hostname** (e.g., `imap.fastmail.com`, `imap.gmail.com`)
@@ -113,7 +113,7 @@ You'll need:
 
 **ProtonMail users**: You'll need the [ProtonMail Bridge](https://proton.me/mail/bridge) running locally.
 
-After entering your credentials, Stork begins syncing immediately. The initial sync may take a few minutes depending on the size of your mailbox.
+After entering your credentials and clicking connect, Stork validates the connection and begins syncing immediately. The initial sync may take a few minutes depending on the size of your mailbox.
 
 ## Using Stork
 
@@ -128,7 +128,7 @@ The interface has three panels:
 
 Click the compose button to write a new message. When viewing a message, use the Reply or Reply All buttons.
 
-Composing requires SMTP credentials configured on the identity. If you only set up IMAP, you can read mail but not send.
+Composing requires SMTP credentials configured on the account. If you only set up IMAP, you can read mail but not send.
 
 ### Search
 
@@ -150,9 +150,9 @@ Press `?` to see available keyboard shortcuts. Navigation, compose, and search a
 
 Toggle dark mode from the settings or use the theme button. Your preference is saved in the browser.
 
-### Multiple Identities
+### Multiple Accounts
 
-You can add multiple email identities from the Settings panel. Each identity syncs independently on its own schedule. The sidebar shows all identities with their labels.
+You can connect multiple email accounts from the Settings panel. Each account syncs independently on its own schedule. The sidebar shows all accounts with their labels.
 
 ### Mail Organization Philosophy
 
@@ -161,7 +161,7 @@ Stork uses a **labels, not folders** model inspired by Gmail. Every IMAP folder 
 **Promoted views** (always at the top of the sidebar):
 - **Inbox** — your landing view. Shows messages with the Inbox label. This is portable across providers because every IMAP server has an INBOX folder, which Stork syncs as a label.
 - **Unread** — shows all unread messages across every label. This is a Stork-internal unread bit and does not flow back to the IMAP server. Useful when your IMAP server auto-sorts emails into folders — new messages in those folders will surface here.
-- **All Mail** — every message for the identity, regardless of labels. Nothing is hidden from this view.
+- **All Mail** — every message for the account, regardless of labels. Nothing is hidden from this view.
 
 **Labels** (below the divider):
 - All other labels (Sent, Drafts, Trash, Spam, custom labels, etc.) appear in the lower section.
@@ -204,7 +204,7 @@ Stork syncs mail using the IMAP protocol:
 2. **Message sync** — for each folder, fetches messages newer than what Stork already has (incremental sync using IMAP UIDs).
 3. **Flag sync** — updates read/unread/starred status for existing messages.
 
-Sync runs automatically every 5 minutes per identity. You can also trigger a manual sync from the UI.
+Sync runs automatically every 5 minutes per account. You can also trigger a manual sync from the UI.
 
 ### What Stork Does NOT Do (by default)
 
@@ -315,4 +315,4 @@ Transient network errors are normal. Stork retries with backoff. If errors persi
 
 ### Search returns no results
 
-The FTS index is built automatically as messages are synced. If you just added an identity, wait for the initial sync to complete. The search covers subject, sender, recipients, and body text.
+The FTS index is built automatically as messages are synced. If you just connected an account, wait for the initial sync to complete. The search covers subject, sender, recipients, and body text.

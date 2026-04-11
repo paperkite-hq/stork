@@ -60,7 +60,7 @@ describe("AccountsTab", () => {
 				onRefetch={onRefetch}
 			/>,
 		);
-		expect(screen.getByText(/No email identities configured/i)).toBeInTheDocument();
+		expect(screen.getByText(/No email accounts connected/i)).toBeInTheDocument();
 	});
 
 	it("renders identity list", () => {
@@ -76,7 +76,7 @@ describe("AccountsTab", () => {
 		expect(screen.getByText("Personal")).toBeInTheDocument();
 	});
 
-	it("calls onEdit('new') when Add Identity button clicked", () => {
+	it("calls onEdit('new') when Connect Email button clicked", () => {
 		render(
 			<AccountsTab
 				identities={[]}
@@ -85,7 +85,7 @@ describe("AccountsTab", () => {
 				onRefetch={onRefetch}
 			/>,
 		);
-		fireEvent.click(screen.getByText("+ Add Email Identity"));
+		fireEvent.click(screen.getByText("+ Connect Email"));
 		expect(onEdit).toHaveBeenCalledWith("new");
 	});
 
@@ -94,7 +94,7 @@ describe("AccountsTab", () => {
 			<AccountsTab identities={[]} editingIdentityId="new" onEdit={onEdit} onRefetch={onRefetch} />,
 		);
 		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: /Add Email Identity/i })).toBeInTheDocument(),
+			expect(screen.getByRole("heading", { name: /Connect Email/i })).toBeInTheDocument(),
 		);
 	});
 
@@ -118,7 +118,7 @@ describe("AccountsTab", () => {
 		expect(screen.getByText("Personal")).toBeInTheDocument();
 		// The editing identity renders as form (edit heading loaded async)
 		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: /Edit Email Identity/i })).toBeInTheDocument(),
+			expect(screen.getByRole("heading", { name: /Edit Email Account/i })).toBeInTheDocument(),
 		);
 	});
 

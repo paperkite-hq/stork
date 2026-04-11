@@ -991,12 +991,12 @@ export function AccountSetupWizard({
 			className="fixed inset-0 z-60 flex items-center justify-center bg-black/50"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Add Email Identity"
+			aria-label="Connect Email"
 		>
 			<div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6 flex flex-col h-[min(680px,90vh)]">
 				<div className="flex items-center justify-between mb-2">
 					<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-						Add Email Identity
+						Connect Email
 					</h3>
 					<button
 						type="button"

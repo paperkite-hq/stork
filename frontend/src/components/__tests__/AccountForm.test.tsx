@@ -53,10 +53,10 @@ describe("AccountForm", () => {
 		mockApi.connectors.outbound.list.mockResolvedValue(mockOutbound);
 	});
 
-	it("renders Add Identity heading for new identity", async () => {
+	it("renders Connect Email heading for new identity", async () => {
 		render(<AccountForm identityId={null} onCancel={onCancel} onSaved={onSaved} />);
 		await waitFor(() =>
-			expect(screen.getByRole("heading", { name: /Add Email Identity/i })).toBeInTheDocument(),
+			expect(screen.getByRole("heading", { name: /Connect Email/i })).toBeInTheDocument(),
 		);
 		expect(screen.getByPlaceholderText("Work Email")).toBeInTheDocument();
 		expect(screen.getByPlaceholderText("you@example.com")).toBeInTheDocument();

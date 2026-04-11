@@ -116,7 +116,7 @@ export function AccountForm({
 			className="border border-stork-200 dark:border-stork-800 rounded-lg p-4 space-y-4 bg-gray-50 dark:bg-gray-800/50"
 		>
 			<h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-				{identityId === null ? "Add Email Identity" : "Edit Email Identity"}
+				{identityId === null ? "Connect Email" : "Edit Email Account"}
 			</h4>
 
 			{error && (
@@ -241,7 +241,7 @@ export function AccountForm({
 					disabled={loading}
 					className="px-4 py-1.5 bg-stork-600 hover:bg-stork-700 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"
 				>
-					{loading ? "Saving..." : identityId === null ? "Add Email Identity" : "Save Changes"}
+					{loading ? "Saving..." : identityId === null ? "Connect Email" : "Save Changes"}
 				</button>
 			</div>
 		</form>
