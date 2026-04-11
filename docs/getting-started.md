@@ -74,7 +74,7 @@ After adding an identity, Stork immediately starts syncing your email.
 
 **Good to know:**
 
-- Stork **does not modify your IMAP server by default**. The sync is read-only — no messages are deleted, moved, or modified on the server. It's safe to use against a production mailbox. To use Stork as a permanent local archive (auto-delete from IMAP after sync), enable **Connector mode** in Settings > Identities.
+- Stork **does not modify your IMAP server by default**. The sync is read-only — no messages are deleted, moved, or modified on the server. It's safe to use against a production mailbox. To use Stork as a permanent local archive (auto-delete from IMAP after sync), enable **Connector mode** in Settings > Inbound.
 - Subsequent syncs are **incremental** — only new messages are fetched, so they're fast.
 - If sync fails (network issue, bad credentials), Stork uses exponential backoff and retries automatically.
 

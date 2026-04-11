@@ -6,30 +6,48 @@ This guide covers installing, configuring, and using Stork.
 
 ### Docker Compose (recommended)
 
+Create a `docker-compose.yml`:
+
+```yaml
+services:
+  stork:
+    image: ghcr.io/paperkite-hq/stork:latest
+    init: true
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - stork-data:/app/data
+    restart: unless-stopped
+    mem_swappiness: 0
+    ulimits:
+      core: 0
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  stork-data:
+```
+
 ```bash
-git clone https://github.com/paperkite-hq/stork.git
-cd stork
 docker compose up -d
 ```
 
 Open `http://localhost:3100` in your browser.
 
-### Docker (single container)
+### Docker (single command)
 
 ```bash
-git clone https://github.com/paperkite-hq/stork.git
-cd stork
-docker build -t stork .
-docker run --rm --init \
+docker run -d --init \
   -p 127.0.0.1:3100:3100 \
   -v ~/stork-data:/app/data \
   --memory-swappiness=0 \
   --ulimit core=0 \
   --security-opt no-new-privileges \
-  stork
+  --restart unless-stopped \
+  ghcr.io/paperkite-hq/stork:latest
 ```
 
-Your data is stored as regular files at `~/stork-data`. The security flags match the `docker-compose.yml` defaults (disabled swap, no core dumps, no privilege escalation) — important for protecting the in-memory encryption key.
+Binds to localhost only, stores the encrypted database in `~/stork-data`. The security flags disable swap, core dumps, and privilege escalation — important for protecting the in-memory encryption key.
 
 ### From Source
 
