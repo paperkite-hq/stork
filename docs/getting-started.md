@@ -37,7 +37,7 @@ Once you confirm your recovery mnemonic is saved, Stork unlocks and you'll see t
 
 ## 3. Connect Your Email
 
-The Welcome screen prompts you to connect your first email account. You'll need your IMAP server details:
+The Welcome screen prompts you to connect your first email. You'll need your IMAP server details:
 
 | Field | Example (Gmail) | Example (Fastmail) |
 |-------|-----------------|-------------------|
@@ -54,7 +54,7 @@ The Welcome screen prompts you to connect your first email account. You'll need 
 - **ProtonMail** requires the [ProtonMail Bridge](https://proton.me/mail/bridge) running locally (IMAP on `127.0.0.1:1143`).
 - **SMTP is optional.** Without it, you can read mail but not send. You can add SMTP credentials later in Settings.
 
-See the [User Guide](user-guide.md#common-imapsmtp-settings) for a full provider table.
+See the [Provider Setup Guides](providers/index.md) for detailed instructions for Gmail, Fastmail, Mailcow, ProtonMail, and more.
 
 Enter your credentials and click connect. Stork validates the connection before saving.
 
@@ -135,7 +135,7 @@ You're up and running. Here are some things to explore:
 
 - **Keyboard shortcuts** — press `?` to see all available shortcuts.
 - **Dark mode** — toggle from the settings or theme button.
-- **Multiple accounts** — connect more email accounts from Settings. Each syncs independently.
+- **Multiple inboxes** — connect more email providers from Settings. Each syncs independently.
 - **Compose email** — click the compose button (requires SMTP configured).
 - **Change your password** — Settings > Security. This is instant regardless of database size.
 
