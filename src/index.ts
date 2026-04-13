@@ -60,4 +60,19 @@ console.log();
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
+// Safety net: log and survive unexpected errors instead of crashing.
+// IMAP/SMTP libraries can emit unhandled errors (e.g. socket timeouts)
+// that would otherwise take down the entire process.
+process.on("uncaughtException", (err) => {
+	console.error("[stork] Uncaught exception (process survived):", err.message);
+	if (err.stack) console.error(err.stack);
+});
+process.on("unhandledRejection", (reason) => {
+	console.error(
+		"[stork] Unhandled rejection (process survived):",
+		reason instanceof Error ? reason.message : reason,
+	);
+	if (reason instanceof Error && reason.stack) console.error(reason.stack);
+});
+
 serve({ port: PORT, fetch: app.fetch });
