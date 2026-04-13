@@ -120,6 +120,9 @@ export class ImapSync {
 			...config,
 			logger: false,
 		});
+		// Attach error handler immediately to prevent unhandled 'error' events
+		// between construction and first connect() call.
+		this.client.on("error", () => {});
 		this.db = db;
 		this.inboundConnectorId = inboundConnectorId;
 		this.subBatchLabelSize = subBatchLabelSize;

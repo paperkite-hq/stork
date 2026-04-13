@@ -34,6 +34,9 @@ export class ImapIngestConnector implements IngestConnector {
 			...config,
 			logger: false,
 		});
+		// Attach error handler immediately to prevent unhandled 'error' events
+		// between construction and first connect() call.
+		this.client.on("error", () => {});
 	}
 
 	async connect(): Promise<void> {
@@ -49,6 +52,7 @@ export class ImapIngestConnector implements IngestConnector {
 				...this.config,
 				logger: false,
 			});
+			this.client.on("error", () => {});
 			return this.client.connect();
 		}, "IMAP connect");
 	}

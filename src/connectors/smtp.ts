@@ -30,6 +30,9 @@ export class SmtpSendConnector implements SendConnector {
 			auth: config.auth,
 			tls: { rejectUnauthorized: config.secure },
 		});
+		// Suppress async transport errors (connection timeouts, socket resets)
+		// that can fire outside of send()/verify() and cause unhandled rejections.
+		this.transport.on("error", () => {});
 	}
 
 	async send(message: OutgoingMessage): Promise<SendResult> {
