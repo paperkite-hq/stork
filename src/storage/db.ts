@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { statSync } from "node:fs";
+import { totalmem } from "node:os";
 import { join } from "node:path";
 import { deflateSync, inflateSync } from "node:zlib";
 import Database from "better-sqlite3-multiple-ciphers";
@@ -21,14 +22,17 @@ export function openDatabase(
 		db.exec(`PRAGMA key = "x'${vaultKey.toString("hex")}'";`);
 	}
 
-	// Scale mmap_size to the database file size (capped at 2 GB).
-	// For large mailboxes (e.g. 16 GB), the default 256 MB mmap covers
-	// only a tiny fraction of the file, causing excessive page faults.
+	// Scale mmap_size based on DB file size and available RAM.
+	// Cap at 50% of total system RAM so we don't crowd out other processes,
+	// but don't exceed the file size (mapping more than the file wastes VA space).
+	// Minimum 256 MB for small DBs. On a machine with 32 GB RAM and a 16 GB DB,
+	// this maps the entire file; on a machine with 8 GB RAM it maps up to 4 GB
+	// (25% of the DB — still far better than the old fixed 256 MB / 1.5%).
 	let mmapSize = 268435456; // 256 MB default
 	try {
 		const fileSize = statSync(dbPath).size;
-		// Use 2× file size (up to 2 GB) so mmap covers the entire DB
-		mmapSize = Math.min(fileSize * 2, 2147483648);
+		const ramCap = Math.floor(totalmem() / 2);
+		mmapSize = Math.min(fileSize, ramCap);
 		// Floor at 256 MB for small DBs
 		if (mmapSize < 268435456) mmapSize = 268435456;
 	} catch {
