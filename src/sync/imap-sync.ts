@@ -191,6 +191,10 @@ export class ImapSync {
 				...this.config,
 				logger: false,
 			});
+			// Attach error handler immediately to prevent unhandled 'error' events
+			// (e.g. ETIMEOUT) from crashing the process. The sync loop's try/catch
+			// handles the resulting failures gracefully.
+			this.client.on("error", () => {});
 			try {
 				return await this.client.connect();
 			} catch (err) {
@@ -911,6 +915,11 @@ export class ImapSync {
 	/**
 	 * Syncs flags (read/unread, starred, etc.) for messages already in the database.
 	 * Fetches flags for all known UIDs and updates any that changed.
+	 *
+	 * Also detects expunged messages — UIDs that no longer exist on the server.
+	 * These are deleted from the local DB (with CASCADE removing their labels),
+	 * which keeps the inbox view accurate when messages are moved or deleted
+	 * server-side.
 	 */
 	private async syncFlags(
 		folderId: number,
@@ -935,6 +944,12 @@ export class ImapSync {
 
 		let updated = 0;
 
+		// Track which UIDs the server confirmed still exist. UIDs missing
+		// from the response have been expunged (moved or deleted server-side).
+		const serverSeenUids = new Set<number>();
+		// Track batches that failed so we don't false-positive expunge them
+		const failedBatchUids = new Set<number>();
+
 		// Fetch flags in batches to avoid oversized IMAP commands
 		for (let i = 0; i < uidSet.length; i += FETCH_BATCH_SIZE) {
 			if (signal?.aborted) break;
@@ -950,6 +965,7 @@ export class ImapSync {
 					},
 					{ uid: true },
 				)) {
+					serverSeenUids.add(msg.uid);
 					const newFlags = Array.from(msg.flags ?? new Set()).join(",");
 					const oldFlags = localFlagMap.get(msg.uid);
 					if (oldFlags !== newFlags) {
@@ -960,6 +976,8 @@ export class ImapSync {
 			} catch (err) {
 				// Connection force-closed during shutdown — treat as normal abort
 				if (signal?.aborted) break;
+				// Mark this batch as failed — don't treat its UIDs as expunged
+				for (const uid of batch) failedBatchUids.add(uid);
 				this.recordError(result, {
 					folderPath: result.folder,
 					uid: null,
@@ -967,6 +985,23 @@ export class ImapSync {
 					message: `Flag sync failed for "${result.folder}" (UIDs ${batch[0]}–${batch[batch.length - 1]}): ${formatImapError(err)} [STORK-E003]`,
 					retriable: true,
 				});
+			}
+		}
+
+		// Detect expunged messages: UIDs we asked for but the server didn't
+		// return, excluding any batches that failed (to avoid false positives).
+		if (!signal?.aborted) {
+			const expungedUids = uidSet.filter(
+				(uid) => !serverSeenUids.has(uid) && !failedBatchUids.has(uid),
+			);
+			if (expungedUids.length > 0) {
+				const deleteMsg = this.db.prepare("DELETE FROM messages WHERE folder_id = ? AND uid = ?");
+				const deleteExpunged = this.db.transaction((uids: number[]) => {
+					for (const uid of uids) {
+						deleteMsg.run(folderId, uid);
+					}
+				});
+				deleteExpunged(expungedUids);
 			}
 		}
 

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { statSync } from "node:fs";
 import { join } from "node:path";
 import { deflateSync, inflateSync } from "node:zlib";
 import Database from "better-sqlite3-multiple-ciphers";
@@ -20,13 +21,40 @@ export function openDatabase(
 		db.exec(`PRAGMA key = "x'${vaultKey.toString("hex")}'";`);
 	}
 
+	// Scale mmap_size to the database file size (capped at 2 GB).
+	// For large mailboxes (e.g. 16 GB), the default 256 MB mmap covers
+	// only a tiny fraction of the file, causing excessive page faults.
+	let mmapSize = 268435456; // 256 MB default
+	try {
+		const fileSize = statSync(dbPath).size;
+		// Use 2× file size (up to 2 GB) so mmap covers the entire DB
+		mmapSize = Math.min(fileSize * 2, 2147483648);
+		// Floor at 256 MB for small DBs
+		if (mmapSize < 268435456) mmapSize = 268435456;
+	} catch {
+		// File may not exist yet (first run)
+	}
+
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
-	db.exec("PRAGMA busy_timeout = 5000");
+	db.exec("PRAGMA busy_timeout = 30000"); // 30s timeout — large DBs under sync load need headroom
 	db.exec("PRAGMA cache_size = -65536"); // 64 MB page cache (default is 2 MB)
 	db.exec("PRAGMA temp_store = MEMORY"); // Use RAM for temp tables during sorts/joins
 	db.exec("PRAGMA synchronous = NORMAL"); // Safe with WAL; avoids fsync on every commit
-	db.exec("PRAGMA mmap_size = 268435456"); // 256 MB memory-mapped I/O
+	db.exec(`PRAGMA mmap_size = ${mmapSize}`);
+
+	// Checkpoint and truncate the WAL before anything else. After a crash
+	// the WAL can be very large (GBs for a big mailbox); leaving it un-
+	// checkpointed means the first writer races against readers and both
+	// suffer. TRUNCATE mode resets the WAL file to zero bytes.
+	try {
+		db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+	} catch {
+		// Checkpoint can fail if another connection holds a read lock — safe to skip
+	}
+
+	// Let SQLite analyse tables and pick better query plans for the current data
+	db.exec("PRAGMA optimize");
 
 	ensureSchema(db);
 	return db;
