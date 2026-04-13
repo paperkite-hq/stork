@@ -9,6 +9,11 @@ export function createTestDb(): Database.Database {
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
 	db.exec("PRAGMA busy_timeout = 5000");
+	// Attach in-memory blobs DB (mirrors openDatabase behavior)
+	db.exec("ATTACH DATABASE ':memory:' AS blobs");
+	db.exec(
+		"CREATE TABLE IF NOT EXISTS blobs.attachment_blobs (content_hash TEXT PRIMARY KEY, data BLOB NOT NULL)",
+	);
 	ensureSchema(db);
 	return db;
 }

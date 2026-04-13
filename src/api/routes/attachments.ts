@@ -13,7 +13,7 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 			.prepare(
 				`SELECT a.filename, a.content_type, b.data
 				FROM attachments a
-				JOIN attachment_blobs b ON b.content_hash = a.content_hash
+				JOIN blobs.attachment_blobs b ON b.content_hash = a.content_hash
 				WHERE a.id = ?`,
 			)
 			.get(attachmentId) as
@@ -51,7 +51,7 @@ export function attachmentRoutes(getDb: () => Database.Database): Hono {
 			.prepare(
 				`SELECT a.content_type, b.data
 				FROM attachments a
-				JOIN attachment_blobs b ON b.content_hash = a.content_hash
+				JOIN blobs.attachment_blobs b ON b.content_hash = a.content_hash
 				WHERE a.message_id = ? AND a.content_id = ?`,
 			)
 			.get(messageId, contentId) as

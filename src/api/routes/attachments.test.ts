@@ -355,7 +355,7 @@ describe("Attachments API", () => {
 
 			const blobCount = (
 				db
-					.prepare("SELECT COUNT(*) as n FROM attachment_blobs WHERE content_hash = ?")
+					.prepare("SELECT COUNT(*) as n FROM blobs.attachment_blobs WHERE content_hash = ?")
 					.get(hash1) as { n: number }
 			).n;
 			expect(blobCount).toBe(1);
@@ -368,7 +368,7 @@ describe("Attachments API", () => {
 			expect(hash1).not.toBe(hash2);
 
 			const totalBlobs = (
-				db.prepare("SELECT COUNT(*) as n FROM attachment_blobs").get() as { n: number }
+				db.prepare("SELECT COUNT(*) as n FROM blobs.attachment_blobs").get() as { n: number }
 			).n;
 			expect(totalBlobs).toBe(2);
 		});
@@ -415,7 +415,7 @@ describe("Attachments API", () => {
 
 			// Only one blob row despite two attachment rows
 			const blobCount = (
-				db.prepare("SELECT COUNT(*) as n FROM attachment_blobs").get() as { n: number }
+				db.prepare("SELECT COUNT(*) as n FROM blobs.attachment_blobs").get() as { n: number }
 			).n;
 			expect(blobCount).toBe(1);
 

@@ -17,7 +17,7 @@ import { compressBuffer } from "./compression.js";
 export function upsertAttachmentBlob(db: Database.Database, data: Buffer): string {
 	const hash = createHash("sha256").update(data).digest("hex");
 	const compressed = compressBuffer(data) ?? data;
-	db.prepare("INSERT OR IGNORE INTO attachment_blobs (content_hash, data) VALUES (?, ?)").run(
+	db.prepare("INSERT OR IGNORE INTO blobs.attachment_blobs (content_hash, data) VALUES (?, ?)").run(
 		hash,
 		compressed,
 	);

@@ -13,6 +13,10 @@ function createTestDb(): Database.Database {
 	const db = new Database(":memory:");
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
+	db.exec("ATTACH DATABASE ':memory:' AS blobs");
+	db.exec(
+		"CREATE TABLE IF NOT EXISTS blobs.attachment_blobs (content_hash TEXT PRIMARY KEY, data BLOB NOT NULL)",
+	);
 	ensureSchema(db);
 	return db;
 }

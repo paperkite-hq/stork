@@ -9,6 +9,19 @@ import { MIGRATIONS, SCHEMA_VERSION } from "./schema.js";
 
 const DATA_DIR = process.env.STORK_DATA_DIR || "./data";
 
+export function attachBlobsDb(db: Database.Database, blobsPath: string, vaultKey?: Buffer): void {
+	const escapedPath = blobsPath.replace(/'/g, "''");
+	if (vaultKey) {
+		db.exec(`ATTACH DATABASE '${escapedPath}' AS blobs KEY "x'${vaultKey.toString("hex")}'"`);
+	} else {
+		db.exec(`ATTACH DATABASE '${escapedPath}' AS blobs`);
+	}
+	// Ensure the blobs table exists in the attached DB (idempotent)
+	db.exec(
+		`CREATE TABLE IF NOT EXISTS blobs.attachment_blobs (content_hash TEXT PRIMARY KEY, data BLOB NOT NULL)`,
+	);
+}
+
 export function openDatabase(
 	filename = "stork.db",
 	dataDir = DATA_DIR,
@@ -74,6 +87,9 @@ export function openDatabase(
 
 	// Let SQLite analyse tables and pick better query plans for the current data
 	db.exec("PRAGMA optimize");
+
+	const blobsPath = join(dataDir, `${filename.replace(/\.db$/, "")}-blobs.db`);
+	attachBlobsDb(db, blobsPath, vaultKey);
 
 	ensureSchema(db);
 	return db;
@@ -255,6 +271,28 @@ const PRE_MIGRATION_HOOKS: Record<number, (db: Database.Database) => void> = {
 		for (let i = 0; i < rows.length; i += BATCH_SIZE) {
 			txn(rows.slice(i, i + BATCH_SIZE));
 		}
+	},
+
+	// v27: Move attachment_blobs from main DB to the attached blobs DB.
+	27: (db) => {
+		const hasTable = db
+			.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='attachment_blobs'")
+			.get();
+		if (!hasTable) return;
+		const rows = db.prepare("SELECT content_hash, data FROM attachment_blobs").all() as Array<{
+			content_hash: string;
+			data: Buffer;
+		}>;
+		if (rows.length === 0) return;
+		const insert = db.prepare(
+			"INSERT OR IGNORE INTO blobs.attachment_blobs (content_hash, data) VALUES (?, ?)",
+		);
+		const txn = db.transaction(() => {
+			for (const row of rows) {
+				insert.run(row.content_hash, row.data);
+			}
+		});
+		txn();
 	},
 
 	// v26: Rename IMAP-sourced labels from folder leaf name to full folder path.

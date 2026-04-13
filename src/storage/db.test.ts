@@ -52,6 +52,10 @@ describe("openDatabase", () => {
 describe("ensureSchema", () => {
 	test("is idempotent — calling twice does not duplicate schema", () => {
 		const db = new Database(":memory:");
+		db.exec("ATTACH DATABASE ':memory:' AS blobs");
+		db.exec(
+			"CREATE TABLE IF NOT EXISTS blobs.attachment_blobs (content_hash TEXT PRIMARY KEY, data BLOB NOT NULL)",
+		);
 		ensureSchema(db);
 		ensureSchema(db);
 		const row = db.prepare("SELECT version FROM schema_version").get() as { version: number };
@@ -60,6 +64,10 @@ describe("ensureSchema", () => {
 
 	test("applies all migrations to reach current SCHEMA_VERSION", () => {
 		const db = new Database(":memory:");
+		db.exec("ATTACH DATABASE ':memory:' AS blobs");
+		db.exec(
+			"CREATE TABLE IF NOT EXISTS blobs.attachment_blobs (content_hash TEXT PRIMARY KEY, data BLOB NOT NULL)",
+		);
 		ensureSchema(db);
 		const row = db.prepare("SELECT version FROM schema_version").get() as { version: number };
 		expect(row.version).toBe(SCHEMA_VERSION);
@@ -73,6 +81,10 @@ describe("ensureSchema", () => {
 function applyMigrationsTo(targetVersion: number): Database.Database {
 	const db = new Database(":memory:");
 	db.exec("PRAGMA foreign_keys = ON");
+	db.exec("ATTACH DATABASE ':memory:' AS blobs");
+	db.exec(
+		"CREATE TABLE IF NOT EXISTS blobs.attachment_blobs (content_hash TEXT PRIMARY KEY, data BLOB NOT NULL)",
+	);
 	// Apply first migration to create base schema
 	db.exec(MIGRATIONS[0]);
 	// Apply subsequent migrations up to targetVersion
@@ -108,7 +120,7 @@ describe("pre-migration hooks", () => {
 		// Verify: attachment_blobs should have the data keyed by SHA-256
 		const expectedHash = createHash("sha256").update(testData).digest("hex");
 		const blob = db
-			.prepare("SELECT data FROM attachment_blobs WHERE content_hash = ?")
+			.prepare("SELECT data FROM blobs.attachment_blobs WHERE content_hash = ?")
 			.get(expectedHash) as { data: Buffer } | undefined;
 		expect(blob).toBeTruthy();
 
@@ -158,7 +170,7 @@ describe("pre-migration hooks", () => {
 
 		// Verify attachment blob is compressed (starts with zlib header 0x78)
 		const blob = db
-			.prepare("SELECT data FROM attachment_blobs WHERE content_hash = ?")
+			.prepare("SELECT data FROM blobs.attachment_blobs WHERE content_hash = ?")
 			.get(hash) as {
 			data: Buffer;
 		};
@@ -189,7 +201,7 @@ describe("pre-migration hooks", () => {
 
 		// Should remain as-is (not double-compressed)
 		const blob = db
-			.prepare("SELECT data FROM attachment_blobs WHERE content_hash = ?")
+			.prepare("SELECT data FROM blobs.attachment_blobs WHERE content_hash = ?")
 			.get(hash) as {
 			data: Buffer;
 		};

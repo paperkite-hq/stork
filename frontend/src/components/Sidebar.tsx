@@ -230,7 +230,6 @@ export function Sidebar({
 	const [syncDetailOpen, setSyncDetailOpen] = useState(false);
 
 	const handleLabelContextMenu = useCallback((e: React.MouseEvent, label: Label) => {
-		if (label.source !== "user") return;
 		e.preventDefault();
 		setContextMenu({ label, position: { x: e.clientX, y: e.clientY } });
 	}, []);

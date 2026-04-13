@@ -373,7 +373,9 @@ describe("storeInboundEmail", () => {
 		});
 		expect(result.stored).toBe(1);
 
-		const blobs = db.prepare("SELECT * FROM attachment_blobs").all() as { content_hash: string }[];
+		const blobs = db.prepare("SELECT * FROM blobs.attachment_blobs").all() as {
+			content_hash: string;
+		}[];
 		expect(blobs.length).toBe(1);
 
 		const atts = db.prepare("SELECT * FROM attachments").all() as {
@@ -421,7 +423,7 @@ describe("storeInboundEmail", () => {
 		expect(atts.length).toBe(2);
 
 		// But only one blob (identical file content stored once)
-		const blobs = db.prepare("SELECT * FROM attachment_blobs").all();
+		const blobs = db.prepare("SELECT * FROM blobs.attachment_blobs").all();
 		expect(blobs.length).toBe(1);
 	});
 });

@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 26;
+export const SCHEMA_VERSION = 27;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -1151,4 +1151,44 @@ PRAGMA foreign_keys = ON;
 	// Version 26: Labels use full IMAP folder path instead of leaf name.
 	// The pre-migration hook renames existing labels and re-links message_labels.
 	"SELECT 1",
+
+	// Version 27: Move attachment_blobs to separate hot/cold storage DB.
+	//
+	// Attachment blobs (the bulk of large mailbox storage) are moved to stork-blobs.db,
+	// which is ATTACHed as 'blobs'. The main stork.db shrinks dramatically — a 16 GB
+	// mailbox typically has 14+ GB in blobs, leaving a ~2 GB main DB that fits in RAM.
+	// Indices, message metadata, FTS, and labels stay in main and can be fully mmap'd.
+	//
+	// The attachments table is rebuilt without the cross-schema FK constraint (SQLite
+	// doesn't enforce FK references into attached databases, so app code ensures integrity).
+	// Data migration happens in PRE_MIGRATION_HOOKS[27].
+	`
+PRAGMA foreign_keys = OFF;
+BEGIN;
+
+CREATE TABLE attachments_v27 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    filename TEXT,
+    content_type TEXT,
+    size INTEGER,
+    content_id TEXT,
+    content_hash TEXT NOT NULL
+);
+
+INSERT INTO attachments_v27 (id, message_id, filename, content_type, size, content_id, content_hash)
+SELECT id, message_id, filename, content_type, size, content_id, content_hash
+FROM attachments;
+
+DROP TABLE attachments;
+ALTER TABLE attachments_v27 RENAME TO attachments;
+
+CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_content_hash ON attachments(content_hash);
+
+DROP TABLE IF EXISTS attachment_blobs;
+
+COMMIT;
+PRAGMA foreign_keys = ON;
+`,
 ];
