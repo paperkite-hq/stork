@@ -1013,12 +1013,12 @@ export class ImapSync {
 
 	/**
 	 * Creates labels for all synced IMAP folders that don't already have one.
-	 * Uses the folder's display name as the label name, with source='imap'.
+	 * Uses the folder's full IMAP path as the label name, with source='imap'.
 	 */
 	ensureLabelsForFolders(): void {
 		const folders = this.db
-			.prepare("SELECT id, name FROM folders WHERE inbound_connector_id = ?")
-			.all(this.inboundConnectorId) as { id: number; name: string }[];
+			.prepare("SELECT id, path FROM folders WHERE inbound_connector_id = ?")
+			.all(this.inboundConnectorId) as { id: number; path: string }[];
 
 		const upsertLabel = this.db.prepare(`
 			INSERT INTO labels (name, source)
@@ -1028,7 +1028,7 @@ export class ImapSync {
 
 		const insertMany = this.db.transaction(() => {
 			for (const folder of folders) {
-				upsertLabel.run(folder.name);
+				upsertLabel.run(folder.path);
 			}
 		});
 
@@ -1037,18 +1037,16 @@ export class ImapSync {
 
 	/**
 	 * Applies folder-derived labels to messages that don't have them yet.
-	 * Each message gets a label matching its IMAP folder name.
+	 * Each message gets a label matching its IMAP folder path.
 	 */
 	applyFolderLabelsToMessages(): void {
-		// For each folder, find the matching label and apply it to messages
-		// that don't already have it
 		this.db
 			.prepare(`
 			INSERT OR IGNORE INTO message_labels (message_id, label_id)
 			SELECT m.id, l.id
 			FROM messages m
 			JOIN folders f ON f.id = m.folder_id
-			JOIN labels l ON l.name = f.name
+			JOIN labels l ON l.name = f.path
 			LEFT JOIN message_labels ml ON ml.message_id = m.id AND ml.label_id = l.id
 			WHERE m.inbound_connector_id = ? AND ml.message_id IS NULL
 		`)

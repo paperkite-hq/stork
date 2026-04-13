@@ -39,12 +39,27 @@ export function openDatabase(
 		// File may not exist yet (first run)
 	}
 
+	// Scale page cache to DB size: 64 MB baseline, up to 512 MB for large DBs.
+	// For a 16 GB DB, 512 MB cache keeps ~3% of pages resident (vs 0.4% at 64 MB).
+	// Combined with mmap, this ensures indices and recent message pages stay hot.
+	let cacheSizeKB = 65536; // 64 MB
+	try {
+		const fileSize = statSync(dbPath).size;
+		if (fileSize > 2 * 1024 * 1024 * 1024)
+			cacheSizeKB = 524288; // 512 MB for >2 GB DBs
+		else if (fileSize > 512 * 1024 * 1024)
+			cacheSizeKB = 262144; // 256 MB for >512 MB DBs
+		else if (fileSize > 128 * 1024 * 1024) cacheSizeKB = 131072; // 128 MB for >128 MB DBs
+	} catch {
+		// First run — use default
+	}
+
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
-	db.exec("PRAGMA busy_timeout = 30000"); // 30s timeout — large DBs under sync load need headroom
-	db.exec("PRAGMA cache_size = -65536"); // 64 MB page cache (default is 2 MB)
-	db.exec("PRAGMA temp_store = MEMORY"); // Use RAM for temp tables during sorts/joins
-	db.exec("PRAGMA synchronous = NORMAL"); // Safe with WAL; avoids fsync on every commit
+	db.exec("PRAGMA busy_timeout = 30000");
+	db.exec(`PRAGMA cache_size = -${cacheSizeKB}`);
+	db.exec("PRAGMA temp_store = MEMORY");
+	db.exec("PRAGMA synchronous = NORMAL");
 	db.exec(`PRAGMA mmap_size = ${mmapSize}`);
 
 	// Checkpoint and truncate the WAL before anything else. After a crash
@@ -240,6 +255,55 @@ const PRE_MIGRATION_HOOKS: Record<number, (db: Database.Database) => void> = {
 		for (let i = 0; i < rows.length; i += BATCH_SIZE) {
 			txn(rows.slice(i, i + BATCH_SIZE));
 		}
+	},
+
+	// v26: Rename IMAP-sourced labels from folder leaf name to full folder path.
+	// Multiple folders can share a leaf name (e.g., "Archive/Old/INBOX" and "INBOX"
+	// both have name="INBOX"). This migration creates path-based labels and re-links
+	// message_labels so each message points to its folder's full-path label.
+	26: (db) => {
+		const folders = db.prepare("SELECT id, path, name FROM folders").all() as Array<{
+			id: number;
+			path: string;
+			name: string;
+		}>;
+
+		if (folders.length === 0) return;
+
+		const upsertLabel = db.prepare(
+			"INSERT INTO labels (name, source) VALUES (?, 'imap') ON CONFLICT(name) DO NOTHING",
+		);
+		const getLabelId = db.prepare("SELECT id FROM labels WHERE name = ?");
+
+		const txn = db.transaction(() => {
+			for (const folder of folders) {
+				if (folder.path === folder.name) continue;
+				upsertLabel.run(folder.path);
+			}
+
+			for (const folder of folders) {
+				if (folder.path === folder.name) continue;
+
+				const oldLabel = getLabelId.get(folder.name) as { id: number } | undefined;
+				const newLabel = getLabelId.get(folder.path) as { id: number } | undefined;
+				if (!oldLabel || !newLabel) continue;
+
+				db.prepare(`
+					UPDATE OR IGNORE message_labels
+					SET label_id = ?
+					WHERE label_id = ? AND message_id IN (
+						SELECT id FROM messages WHERE folder_id = ?
+					)
+				`).run(newLabel.id, oldLabel.id, folder.id);
+			}
+
+			db.exec(`
+				DELETE FROM labels WHERE source = 'imap'
+				AND id NOT IN (SELECT DISTINCT label_id FROM message_labels)
+				AND name NOT IN (SELECT path FROM folders)
+			`);
+		});
+		txn();
 	},
 };
 

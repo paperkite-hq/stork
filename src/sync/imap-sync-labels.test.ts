@@ -44,7 +44,7 @@ describe("ensureLabelsForFolders", () => {
 		expect(count).toBe(0);
 	});
 
-	test("creates one label per folder using folder name", () => {
+	test("creates one label per folder using folder path", () => {
 		createTestFolder(db, identityId, "INBOX");
 		createTestFolder(db, identityId, "Sent");
 		createTestFolder(db, identityId, "Drafts");
@@ -110,9 +110,7 @@ describe("ensureLabelsForFolders", () => {
 		expect(totalLabels).toBe(2);
 	});
 
-	test("nested folder path — label name is the folder display name (not full path)", () => {
-		// createTestFolder stores path in both path and name columns,
-		// but name is just the last segment (mimics real IMAP behaviour)
+	test("nested folder path — label name is the full IMAP path", () => {
 		db.prepare(`
 			INSERT INTO folders (inbound_connector_id, path, name, delimiter, flags, special_use, uid_validity)
 			VALUES (?, 'Archive/2025', '2025', '/', '[]', null, 1)
@@ -121,7 +119,20 @@ describe("ensureLabelsForFolders", () => {
 		makeSync(identityId, db).ensureLabelsForFolders();
 
 		const label = db.prepare("SELECT name FROM labels").get() as { name: string } | undefined;
-		expect(label?.name).toBe("2025");
+		expect(label?.name).toBe("Archive/2025");
+	});
+
+	test("disambiguates folders with same leaf name but different paths", () => {
+		createTestFolder(db, identityId, "INBOX");
+		db.prepare(`
+			INSERT INTO folders (inbound_connector_id, path, name, delimiter, flags, special_use, uid_validity)
+			VALUES (?, 'Archive/Old/INBOX', 'INBOX', '/', '[]', null, 1)
+		`).run(identityId);
+
+		makeSync(identityId, db).ensureLabelsForFolders();
+
+		const labels = db.prepare("SELECT name FROM labels ORDER BY name").all() as { name: string }[];
+		expect(labels.map((l) => l.name)).toEqual(["Archive/Old/INBOX", "INBOX"]);
 	});
 });
 
@@ -256,6 +267,38 @@ describe("applyFolderLabelsToMessages", () => {
 
 		expect(myCount).toBe(1);
 		expect(otherCount).toBe(0);
+	});
+
+	test("nested folders with same leaf name get distinct labels", () => {
+		const topInbox = createTestFolder(db, identityId, "INBOX");
+		db.prepare(`
+			INSERT INTO folders (inbound_connector_id, path, name, delimiter, flags, special_use, uid_validity)
+			VALUES (?, 'Archive/Old/INBOX', 'INBOX', '/', '[]', null, 1)
+		`).run(identityId);
+		const nestedInboxId = Number(
+			(db.prepare("SELECT last_insert_rowid() as id").get() as { id: number }).id,
+		);
+
+		const msg1 = createTestMessage(db, identityId, topInbox, 1);
+		const msg2 = createTestMessage(db, identityId, nestedInboxId, 2);
+
+		const sync = makeSync(identityId, db);
+		sync.ensureLabelsForFolders();
+		sync.applyFolderLabelsToMessages();
+
+		const labelFor = (msgId: number): string => {
+			const row = db
+				.prepare(`
+					SELECT l.name FROM message_labels ml
+					JOIN labels l ON l.id = ml.label_id
+					WHERE ml.message_id = ?
+				`)
+				.get(msgId) as { name: string } | undefined;
+			return row?.name ?? "(none)";
+		};
+
+		expect(labelFor(msg1)).toBe("INBOX");
+		expect(labelFor(msg2)).toBe("Archive/Old/INBOX");
 	});
 
 	test("messages without a matching folder label are not labelled", () => {

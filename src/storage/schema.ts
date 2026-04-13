@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 25;
+export const SCHEMA_VERSION = 26;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -1147,4 +1147,8 @@ PRAGMA foreign_keys = ON;
 
 	INSERT INTO messages_fts(messages_fts) VALUES ('rebuild');
 	`,
+
+	// Version 26: Labels use full IMAP folder path instead of leaf name.
+	// The pre-migration hook renames existing labels and re-links message_labels.
+	"SELECT 1",
 ];

@@ -19,9 +19,11 @@ import {
 } from "./Icons";
 import { LabelManager } from "./LabelManager";
 
-// Map well-known label names (derived from IMAP folder names) to icons
+// Map well-known label names (derived from IMAP folder paths) to icons.
+// Uses the last path segment so nested folders like "[Gmail]/Sent Mail" still match.
 function labelIcon(label: Label): ReactNode {
-	const name = label.name.toLowerCase();
+	const segments = label.name.split("/");
+	const name = (segments[segments.length - 1] ?? label.name).toLowerCase();
 	const cls = "w-4 h-4 flex-shrink-0";
 	if (name === "inbox") return <InboxIcon className={cls} />;
 	if (name === "sent" || name === "sent mail" || name === "sent items")
@@ -437,9 +439,9 @@ export function Sidebar({
 					</>
 				)}
 
-				{/* All labels — Inbox excluded (promoted above). Identity labels appear inline with person icon. */}
+				{/* All labels — top-level Inbox excluded (promoted above). Identity labels appear inline with person icon. */}
 				{labels
-					.filter((l) => l.name.toLowerCase() !== "inbox")
+					.filter((l) => l.name.toUpperCase() !== "INBOX")
 					.map((label) => {
 						const active = label.id === selectedLabelId || filterLabelIds.includes(label.id);
 						return (
