@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 29;
+export const SCHEMA_VERSION = 30;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -1209,4 +1209,28 @@ CREATE TABLE IF NOT EXISTS label_overrides (
 
 	// Version 29: Add icon column to labels so users can customise label icons.
 	`ALTER TABLE labels ADD COLUMN icon TEXT;`,
+
+	// Version 30: Covering index on message_labels for O(1) paginated label views.
+	//
+	// The root cause of slow page loads on large mailboxes (5+ GB): every paginated
+	// label view (inbox, custom labels) required SQLite to materialise ALL matching
+	// message IDs from message_labels, join to messages, sort by date, then apply
+	// LIMIT/OFFSET. On a 5 GB mailbox with 2M+ message_labels rows this took 30-60s.
+	//
+	// Fix: add a `date` column to message_labels and a covering compound index
+	// (label_id, date DESC). SQLite can now satisfy ORDER BY date DESC with an index
+	// range scan in label_id order — no sort step, O(LIMIT) I/Os regardless of inbox
+	// size. The pre-migration JS hook backfills date for all existing rows in batches.
+	//
+	// Also adds cached_message_count / cached_unread_count to inbound_connectors.
+	// The cross-connector all-messages and unread-messages count endpoints previously
+	// did a full messages table scan with a LIKE on flags. These columns let those
+	// endpoints return in O(connectors) — a tiny table — instead of O(messages).
+	// Maintained by refreshLabelCounts() at the end of each sync cycle.
+	`
+ALTER TABLE message_labels ADD COLUMN date TEXT;
+CREATE INDEX idx_message_labels_label_date ON message_labels(label_id, date DESC);
+ALTER TABLE inbound_connectors ADD COLUMN cached_message_count INTEGER DEFAULT NULL;
+ALTER TABLE inbound_connectors ADD COLUMN cached_unread_count INTEGER DEFAULT NULL;
+`,
 ];

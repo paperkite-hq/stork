@@ -362,18 +362,20 @@ export function messageRoutes(
 			return c.json({ error: "label_ids array is required" }, 400);
 		}
 
-		const message = db.prepare("SELECT id FROM messages WHERE id = ?").get(messageId);
+		const message = db.prepare("SELECT id, date FROM messages WHERE id = ?").get(messageId) as
+			| { id: number; date: string | null }
+			| undefined;
 		if (!message) return c.json({ error: "Message not found" }, 404);
 
 		const insert = db.prepare(
-			"INSERT OR IGNORE INTO message_labels (message_id, label_id) VALUES (?, ?)",
+			"INSERT OR IGNORE INTO message_labels (message_id, label_id, date) VALUES (?, ?, ?)",
 		);
 		const clearOverride = db.prepare(
 			"DELETE FROM label_overrides WHERE message_id = ? AND label_id = ?",
 		);
 		const insertMany = db.transaction(() => {
 			for (const labelId of labelIds) {
-				insert.run(messageId, labelId);
+				insert.run(messageId, labelId, message.date ?? null);
 				clearOverride.run(messageId, labelId);
 			}
 		});

@@ -96,12 +96,14 @@ export async function storeInboundEmail(
 		ON CONFLICT(name) DO UPDATE SET source = 'connector'
 	`);
 	const applyConnectorLabel = db.prepare(`
-		INSERT OR IGNORE INTO message_labels (message_id, label_id)
-		SELECT ?, l.id FROM labels l WHERE l.name = ? AND l.source = 'connector'
+		INSERT OR IGNORE INTO message_labels (message_id, label_id, date)
+		SELECT ?, l.id, (SELECT m.date FROM messages m WHERE m.id = ?)
+		FROM labels l WHERE l.name = ? AND l.source = 'connector'
 	`);
 	const applyInboxLabel = db.prepare(`
-		INSERT OR IGNORE INTO message_labels (message_id, label_id)
-		SELECT ?, l.id FROM labels l WHERE LOWER(l.name) = 'inbox'
+		INSERT OR IGNORE INTO message_labels (message_id, label_id, date)
+		SELECT ?, l.id, (SELECT m.date FROM messages m WHERE m.id = ?)
+		FROM labels l WHERE LOWER(l.name) = 'inbox'
 	`);
 
 	const folderId = findOrCreateInbox(db, connectorId);
@@ -156,9 +158,9 @@ export async function storeInboundEmail(
 	if (connectorRow) {
 		const color = connectorLabelPalette[(connectorId - 1) % connectorLabelPalette.length];
 		ensureConnectorLabel.run(connectorRow.name, color);
-		applyConnectorLabel.run(messageRowId, connectorRow.name);
+		applyConnectorLabel.run(messageRowId, messageRowId, connectorRow.name);
 	}
-	applyInboxLabel.run(messageRowId);
+	applyInboxLabel.run(messageRowId, messageRowId);
 
 	db.prepare(
 		"UPDATE folders SET unread_count = unread_count + 1, message_count = message_count + 1 WHERE id = ?",

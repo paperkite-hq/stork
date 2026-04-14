@@ -121,12 +121,11 @@ export function createTestLabel(
 	return row.id;
 }
 
-/** Links a message to a label */
+/** Links a message to a label, populating the date column for correct sort order */
 export function addMessageLabel(db: Database.Database, messageId: number, labelId: number): void {
-	db.prepare("INSERT INTO message_labels (message_id, label_id) VALUES (?, ?)").run(
-		messageId,
-		labelId,
-	);
+	db.prepare(
+		"INSERT INTO message_labels (message_id, label_id, date) SELECT ?, ?, m.date FROM messages m WHERE m.id = ? ON CONFLICT DO NOTHING",
+	).run(messageId, labelId, messageId);
 }
 
 /** Inserts a test message (linked to inbound connector) and returns its ID */

@@ -295,6 +295,34 @@ const PRE_MIGRATION_HOOKS: Record<number, (db: Database.Database) => void> = {
 		txn();
 	},
 
+	// v30: Backfill date column on message_labels before the SQL migration adds the
+	// covering index. Batch the UPDATE so the WAL doesn't grow unboundedly —
+	// important on 5+ GB databases.
+	30: (db) => {
+		const BATCH_SIZE = 50_000;
+
+		const maxRow = db.prepare("SELECT MAX(rowid) AS max_rowid FROM message_labels").get() as
+			| { max_rowid: number | null }
+			| undefined;
+		const maxRowid = maxRow?.max_rowid ?? 0;
+		if (maxRowid === 0) return;
+
+		const updateBatch = db.prepare(`
+			UPDATE message_labels
+			SET date = (SELECT m.date FROM messages m WHERE m.id = message_labels.message_id)
+			WHERE rowid BETWEEN ? AND ?
+			  AND date IS NULL
+		`);
+
+		const batchTxn = db.transaction((lo: number, hi: number) => {
+			updateBatch.run(lo, hi);
+		});
+
+		for (let lo = 1; lo <= maxRowid; lo += BATCH_SIZE) {
+			batchTxn(lo, lo + BATCH_SIZE - 1);
+		}
+	},
+
 	// v26: Rename IMAP-sourced labels from folder leaf name to full folder path.
 	// Multiple folders can share a leaf name (e.g., "Archive/Old/INBOX" and "INBOX"
 	// both have name="INBOX"). This migration creates path-based labels and re-links

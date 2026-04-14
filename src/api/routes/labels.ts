@@ -85,20 +85,26 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 		if (pagination instanceof Response) return pagination;
 		const { limit, offset } = pagination;
 
+		// GROUP BY replaces the correlated subquery — O(message_labels × ids) instead of
+		// O(messages × ids). Drive from message_labels so the intersection is computed
+		// in one pass; then join messages by PK for the selected 50 rows.
 		const placeholders = ids.map(() => "?").join(",");
 		const messages = getDb()
 			.prepare(`
 				SELECT m.id, m.uid, m.message_id, m.in_reply_to, m.subject, m.from_address, m.from_name,
 					m.to_addresses, m.date, m.flags, m.size, m.has_attachments,
 					SUBSTR(m.text_body, 1, 200) as preview, m.identity_id
-				FROM messages m
-				WHERE (
-					SELECT COUNT(DISTINCT ml.label_id)
+				FROM (
+					SELECT ml.message_id, MAX(ml.date) AS latest_date
 					FROM message_labels ml
-					WHERE ml.message_id = m.id AND ml.label_id IN (${placeholders})
-				) = ?
-				ORDER BY m.date DESC
-				LIMIT ? OFFSET ?
+					WHERE ml.label_id IN (${placeholders})
+					GROUP BY ml.message_id
+					HAVING COUNT(DISTINCT ml.label_id) = ?
+					ORDER BY latest_date DESC
+					LIMIT ? OFFSET ?
+				) AS matched
+				JOIN messages m ON m.id = matched.message_id
+				ORDER BY matched.latest_date DESC
 			`)
 			.all(...ids, ids.length, limit, offset);
 
@@ -115,18 +121,21 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 			.filter((n) => Number.isInteger(n) && n > 0);
 		if (ids.length === 0) return c.json({ error: "At least one valid label ID is required" }, 400);
 
+		// GROUP BY replaces the correlated subquery for count too.
 		const placeholders = ids.map(() => "?").join(",");
 		const row = getDb()
 			.prepare(`
 				SELECT
 					COUNT(*) as total,
 					SUM(CASE WHEN m.flags IS NULL OR m.flags NOT LIKE '%\\Seen%' THEN 1 ELSE 0 END) as unread
-				FROM messages m
-				WHERE (
-					SELECT COUNT(DISTINCT ml.label_id)
+				FROM (
+					SELECT ml.message_id
 					FROM message_labels ml
-					WHERE ml.message_id = m.id AND ml.label_id IN (${placeholders})
-				) = ?
+					WHERE ml.label_id IN (${placeholders})
+					GROUP BY ml.message_id
+					HAVING COUNT(DISTINCT ml.label_id) = ?
+				) AS matched
+				JOIN messages m ON m.id = matched.message_id
 			`)
 			.all(...ids, ids.length) as Array<{ total: number; unread: number }>;
 
@@ -149,6 +158,7 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 		const limitParam = c.req.query("limit");
 		const limit = limitParam ? Math.min(Math.max(1, Number(limitParam) || 5), 20) : 5;
 
+		// GROUP BY replaces correlated subqueries for the filter/related endpoint.
 		const placeholders = ids.map(() => "?").join(",");
 		const related = getDb()
 			.prepare(
@@ -158,13 +168,11 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 				JOIN message_labels ml ON ml.label_id = l.id
 				WHERE l.id NOT IN (${placeholders})
 				AND ml.message_id IN (
-					SELECT m.id
-					FROM messages m
-					WHERE (
-						SELECT COUNT(DISTINCT ml2.label_id)
-						FROM message_labels ml2
-						WHERE ml2.message_id = m.id AND ml2.label_id IN (${placeholders})
-					) = ?
+					SELECT message_id
+					FROM message_labels
+					WHERE label_id IN (${placeholders})
+					GROUP BY message_id
+					HAVING COUNT(DISTINCT label_id) = ?
 				)
 				GROUP BY l.id, l.name, l.color, l.icon, l.source
 				ORDER BY co_count DESC
@@ -209,15 +217,17 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 		if (pagination instanceof Response) return pagination;
 		const { limit, offset } = pagination;
 
+		// Drive the join from message_labels (covering index label_id, date DESC) so
+		// SQLite returns rows in date order without a sort step.
 		const messages = getDb()
 			.prepare(`
 				SELECT m.id, m.uid, m.message_id, m.in_reply_to, m.subject, m.from_address, m.from_name,
 					m.to_addresses, m.date, m.flags, m.size, m.has_attachments,
 					SUBSTR(m.text_body, 1, 200) as preview
-				FROM messages m
-				JOIN message_labels ml ON ml.message_id = m.id
+				FROM message_labels ml
+				JOIN messages m ON m.id = ml.message_id
 				WHERE ml.label_id = ?
-				ORDER BY m.date DESC
+				ORDER BY ml.date DESC
 				LIMIT ? OFFSET ?
 			`)
 			.all(labelId, limit, offset);

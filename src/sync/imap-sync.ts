@@ -1042,8 +1042,8 @@ export class ImapSync {
 	applyFolderLabelsToMessages(): void {
 		this.db
 			.prepare(`
-			INSERT OR IGNORE INTO message_labels (message_id, label_id)
-			SELECT m.id, l.id
+			INSERT OR IGNORE INTO message_labels (message_id, label_id, date)
+			SELECT m.id, l.id, m.date
 			FROM messages m
 			JOIN folders f ON f.id = m.folder_id
 			JOIN labels l ON l.name = f.path
@@ -1080,20 +1080,45 @@ export class ImapSync {
 			unread_count: number;
 		}>;
 
-		const updateStmt = this.db.prepare(
+		// Per-connector message and unread counts — used by the cross-connector
+		// all-messages/count and unread-messages/count endpoints so they return in
+		// O(connectors) instead of doing a full messages table scan with a LIKE filter.
+		const connectorCounts = this.db
+			.prepare(`
+				SELECT inbound_connector_id,
+					COUNT(*) AS message_count,
+					SUM(CASE WHEN flags IS NULL OR flags NOT LIKE '%\\Seen%' THEN 1 ELSE 0 END) AS unread_count
+				FROM messages
+				GROUP BY inbound_connector_id
+			`)
+			.all() as Array<{
+			inbound_connector_id: number;
+			message_count: number;
+			unread_count: number;
+		}>;
+
+		const updateLabel = this.db.prepare(
 			"UPDATE labels SET message_count = ?, unread_count = ? WHERE id = ?",
 		);
-
-		const applyUpdate = this.db.transaction(
-			(rows: Array<{ label_id: number; message_count: number; unread_count: number }>) => {
-				// Reset all labels to 0; labels with no messages won't appear in counts above
-				this.db.prepare("UPDATE labels SET message_count = 0, unread_count = 0").run();
-				for (const row of rows) {
-					updateStmt.run(row.message_count, row.unread_count, row.label_id);
-				}
-			},
+		const updateConnector = this.db.prepare(
+			"UPDATE inbound_connectors SET cached_message_count = ?, cached_unread_count = ? WHERE id = ?",
 		);
-		applyUpdate(counts);
+
+		const applyUpdate = this.db.transaction(() => {
+			// Reset all labels to 0; labels with no messages won't appear in counts above
+			this.db.prepare("UPDATE labels SET message_count = 0, unread_count = 0").run();
+			for (const row of counts) {
+				updateLabel.run(row.message_count, row.unread_count, row.label_id);
+			}
+			// Reset connector caches; connectors with no messages won't appear above
+			this.db
+				.prepare("UPDATE inbound_connectors SET cached_message_count = 0, cached_unread_count = 0")
+				.run();
+			for (const row of connectorCounts) {
+				updateConnector.run(row.message_count, row.unread_count, row.inbound_connector_id);
+			}
+		});
+		applyUpdate();
 	}
 
 	/**
@@ -1128,8 +1153,8 @@ export class ImapSync {
 
 		this.db
 			.prepare(`
-				INSERT OR IGNORE INTO message_labels (message_id, label_id)
-				SELECT m.id, l.id
+				INSERT OR IGNORE INTO message_labels (message_id, label_id, date)
+				SELECT m.id, l.id, m.date
 				FROM messages m
 				JOIN labels l ON l.name = ? AND l.source = 'connector'
 				LEFT JOIN message_labels ml ON ml.message_id = m.id AND ml.label_id = l.id
@@ -1327,8 +1352,9 @@ export class ImapSync {
 		`);
 
 		const addLabelStmt = this.db.prepare(`
-			INSERT OR IGNORE INTO message_labels (message_id, label_id)
-			SELECT ?, l.id FROM labels l
+			INSERT OR IGNORE INTO message_labels (message_id, label_id, date)
+			SELECT ?, l.id, (SELECT m.date FROM messages m WHERE m.id = ?)
+			FROM labels l
 			JOIN folders f ON f.name = l.name
 			WHERE f.id = ? LIMIT 1
 		`);
@@ -1369,7 +1395,7 @@ export class ImapSync {
 						// Remove stale old-folder label from the original row
 						removeLabelStmt.run(msg.id, folder.id);
 						// Ensure new-folder label is on the destination row
-						addLabelStmt.run(movedTo.id, movedTo.folder_id);
+						addLabelStmt.run(movedTo.id, movedTo.id, movedTo.folder_id);
 						result.labelsUpdated++;
 					}
 				}
