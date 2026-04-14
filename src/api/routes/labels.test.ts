@@ -87,6 +87,17 @@ describe("Labels API", () => {
 			expect(body.id).toBeGreaterThan(0);
 		});
 
+		test("POST /api/labels returns 409 for duplicate name", async () => {
+			createTestLabel(db, "Duplicate");
+			const { status, body } = await jsonRequest("/api/labels", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ name: "Duplicate" }),
+			});
+			expect(status).toBe(409);
+			expect(body.error).toMatch(/already exists/i);
+		});
+
 		test("GET /api/identities/:id/labels returns same labels regardless of account", async () => {
 			const identityId2 = createTestInboundConnector(db, { email: "second@example.com" });
 			createTestLabel(db, "Shared");
@@ -141,6 +152,20 @@ describe("Labels API", () => {
 			const { body: labels } = await jsonRequest("/api/labels");
 			expect(labels[0].name).toBe("New Name");
 			expect(labels[0].color).toBe("#00ff00");
+		});
+
+		test("PUT /api/labels/:id updates icon field", async () => {
+			const labelId = createTestLabel(db, "IconTest");
+			const { status } = await jsonRequest(`/api/labels/${labelId}`, {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ icon: "star" }),
+			});
+			expect(status).toBe(200);
+
+			const { body: labels } = await jsonRequest("/api/labels");
+			const label = labels.find((l: { name: string }) => l.name === "IconTest");
+			expect(label.icon).toBe("star");
 		});
 
 		test("PUT /api/labels/:id returns 404 for missing", async () => {

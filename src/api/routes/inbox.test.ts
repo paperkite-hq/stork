@@ -196,6 +196,22 @@ describe("Inbox API", () => {
 			expect(body.total).toBe(3);
 			expect(body.unread).toBe(2);
 		});
+
+		test("returns cached connector counts when available", async () => {
+			const inbound1 = createTestInboundConnector(db);
+			db.prepare(
+				"UPDATE inbound_connectors SET cached_message_count = 100, cached_unread_count = 25 WHERE id = ?",
+			).run(inbound1);
+
+			const inbound2 = createTestInboundConnector(db, { imapUser: "b@example.com" });
+			db.prepare(
+				"UPDATE inbound_connectors SET cached_message_count = 50, cached_unread_count = 10 WHERE id = ?",
+			).run(inbound2);
+
+			const { status, body } = await jsonRequest("/api/inbox/all-messages/count");
+			expect(status).toBe(200);
+			expect(body).toEqual({ total: 150, unread: 35 });
+		});
 	});
 
 	describe("GET /api/inbox/unread-messages", () => {
@@ -260,6 +276,22 @@ describe("Inbox API", () => {
 			expect(status).toBe(200);
 			expect(body.total).toBe(2);
 		});
+
+		test("returns cached unread count when available", async () => {
+			const inbound1 = createTestInboundConnector(db);
+			db.prepare("UPDATE inbound_connectors SET cached_unread_count = 15 WHERE id = ?").run(
+				inbound1,
+			);
+
+			const inbound2 = createTestInboundConnector(db, { imapUser: "b@example.com" });
+			db.prepare("UPDATE inbound_connectors SET cached_unread_count = 8 WHERE id = ?").run(
+				inbound2,
+			);
+
+			const { status, body } = await jsonRequest("/api/inbox/unread-messages/count");
+			expect(status).toBe(200);
+			expect(body).toEqual({ total: 23 });
+		});
 	});
 
 	describe("GET /api/inbox/unified/count", () => {
@@ -302,6 +334,17 @@ describe("Inbox API", () => {
 			expect(status).toBe(200);
 			expect(body.total).toBe(3);
 			expect(body.unread).toBe(2);
+		});
+
+		test("returns cached counts when label cache is populated", async () => {
+			const inboxLabel = createTestLabel(db, "Inbox", { source: "imap" });
+			db.prepare("UPDATE labels SET message_count = 42, unread_count = 7 WHERE id = ?").run(
+				inboxLabel,
+			);
+
+			const { status, body } = await jsonRequest("/api/inbox/unified/count");
+			expect(status).toBe(200);
+			expect(body).toEqual({ total: 42, unread: 7 });
 		});
 	});
 });
