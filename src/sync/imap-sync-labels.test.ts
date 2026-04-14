@@ -577,3 +577,133 @@ describe("syncAll — sub-batch label application during large folder sync", () 
 		expect(count).toBe(6);
 	});
 });
+
+// ─── label_overrides ─────────────────────────────────────────────────────────
+
+describe("label_overrides", () => {
+	let db: ReturnType<typeof createTestDb>;
+	let identityId: number;
+
+	beforeEach(() => {
+		db = createTestDb();
+		identityId = createTestInboundConnector(db);
+	});
+
+	test("override prevents sync from re-adding a removed label", () => {
+		const folderId = createTestFolder(db, identityId, "INBOX");
+		const msgId = createTestMessage(db, identityId, folderId, 1);
+
+		const sync = makeSync(identityId, db);
+		sync.ensureLabelsForFolders();
+		sync.applyFolderLabelsToMessages();
+
+		const labelId = (
+			db.prepare("SELECT id FROM labels WHERE name = 'INBOX'").get() as { id: number }
+		).id;
+
+		// Simulate user removing the label and recording an override
+		db.prepare("DELETE FROM message_labels WHERE message_id = ? AND label_id = ?").run(
+			msgId,
+			labelId,
+		);
+		db.prepare("INSERT INTO label_overrides (message_id, label_id) VALUES (?, ?)").run(
+			msgId,
+			labelId,
+		);
+
+		// Sync again — should NOT re-add the label
+		sync.applyFolderLabelsToMessages();
+
+		const count = (
+			db
+				.prepare("SELECT COUNT(*) as n FROM message_labels WHERE message_id = ? AND label_id = ?")
+				.get(msgId, labelId) as { n: number }
+		).n;
+		expect(count).toBe(0);
+	});
+
+	test("clearing an override allows sync to re-apply the label", () => {
+		const folderId = createTestFolder(db, identityId, "INBOX");
+		const msgId = createTestMessage(db, identityId, folderId, 1);
+
+		const sync = makeSync(identityId, db);
+		sync.ensureLabelsForFolders();
+		sync.applyFolderLabelsToMessages();
+
+		const labelId = (
+			db.prepare("SELECT id FROM labels WHERE name = 'INBOX'").get() as { id: number }
+		).id;
+
+		// Remove label + record override
+		db.prepare("DELETE FROM message_labels WHERE message_id = ? AND label_id = ?").run(
+			msgId,
+			labelId,
+		);
+		db.prepare("INSERT INTO label_overrides (message_id, label_id) VALUES (?, ?)").run(
+			msgId,
+			labelId,
+		);
+
+		// Clear override (simulating user re-adding the label via API)
+		db.prepare("DELETE FROM label_overrides WHERE message_id = ? AND label_id = ?").run(
+			msgId,
+			labelId,
+		);
+
+		// Sync — should re-add the label
+		sync.applyFolderLabelsToMessages();
+
+		const count = (
+			db
+				.prepare("SELECT COUNT(*) as n FROM message_labels WHERE message_id = ? AND label_id = ?")
+				.get(msgId, labelId) as { n: number }
+		).n;
+		expect(count).toBe(1);
+	});
+
+	test("override on one message does not affect other messages", () => {
+		const folderId = createTestFolder(db, identityId, "INBOX");
+		const msg1 = createTestMessage(db, identityId, folderId, 1);
+		const msg2 = createTestMessage(db, identityId, folderId, 2);
+
+		const sync = makeSync(identityId, db);
+		sync.ensureLabelsForFolders();
+		sync.applyFolderLabelsToMessages();
+
+		const labelId = (
+			db.prepare("SELECT id FROM labels WHERE name = 'INBOX'").get() as { id: number }
+		).id;
+
+		// Override only msg1
+		db.prepare("DELETE FROM message_labels WHERE message_id = ? AND label_id = ?").run(
+			msg1,
+			labelId,
+		);
+		db.prepare("INSERT INTO label_overrides (message_id, label_id) VALUES (?, ?)").run(
+			msg1,
+			labelId,
+		);
+
+		// Remove msg2's label but without override
+		db.prepare("DELETE FROM message_labels WHERE message_id = ? AND label_id = ?").run(
+			msg2,
+			labelId,
+		);
+
+		sync.applyFolderLabelsToMessages();
+
+		// msg1 should stay removed (override), msg2 should be re-added (no override)
+		const msg1Count = (
+			db
+				.prepare("SELECT COUNT(*) as n FROM message_labels WHERE message_id = ? AND label_id = ?")
+				.get(msg1, labelId) as { n: number }
+		).n;
+		const msg2Count = (
+			db
+				.prepare("SELECT COUNT(*) as n FROM message_labels WHERE message_id = ? AND label_id = ?")
+				.get(msg2, labelId) as { n: number }
+		).n;
+		expect(msg1Count).toBe(0);
+		expect(msg2Count).toBe(1);
+	});
+});

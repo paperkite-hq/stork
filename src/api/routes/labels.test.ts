@@ -606,6 +606,61 @@ describe("Labels API", () => {
 			expect(body[0]).toHaveProperty("color");
 			expect(body[0]).toHaveProperty("source");
 		});
+
+		test("DELETE /api/messages/:id/labels/:labelId records override for imap labels", async () => {
+			const msgId = createTestMessage(db, identityId, folderId, 1);
+			const labelId = createTestLabel(db, "INBOX", { source: "imap" });
+			addMessageLabel(db, msgId, labelId);
+
+			await jsonRequest(`/api/messages/${msgId}/labels/${labelId}`, { method: "DELETE" });
+
+			const overrideCount = (
+				db
+					.prepare(
+						"SELECT COUNT(*) as n FROM label_overrides WHERE message_id = ? AND label_id = ?",
+					)
+					.get(msgId, labelId) as { n: number }
+			).n;
+			expect(overrideCount).toBe(1);
+		});
+
+		test("DELETE /api/messages/:id/labels/:labelId does not record override for user labels", async () => {
+			const msgId = createTestMessage(db, identityId, folderId, 1);
+			const labelId = createTestLabel(db, "Custom");
+			addMessageLabel(db, msgId, labelId);
+
+			await jsonRequest(`/api/messages/${msgId}/labels/${labelId}`, { method: "DELETE" });
+
+			const overrideCount = (
+				db.prepare("SELECT COUNT(*) as n FROM label_overrides").get() as { n: number }
+			).n;
+			expect(overrideCount).toBe(0);
+		});
+
+		test("POST /api/messages/:id/labels clears override when re-adding a label", async () => {
+			const msgId = createTestMessage(db, identityId, folderId, 1);
+			const labelId = createTestLabel(db, "INBOX", { source: "imap" });
+			addMessageLabel(db, msgId, labelId);
+
+			// Remove label (creates override)
+			await jsonRequest(`/api/messages/${msgId}/labels/${labelId}`, { method: "DELETE" });
+
+			// Re-add label (should clear override)
+			await jsonRequest(`/api/messages/${msgId}/labels`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ label_ids: [labelId] }),
+			});
+
+			const overrideCount = (
+				db
+					.prepare(
+						"SELECT COUNT(*) as n FROM label_overrides WHERE message_id = ? AND label_id = ?",
+					)
+					.get(msgId, labelId) as { n: number }
+			).n;
+			expect(overrideCount).toBe(0);
+		});
 	});
 
 	// ─── Related Labels ──────────────────────────────────────

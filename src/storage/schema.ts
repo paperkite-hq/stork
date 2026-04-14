@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 27;
+export const SCHEMA_VERSION = 28;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -1190,5 +1190,20 @@ DROP TABLE IF EXISTS attachment_blobs;
 
 COMMIT;
 PRAGMA foreign_keys = ON;
+`,
+
+	// Version 28: Track user label overrides so sync doesn't re-add removed labels.
+	//
+	// When a user removes an IMAP-derived label (source='imap') from a message,
+	// we record it here. applyFolderLabelsToMessages() skips pairs present in
+	// this table, so the removal persists across syncs. Re-adding the label via
+	// the API clears the override.
+	`
+CREATE TABLE IF NOT EXISTS label_overrides (
+    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    label_id INTEGER NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (message_id, label_id)
+);
 `,
 ];

@@ -683,6 +683,32 @@ describe("Messages API", () => {
 				expect(status).toBe(400);
 				expect(body.error).toMatch(/label_id/i);
 			});
+
+			test("records label_overrides for imap-sourced labels", async () => {
+				db.prepare("INSERT OR IGNORE INTO labels (name, source) VALUES ('Sent', 'imap')").run();
+				const labelId = (
+					db.prepare("SELECT id FROM labels WHERE name = 'Sent'").get() as { id: number }
+				).id;
+				db.prepare("INSERT INTO message_labels (message_id, label_id) VALUES (?, ?)").run(
+					msg1,
+					labelId,
+				);
+				db.prepare("INSERT INTO message_labels (message_id, label_id) VALUES (?, ?)").run(
+					msg2,
+					labelId,
+				);
+
+				await bulkPost({
+					ids: [msg1, msg2],
+					action: "remove_label",
+					label_id: labelId,
+				});
+
+				const overrides = db
+					.prepare("SELECT message_id FROM label_overrides WHERE label_id = ?")
+					.all(labelId);
+				expect(overrides).toHaveLength(2);
+			});
 		});
 
 		describe("action: move", () => {

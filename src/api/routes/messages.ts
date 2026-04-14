@@ -14,6 +14,16 @@ interface ImapConnectorInfo {
 	imap_pass: string;
 }
 
+function recordLabelOverride(db: Database.Database, messageId: number, labelId: number): void {
+	const isImap = db.prepare("SELECT 1 FROM labels WHERE id = ? AND source = 'imap'").get(labelId);
+	if (isImap) {
+		db.prepare("INSERT OR IGNORE INTO label_overrides (message_id, label_id) VALUES (?, ?)").run(
+			messageId,
+			labelId,
+		);
+	}
+}
+
 /** Deletes messages from an IMAP server. Injectable for testing. */
 export type ImapDeleteFn = (info: ImapConnectorInfo, uids: number[]) => Promise<void>;
 
@@ -294,6 +304,9 @@ export function messageRoutes(
 					`DELETE FROM message_labels WHERE label_id = ? AND message_id IN (${placeholders})`,
 				)
 				.run(label_id, ...ids);
+			for (const id of ids) {
+				recordLabelOverride(db, id, label_id);
+			}
 			return c.json({ ok: true, count: result.changes });
 		}
 
@@ -355,9 +368,13 @@ export function messageRoutes(
 		const insert = db.prepare(
 			"INSERT OR IGNORE INTO message_labels (message_id, label_id) VALUES (?, ?)",
 		);
+		const clearOverride = db.prepare(
+			"DELETE FROM label_overrides WHERE message_id = ? AND label_id = ?",
+		);
 		const insertMany = db.transaction(() => {
 			for (const labelId of labelIds) {
 				insert.run(messageId, labelId);
+				clearOverride.run(messageId, labelId);
 			}
 		});
 		insertMany();
@@ -375,6 +392,7 @@ export function messageRoutes(
 			messageId,
 			labelId,
 		);
+		recordLabelOverride(db, messageId, labelId);
 		return c.json({ ok: true });
 	});
 

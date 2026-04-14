@@ -1048,7 +1048,8 @@ export class ImapSync {
 			JOIN folders f ON f.id = m.folder_id
 			JOIN labels l ON l.name = f.path
 			LEFT JOIN message_labels ml ON ml.message_id = m.id AND ml.label_id = l.id
-			WHERE m.inbound_connector_id = ? AND ml.message_id IS NULL
+			LEFT JOIN label_overrides lo ON lo.message_id = m.id AND lo.label_id = l.id
+			WHERE m.inbound_connector_id = ? AND ml.message_id IS NULL AND lo.message_id IS NULL
 		`)
 			.run(this.inboundConnectorId);
 	}
