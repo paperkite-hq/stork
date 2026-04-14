@@ -183,6 +183,7 @@ export interface MessageSummary {
 	id: number;
 	uid: number;
 	message_id: string | null;
+	in_reply_to: string | null;
 	subject: string | null;
 	from_address: string;
 	from_name: string | null;

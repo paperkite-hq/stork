@@ -481,7 +481,7 @@ export function connectorRoutes(
 
 		const messages = getDb()
 			.prepare(
-				`SELECT id, uid, message_id, subject, from_address, from_name,
+				`SELECT id, uid, message_id, in_reply_to, subject, from_address, from_name,
 					to_addresses, date, flags, size, has_attachments,
 					SUBSTR(text_body, 1, 200) as preview
 				FROM messages

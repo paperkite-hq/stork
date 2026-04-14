@@ -9,6 +9,7 @@ function makeMessage(overrides: Partial<MessageSummary> = {}): MessageSummary {
 		id: 1,
 		uid: 1,
 		message_id: "<msg1@test>",
+		in_reply_to: null,
 		subject: "Test Subject",
 		from_address: "sender@test.com",
 		from_name: "Test Sender",
@@ -297,5 +298,74 @@ describe("MessageList", () => {
 		const messages = [makeMessage({ id: 1, date: "not-a-date", subject: "Bad date" })];
 		const { container } = render(<MessageList {...defaultProps} messages={messages} />);
 		expect(container.textContent).not.toContain("Invalid Date");
+	});
+
+	describe("thread grouping", () => {
+		it("groups reply messages under their parent", () => {
+			const messages = [
+				makeMessage({ id: 1, message_id: "<root@test>", subject: "Thread root" }),
+				makeMessage({
+					id: 2,
+					message_id: "<reply@test>",
+					in_reply_to: "<root@test>",
+					subject: "Re: Thread root",
+					from_name: "Replier",
+				}),
+			];
+			render(<MessageList {...defaultProps} messages={messages} />);
+			expect(screen.getByText("Thread root")).toBeInTheDocument();
+			expect(screen.getByText("Replier")).toBeInTheDocument();
+			// Reply should NOT show its subject (compact view)
+			expect(screen.queryByText("Re: Thread root")).not.toBeInTheDocument();
+		});
+
+		it("shows thread count badge on root message", () => {
+			const messages = [
+				makeMessage({ id: 1, message_id: "<root@test>", subject: "Thread root" }),
+				makeMessage({
+					id: 2,
+					message_id: "<r1@test>",
+					in_reply_to: "<root@test>",
+					subject: "Re: Thread root",
+				}),
+				makeMessage({
+					id: 3,
+					message_id: "<r2@test>",
+					in_reply_to: "<root@test>",
+					subject: "Re: Thread root",
+				}),
+			];
+			const { container } = render(<MessageList {...defaultProps} messages={messages} />);
+			// Should show "3" (root + 2 replies)
+			expect(container.textContent).toContain("3");
+		});
+
+		it("renders thread children with left border indentation", () => {
+			const messages = [
+				makeMessage({ id: 1, message_id: "<root@test>", subject: "Parent" }),
+				makeMessage({
+					id: 2,
+					message_id: "<child@test>",
+					in_reply_to: "<root@test>",
+					subject: "Re: Parent",
+				}),
+			];
+			const { container } = render(<MessageList {...defaultProps} messages={messages} />);
+			const options = container.querySelectorAll('[role="option"]');
+			expect(options.length).toBe(2);
+			// Child should have ml-4 (indentation) and border-l-2 (thread line)
+			expect(options[1]?.className).toContain("ml-4");
+			expect(options[1]?.className).toContain("border-l-2");
+		});
+
+		it("does not group messages without in_reply_to references", () => {
+			const messages = [
+				makeMessage({ id: 1, message_id: "<a@test>", subject: "Message A" }),
+				makeMessage({ id: 2, message_id: "<b@test>", subject: "Message B" }),
+			];
+			render(<MessageList {...defaultProps} messages={messages} />);
+			expect(screen.getByText("Message A")).toBeInTheDocument();
+			expect(screen.getByText("Message B")).toBeInTheDocument();
+		});
 	});
 });

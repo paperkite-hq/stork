@@ -88,7 +88,7 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 		const placeholders = ids.map(() => "?").join(",");
 		const messages = getDb()
 			.prepare(`
-				SELECT m.id, m.uid, m.message_id, m.subject, m.from_address, m.from_name,
+				SELECT m.id, m.uid, m.message_id, m.in_reply_to, m.subject, m.from_address, m.from_name,
 					m.to_addresses, m.date, m.flags, m.size, m.has_attachments,
 					SUBSTR(m.text_body, 1, 200) as preview, m.identity_id
 				FROM messages m
@@ -211,7 +211,7 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 
 		const messages = getDb()
 			.prepare(`
-				SELECT m.id, m.uid, m.message_id, m.subject, m.from_address, m.from_name,
+				SELECT m.id, m.uid, m.message_id, m.in_reply_to, m.subject, m.from_address, m.from_name,
 					m.to_addresses, m.date, m.flags, m.size, m.has_attachments,
 					SUBSTR(m.text_body, 1, 200) as preview
 				FROM messages m

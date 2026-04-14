@@ -1,8 +1,63 @@
-import { memo, type RefObject, useEffect, useRef } from "react";
+import { memo, type RefObject, useEffect, useMemo, useRef } from "react";
 import type { Folder, InboundConnector, LabelSummary, MessageSummary } from "../api";
 import { isFlagged, isUnread } from "../utils";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { AlertCircleIcon, InboxEmptyIcon, PaperclipIcon, RefreshIcon, StarIcon } from "./Icons";
+
+interface ThreadGroup {
+	root: MessageSummary;
+	children: MessageSummary[];
+}
+
+function groupMessagesIntoThreads(messages: MessageSummary[]): ThreadGroup[] {
+	const byMessageId = new Map<string, MessageSummary>();
+	for (const msg of messages) {
+		if (msg.message_id) byMessageId.set(msg.message_id, msg);
+	}
+
+	const childIds = new Set<number>();
+	const parentMap = new Map<number, number>();
+
+	for (const msg of messages) {
+		if (msg.in_reply_to) {
+			const parent = byMessageId.get(msg.in_reply_to);
+			if (parent) {
+				childIds.add(msg.id);
+				parentMap.set(msg.id, parent.id);
+			}
+		}
+	}
+
+	const rootFor = (id: number): number => {
+		const p = parentMap.get(id);
+		return p !== undefined ? rootFor(p) : id;
+	};
+
+	const groups = new Map<number, ThreadGroup>();
+	const result: ThreadGroup[] = [];
+
+	for (const msg of messages) {
+		if (childIds.has(msg.id)) continue;
+
+		const rootId = rootFor(msg.id);
+		if (rootId !== msg.id) continue;
+
+		const group: ThreadGroup = { root: msg, children: [] };
+		groups.set(msg.id, group);
+		result.push(group);
+	}
+
+	for (const msg of messages) {
+		if (!childIds.has(msg.id)) continue;
+		const rid = rootFor(msg.id);
+		const group = groups.get(rid);
+		if (group) {
+			group.children.push(msg);
+		}
+	}
+
+	return result;
+}
 
 function formatDate(dateStr: string | null | undefined): string {
 	if (!dateStr) return "";
@@ -70,6 +125,12 @@ interface MessageListItemProps {
 	selectedRef?: RefObject<HTMLButtonElement | null>;
 	/** Identity email shown as a badge — passed when viewing unified inbox */
 	identityLabel?: string;
+	/** When true, renders compact (no subject, reduced padding) as part of a thread group */
+	threadChild?: boolean;
+	/** Whether this is the last child in a thread group */
+	threadLast?: boolean;
+	/** Number of replies in the thread (shown on root message) */
+	threadCount?: number;
 }
 
 /** Memoized message row — skips re-render when props haven't changed,
@@ -86,6 +147,9 @@ const MessageListItem = memo(function MessageListItem({
 	onToggleSelect,
 	selectedRef,
 	identityLabel,
+	threadChild,
+	threadLast,
+	threadCount,
 }: MessageListItemProps) {
 	const unread = isUnread(msg.flags);
 	const starred = isFlagged(msg.flags);
@@ -95,9 +159,11 @@ const MessageListItem = memo(function MessageListItem({
 		<div
 			role="option"
 			aria-selected={active}
-			className={`group relative border-b border-gray-100 dark:border-gray-800 transition-colors ${
-				focused ? "border-l-2 border-l-stork-500 dark:border-l-stork-400" : ""
-			} ${
+			className={`group relative transition-colors ${
+				threadChild
+					? `ml-4 border-l-2 border-l-gray-200 dark:border-l-gray-700 ${threadLast ? "border-b border-b-gray-100 dark:border-b-gray-800" : ""}`
+					: "border-b border-gray-100 dark:border-gray-800"
+			} ${focused ? "border-l-2 border-l-stork-500 dark:border-l-stork-400" : ""} ${
 				bulkSelected
 					? "bg-stork-50 dark:bg-stork-950"
 					: active
@@ -166,13 +232,13 @@ const MessageListItem = memo(function MessageListItem({
 				type="button"
 				data-index={idx}
 				onClick={() => onSelect(msg.id)}
-				className={`w-full text-left py-3 border-b-0 transition-colors ${
+				className={`w-full text-left ${threadChild ? "py-1.5" : "py-3"} border-b-0 transition-colors ${
 					onToggleSelect ? "pl-8 pr-4" : "px-4"
 				}`}
 			>
 				<div className="flex items-start gap-2 min-w-0">
 					{/* Unread dot */}
-					<div className="pt-1.5 flex-shrink-0">
+					<div className={`${threadChild ? "pt-1" : "pt-1.5"} flex-shrink-0`}>
 						{unread ? (
 							<div className="w-2 h-2 rounded-full bg-stork-500" />
 						) : (
@@ -191,6 +257,14 @@ const MessageListItem = memo(function MessageListItem({
 							>
 								{msg.from_name || msg.from_address}
 							</span>
+							{threadCount != null && threadCount > 0 && (
+								<span className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 rounded-full px-1.5 py-0">
+									{threadCount + 1}
+								</span>
+							)}
+							{threadChild && msg.has_attachments > 0 && (
+								<PaperclipIcon className="w-3 h-3 text-gray-400 flex-shrink-0" />
+							)}
 							<span
 								className="flex-shrink-0 text-xs text-gray-400 ml-auto"
 								title={
@@ -209,31 +283,38 @@ const MessageListItem = memo(function MessageListItem({
 								{formatDate(msg.date)}
 							</span>
 						</div>
-						<div className="flex items-center gap-1.5">
-							<span
-								className={`text-sm truncate ${
-									unread
-										? "font-medium text-gray-800 dark:text-gray-200"
-										: "text-gray-600 dark:text-gray-400"
-								}`}
-							>
-								{msg.subject || "(no subject)"}
-							</span>
-							{msg.has_attachments > 0 && (
-								<PaperclipIcon className="w-3 h-3 text-gray-400 flex-shrink-0" />
-							)}
-						</div>
-						{identityLabel && (
+						{!threadChild && (
+							<div className="flex items-center gap-1.5">
+								<span
+									className={`text-sm truncate ${
+										unread
+											? "font-medium text-gray-800 dark:text-gray-200"
+											: "text-gray-600 dark:text-gray-400"
+									}`}
+								>
+									{msg.subject || "(no subject)"}
+								</span>
+								{msg.has_attachments > 0 && (
+									<PaperclipIcon className="w-3 h-3 text-gray-400 flex-shrink-0" />
+								)}
+							</div>
+						)}
+						{threadChild && msg.preview && (
+							<div className="text-xs text-gray-400 dark:text-gray-500 truncate">
+								{msg.preview.replace(/\s+/g, " ").trim()}
+							</div>
+						)}
+						{!threadChild && identityLabel && (
 							<div className="text-xs text-stork-500 dark:text-stork-400 truncate mt-0.5">
 								{identityLabel}
 							</div>
 						)}
-						{!identityLabel && msg.preview && (
+						{!threadChild && !identityLabel && msg.preview && (
 							<div className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">
 								{msg.preview.replace(/\s+/g, " ").trim()}
 							</div>
 						)}
-						{identityLabel && msg.preview && (
+						{!threadChild && identityLabel && msg.preview && (
 							<div className="text-xs text-gray-400 dark:text-gray-500 truncate">
 								{msg.preview.replace(/\s+/g, " ").trim()}
 							</div>
@@ -318,6 +399,7 @@ export function MessageList({
 	const selectedRef = useRef<HTMLButtonElement>(null);
 	const bulkCount = selectedIds?.size ?? 0;
 	const hasBulk = bulkCount > 0;
+	const threadGroups = useMemo(() => groupMessagesIntoThreads(messages), [messages]);
 
 	// Scroll selected message into view (for keyboard navigation)
 	// biome-ignore lint/correctness/useExhaustiveDependencies: selectedId drives when to scroll, ref is stable
@@ -504,26 +586,52 @@ export function MessageList({
 						<p>No messages in this folder</p>
 					</div>
 				)}
-				{messages.map((msg, idx) => {
-					const connector =
+				{threadGroups.map((group) => {
+					const connectorFor = (msg: MessageSummary) =>
 						inboundConnectors && msg.inbound_connector_id
 							? inboundConnectors.find((c) => c.id === msg.inbound_connector_id)
 							: undefined;
+					const rootConnector = connectorFor(group.root);
+					const rootIdx = messages.indexOf(group.root);
 					return (
-						<MessageListItem
-							key={msg.id}
-							msg={msg}
-							idx={idx}
-							active={msg.id === selectedId}
-							focused={msg.id === focusedId}
-							bulkSelected={selectedIds?.has(msg.id) ?? false}
-							hasBulk={hasBulk}
-							onSelect={onSelect}
-							onToggleStar={onToggleStar}
-							onToggleSelect={onToggleSelect}
-							selectedRef={msg.id === selectedId ? selectedRef : undefined}
-							identityLabel={connector ? connector.name : undefined}
-						/>
+						<div key={group.root.id}>
+							<MessageListItem
+								msg={group.root}
+								idx={rootIdx}
+								active={group.root.id === selectedId}
+								focused={group.root.id === focusedId}
+								bulkSelected={selectedIds?.has(group.root.id) ?? false}
+								hasBulk={hasBulk}
+								onSelect={onSelect}
+								onToggleStar={onToggleStar}
+								onToggleSelect={onToggleSelect}
+								selectedRef={group.root.id === selectedId ? selectedRef : undefined}
+								identityLabel={rootConnector ? rootConnector.name : undefined}
+								threadCount={group.children.length}
+							/>
+							{group.children.map((child, ci) => {
+								const childConnector = connectorFor(child);
+								const childIdx = messages.indexOf(child);
+								return (
+									<MessageListItem
+										key={child.id}
+										msg={child}
+										idx={childIdx}
+										active={child.id === selectedId}
+										focused={child.id === focusedId}
+										bulkSelected={selectedIds?.has(child.id) ?? false}
+										hasBulk={hasBulk}
+										onSelect={onSelect}
+										onToggleStar={onToggleStar}
+										onToggleSelect={onToggleSelect}
+										selectedRef={child.id === selectedId ? selectedRef : undefined}
+										identityLabel={childConnector ? childConnector.name : undefined}
+										threadChild
+										threadLast={ci === group.children.length - 1}
+									/>
+								);
+							})}
+						</div>
 					);
 				})}
 				{hasMore && (
