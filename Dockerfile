@@ -1,27 +1,31 @@
-FROM docker.io/library/node:22-slim AS base
+FROM docker.io/library/node:22-slim AS builder
 WORKDIR /app
 
-# Install build tools required to compile better-sqlite3-multiple-ciphers native addon
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install backend dependencies
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Install frontend dependencies
 COPY frontend/package.json frontend/package-lock.json frontend/
 RUN cd frontend && npm ci
 
-# Copy source
 COPY . .
 
-# Build frontend and backend
 RUN cd frontend && npm run build
 RUN npm run build
 
-# Create data directory
+RUN npm prune --omit=dev && cd frontend && rm -rf node_modules
+
+FROM docker.io/library/node:22-slim
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/frontend/dist ./frontend/dist
+COPY --from=builder /app/package.json ./
+
 RUN mkdir -p /app/data
 
 EXPOSE 3100

@@ -262,12 +262,14 @@ The frontend is built with Vite and served as static files by the Hono backend:
 Stork ships as a single Docker container:
 
 ```dockerfile
-FROM node:22-slim AS base
-# Install deps, build frontend + backend, expose port 3100
+FROM node:22-slim AS builder
+# Install build tools, compile native addons, build frontend + backend
+FROM node:22-slim
+# Copy only dist/, frontend/dist/, and production node_modules
 CMD ["node", "dist/index.js"]
 ```
 
-The container:
+A multi-stage build keeps the runtime image small — no build tools (python3, make, g++), no devDependencies, no source code. The container:
 - Stores all data in `/app/data` (SQLite database + attachments).
 - Exposes port 3100 (configurable via `STORK_PORT`).
 - Uses `init: true` in docker-compose for proper signal handling.
