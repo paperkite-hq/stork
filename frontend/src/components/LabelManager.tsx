@@ -436,7 +436,7 @@ export function MessageLabelPicker({ messageId, onLabelsChanged }: MessageLabelP
 									className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2"
 								>
 									<span
-										className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${
+										className={`w-4 h-4 flex-shrink-0 rounded border flex items-center justify-center text-xs ${
 											isAssigned
 												? "bg-stork-600 border-stork-600 text-white"
 												: "border-gray-300 dark:border-gray-600"
