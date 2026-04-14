@@ -30,9 +30,26 @@ Stork syncs your email from any IMAP server, stores it locally with **AES-256 en
 - **Mirror & Connector modes** — test the waters with your provider as backup, then flip to Connector mode when you're ready to commit
 - **Desktop notifications** — new mail alerts as messages arrive
 - **Recovery key** — 24-word BIP39 mnemonic so a forgotten password doesn't mean lost mail
-- **Single container** — `docker compose up` and you're running. No PHP, no external DB.
+- **Single container** — one `docker run` command and you're running. No PHP, no external DB.
 
 ## Quick Start
+
+```bash
+docker run -d --init \
+  -p 127.0.0.1:3100:3100 \
+  -v ~/stork-data:/app/data \
+  --memory-swappiness=0 \
+  --ulimit core=0 \
+  --security-opt no-new-privileges \
+  --restart unless-stopped \
+  ghcr.io/paperkite-hq/stork:latest
+# Open http://localhost:3100
+```
+
+The setup wizard will guide you through creating a password and connecting your email. See the [Getting Started guide](docs/getting-started.md) for a full walkthrough.
+
+<details>
+<summary>Docker Compose</summary>
 
 ```yaml
 # docker-compose.yml
@@ -57,26 +74,7 @@ volumes:
 
 ```bash
 docker compose up -d
-# Open http://localhost:3100
 ```
-
-The setup wizard will guide you through creating a password and connecting your email. See the [Getting Started guide](docs/getting-started.md) for a full walkthrough.
-
-<details>
-<summary>Docker run (single command)</summary>
-
-```bash
-docker run -d --init \
-  -p 127.0.0.1:3100:3100 \
-  -v ~/stork-data:/app/data \
-  --memory-swappiness=0 \
-  --ulimit core=0 \
-  --security-opt no-new-privileges \
-  --restart unless-stopped \
-  ghcr.io/paperkite-hq/stork:latest
-```
-
-Binds to localhost only, stores the encrypted database in `~/stork-data`, disables swap/core dumps/privilege escalation.
 </details>
 
 <details>
