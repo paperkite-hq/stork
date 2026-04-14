@@ -342,7 +342,7 @@ export function messageRoutes(
 		if (messageId instanceof Response) return messageId;
 		const labels = getDb()
 			.prepare(`
-				SELECT l.id, l.name, l.color, l.source
+				SELECT l.id, l.name, l.color, l.icon, l.source
 				FROM labels l
 				JOIN message_labels ml ON ml.label_id = l.id
 				WHERE ml.message_id = ?

@@ -197,7 +197,7 @@ export function App() {
 					.filter((l) => l.message_count > 0 && !filterLabelIds.includes(l.id))
 					.sort((a, b) => b.message_count - a.message_count)
 					.slice(0, 5)
-					.map((l) => ({ id: l.id, name: l.name, color: l.color, source: l.source }))
+					.map((l) => ({ id: l.id, name: l.name, color: l.color, icon: l.icon, source: l.source }))
 			: null;
 
 	// filterRelated results are already scoped to the intersection — no need to re-filter by active IDs

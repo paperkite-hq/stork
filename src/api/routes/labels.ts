@@ -9,7 +9,7 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 	api.get("/", (c) => {
 		const labels = getDb()
 			.prepare(
-				"SELECT id, name, color, source, created_at, message_count, unread_count FROM labels ORDER BY name",
+				"SELECT id, name, color, icon, source, created_at, message_count, unread_count FROM labels ORDER BY name",
 			)
 			.all();
 		return c.json(labels);
@@ -21,8 +21,8 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 		if (!body.name) return c.json({ error: "name is required" }, 400);
 		try {
 			const result = getDb()
-				.prepare("INSERT INTO labels (name, color, source) VALUES (?, ?, ?)")
-				.run(body.name, body.color ?? null, body.source ?? "user");
+				.prepare("INSERT INTO labels (name, color, icon, source) VALUES (?, ?, ?, ?)")
+				.run(body.name, body.color ?? null, body.icon ?? null, body.source ?? "user");
 			return c.json({ id: Number(result.lastInsertRowid) }, 201);
 		} catch (err) {
 			if (String(err).includes("UNIQUE constraint")) {
@@ -47,6 +47,10 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 		if ("color" in body) {
 			sets.push("color = ?");
 			values.push(body.color);
+		}
+		if ("icon" in body) {
+			sets.push("icon = ?");
+			values.push(body.icon);
 		}
 		if (sets.length === 0) return c.json({ error: "No fields to update" }, 400);
 
@@ -149,7 +153,7 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 		const related = getDb()
 			.prepare(
 				`
-				SELECT l.id, l.name, l.color, l.source, COUNT(*) as co_count
+				SELECT l.id, l.name, l.color, l.icon, l.source, COUNT(*) as co_count
 				FROM labels l
 				JOIN message_labels ml ON ml.label_id = l.id
 				WHERE l.id NOT IN (${placeholders})
@@ -162,7 +166,7 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 						WHERE ml2.message_id = m.id AND ml2.label_id IN (${placeholders})
 					) = ?
 				)
-				GROUP BY l.id, l.name, l.color, l.source
+				GROUP BY l.id, l.name, l.color, l.icon, l.source
 				ORDER BY co_count DESC
 				LIMIT ?
 			`,
@@ -183,12 +187,12 @@ export function labelRoutes(getDb: () => Database.Database): Hono {
 		const related = getDb()
 			.prepare(
 				`
-				SELECT l.id, l.name, l.color, l.source, COUNT(*) as co_count
+				SELECT l.id, l.name, l.color, l.icon, l.source, COUNT(*) as co_count
 				FROM labels l
 				JOIN message_labels ml ON ml.label_id = l.id
 				JOIN message_labels ml2 ON ml2.message_id = ml.message_id AND ml2.label_id = ?
 				WHERE l.id != ?
-				GROUP BY l.id, l.name, l.color, l.source
+				GROUP BY l.id, l.name, l.color, l.icon, l.source
 				ORDER BY co_count DESC
 				LIMIT ?
 			`,

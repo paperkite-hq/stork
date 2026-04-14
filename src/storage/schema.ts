@@ -4,7 +4,7 @@
  * Uses FTS5 for full-text search across message subjects and bodies.
  */
 
-export const SCHEMA_VERSION = 28;
+export const SCHEMA_VERSION = 29;
 
 export const MIGRATIONS = [
 	// Version 1: Initial schema
@@ -1206,4 +1206,7 @@ CREATE TABLE IF NOT EXISTS label_overrides (
     PRIMARY KEY (message_id, label_id)
 );
 `,
+
+	// Version 29: Add icon column to labels so users can customise label icons.
+	`ALTER TABLE labels ADD COLUMN icon TEXT;`,
 ];

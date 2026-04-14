@@ -219,6 +219,7 @@ export interface Label {
 	id: number;
 	name: string;
 	color: string | null;
+	icon: string | null;
 	source: "imap" | "user" | "connector";
 	created_at: string;
 	message_count: number;
@@ -229,6 +230,7 @@ export interface LabelSummary {
 	id: number;
 	name: string;
 	color: string | null;
+	icon: string | null;
 	source: "imap" | "user" | "connector";
 }
 
@@ -460,12 +462,12 @@ export const api = {
 	labels: {
 		// Labels are global (no identity scoping).
 		list: () => fetchJSON<Label[]>("/labels"),
-		create: (data: { name: string; color?: string }) =>
+		create: (data: { name: string; color?: string; icon?: string | null }) =>
 			fetchJSON<{ id: number }>("/labels", {
 				method: "POST",
 				body: JSON.stringify(data),
 			}),
-		update: (labelId: number, data: { name?: string; color?: string }) =>
+		update: (labelId: number, data: { name?: string; color?: string; icon?: string | null }) =>
 			fetchJSON<{ ok: boolean }>(`/labels/${labelId}`, {
 				method: "PUT",
 				body: JSON.stringify(data),

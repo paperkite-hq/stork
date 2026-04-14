@@ -26,6 +26,7 @@ function makeLabel(overrides: Partial<Label> = {}): Label {
 		id: 1,
 		name: "Work",
 		color: "#3b82f6",
+		icon: null,
 		source: "user",
 		created_at: new Date().toISOString(),
 		message_count: 5,
@@ -70,7 +71,11 @@ describe("LabelManager", () => {
 		await user.click(screen.getByText("Create label", { selector: "button[type='submit']" }));
 
 		await waitFor(() => {
-			expect(api.labels.create).toHaveBeenCalledWith({ name: "Important" });
+			expect(api.labels.create).toHaveBeenCalledWith({
+				name: "Important",
+				color: undefined,
+				icon: null,
+			});
 		});
 		expect(defaultProps.onLabelsChanged).toHaveBeenCalled();
 	});
@@ -87,7 +92,11 @@ describe("LabelManager", () => {
 		await user.click(screen.getByText("Create label", { selector: "button[type='submit']" }));
 
 		await waitFor(() => {
-			expect(api.labels.create).toHaveBeenCalledWith({ name: "Urgent", color: "#ef4444" });
+			expect(api.labels.create).toHaveBeenCalledWith({
+				name: "Urgent",
+				color: "#ef4444",
+				icon: null,
+			});
 		});
 	});
 
@@ -256,6 +265,7 @@ describe("LabelManager", () => {
 			expect(api.labels.update).toHaveBeenCalledWith(5, {
 				name: "Work Projects",
 				color: "#3b82f6",
+				icon: null,
 			});
 		});
 	});
@@ -289,7 +299,11 @@ describe("LabelManager", () => {
 		await user.click(screen.getByText("Create label", { selector: "button[type='submit']" }));
 
 		await waitFor(() => {
-			expect(api.labels.create).toHaveBeenCalledWith({ name: "No Color" });
+			expect(api.labels.create).toHaveBeenCalledWith({
+				name: "No Color",
+				color: undefined,
+				icon: null,
+			});
 		});
 	});
 });
@@ -310,7 +324,9 @@ describe("MessageLabelPicker", () => {
 			makeLabel({ id: 1, name: "Inbox", source: "imap" }),
 			makeLabel({ id: 2, name: "Work", source: "user" }),
 		];
-		const msgLabels: LabelSummary[] = [{ id: 1, name: "Inbox", color: null, source: "imap" }];
+		const msgLabels: LabelSummary[] = [
+			{ id: 1, name: "Inbox", color: null, icon: null, source: "imap" },
+		];
 
 		vi.mocked(api.labels.list).mockResolvedValue(allLabels);
 		vi.mocked(api.messages.labels).mockResolvedValue(msgLabels);
@@ -330,7 +346,9 @@ describe("MessageLabelPicker", () => {
 			makeLabel({ id: 1, name: "Inbox", source: "imap" }),
 			makeLabel({ id: 2, name: "Work", source: "user", color: "#3b82f6" }),
 		];
-		const msgLabels: LabelSummary[] = [{ id: 1, name: "Inbox", color: null, source: "imap" }];
+		const msgLabels: LabelSummary[] = [
+			{ id: 1, name: "Inbox", color: null, icon: null, source: "imap" },
+		];
 		const onLabelsChanged = vi.fn();
 
 		vi.mocked(api.labels.list).mockResolvedValue(allLabels);
@@ -356,7 +374,9 @@ describe("MessageLabelPicker", () => {
 	it("removes a label from a message", async () => {
 		const user = userEvent.setup();
 		const allLabels: Label[] = [makeLabel({ id: 1, name: "Inbox", source: "imap" })];
-		const msgLabels: LabelSummary[] = [{ id: 1, name: "Inbox", color: null, source: "imap" }];
+		const msgLabels: LabelSummary[] = [
+			{ id: 1, name: "Inbox", color: null, icon: null, source: "imap" },
+		];
 		const onLabelsChanged = vi.fn();
 
 		vi.mocked(api.labels.list).mockResolvedValue(allLabels);

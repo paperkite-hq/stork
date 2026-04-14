@@ -21,6 +21,7 @@ function makeLabel(overrides: Partial<Label> = {}): Label {
 		id: 1,
 		name: "Inbox",
 		color: null,
+		icon: null,
 		source: "imap",
 		created_at: new Date().toISOString(),
 		message_count: 10,

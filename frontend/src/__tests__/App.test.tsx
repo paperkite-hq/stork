@@ -181,6 +181,7 @@ function makeLabel(overrides: Partial<Label> = {}): Label {
 		id: 1,
 		name: "inbox",
 		color: null,
+		icon: null,
 		source: "imap",
 		created_at: "2024-01-01T00:00:00Z",
 		message_count: 0,
@@ -2690,9 +2691,9 @@ describe("App — per-identity default_view label: parsing", () => {
 
 describe("App — suggestForLabelId multi-step drill-down", () => {
 	// LabelSummary-shaped objects for the related labels API mock responses
-	const _inboxSummary = { id: 1, name: "inbox", color: null, source: "imap" as const };
-	const workSummary = { id: 5, name: "Work", color: null, source: "user" as const };
-	const urgentSummary = { id: 6, name: "Urgent", color: null, source: "user" as const };
+	const _inboxSummary = { id: 1, name: "inbox", color: null, icon: null, source: "imap" as const };
+	const workSummary = { id: 5, name: "Work", color: null, icon: null, source: "user" as const };
+	const urgentSummary = { id: 6, name: "Urgent", color: null, icon: null, source: "user" as const };
 
 	// Full Label objects for api.labels.list
 	const inboxLabel = makeLabel({ id: 1, name: "inbox", source: "imap", message_count: 10 });

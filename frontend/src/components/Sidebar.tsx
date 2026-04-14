@@ -17,14 +17,18 @@ import {
 	TrashIcon,
 	UnreadIcon,
 } from "./Icons";
-import { LabelManager } from "./LabelManager";
+import { LABEL_ICONS, LabelManager } from "./LabelManager";
 
-// Map well-known label names (derived from IMAP folder paths) to icons.
-// Uses the last path segment so nested folders like "[Gmail]/Sent Mail" still match.
 function labelIcon(label: Label): ReactNode {
+	const cls = "w-4 h-4 flex-shrink-0";
+
+	if (label.icon) {
+		const IconComponent = LABEL_ICONS[label.icon];
+		if (IconComponent) return <IconComponent className={cls} />;
+	}
+
 	const segments = label.name.split("/");
 	const name = (segments[segments.length - 1] ?? label.name).toLowerCase();
-	const cls = "w-4 h-4 flex-shrink-0";
 	if (name === "inbox") return <InboxIcon className={cls} />;
 	if (name === "sent" || name === "sent mail" || name === "sent items")
 		return <SendIcon className={cls} />;
@@ -34,7 +38,6 @@ function labelIcon(label: Label): ReactNode {
 	if (name === "junk" || name === "spam") return <SpamIcon className={cls} />;
 	if (name === "archive" || name === "all mail") return <ArchiveIcon className={cls} />;
 	if (name === "starred" || name === "flagged") return <StarIcon className={cls} filled />;
-	// Connector labels get a person icon
 	if (label.source === "connector") {
 		return (
 			<svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -44,7 +47,6 @@ function labelIcon(label: Label): ReactNode {
 			</svg>
 		);
 	}
-	// User-created labels get a colored dot if they have a color, otherwise a tag icon
 	if (label.color) {
 		return (
 			<span

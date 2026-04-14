@@ -157,7 +157,7 @@ export function identityRoutes(getDb: () => Database.Database): Hono {
 		void identityId; // accepted but unused — labels are global
 		const labels = getDb()
 			.prepare(
-				"SELECT id, name, color, source, created_at, message_count, unread_count FROM labels ORDER BY name",
+				"SELECT id, name, color, icon, source, created_at, message_count, unread_count FROM labels ORDER BY name",
 			)
 			.all();
 		return c.json(labels);

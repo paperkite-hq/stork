@@ -1,8 +1,43 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ComponentType, useCallback, useEffect, useRef, useState } from "react";
 import { api, type Label, type LabelSummary } from "../api";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { XIcon } from "./Icons";
+import {
+	ArchiveIcon,
+	CalendarIcon,
+	DraftIcon,
+	FilterIcon,
+	FolderIcon,
+	InboxIcon,
+	MailIcon,
+	PaperclipIcon,
+	SearchIcon,
+	SendIcon,
+	ShieldIcon,
+	SpamIcon,
+	StarIcon,
+	TrashIcon,
+	XIcon,
+} from "./Icons";
 import { toast } from "./Toast";
+
+export const LABEL_ICONS: Record<string, ComponentType<{ className?: string }>> = {
+	inbox: InboxIcon,
+	send: SendIcon,
+	draft: DraftIcon,
+	trash: TrashIcon,
+	spam: SpamIcon,
+	archive: ArchiveIcon,
+	star: StarIcon,
+	folder: FolderIcon,
+	search: SearchIcon,
+	shield: ShieldIcon,
+	filter: FilterIcon,
+	calendar: CalendarIcon,
+	mail: MailIcon,
+	paperclip: PaperclipIcon,
+};
+
+export type LabelIconKey = keyof typeof LABEL_ICONS;
 
 const PRESET_COLORS: { hex: string; name: string }[] = [
 	{ hex: "#ef4444", name: "Red" },
@@ -43,6 +78,49 @@ function ColorPicker({ value, onChange }: ColorPickerProps) {
 	);
 }
 
+interface IconPickerProps {
+	value: string | null;
+	onChange: (icon: string | null) => void;
+}
+
+function IconPicker({ value, onChange }: IconPickerProps) {
+	const cls = "w-4 h-4";
+	return (
+		<div className="space-y-1">
+			<p className="text-xs text-gray-400">Icon</p>
+			<div className="flex items-center gap-1 flex-wrap">
+				<button
+					type="button"
+					onClick={() => onChange(null)}
+					className={`w-7 h-7 rounded flex items-center justify-center border transition-all ${
+						value === null
+							? "border-gray-800 dark:border-white bg-gray-100 dark:bg-gray-800"
+							: "border-transparent hover:bg-gray-100 dark:hover:bg-gray-800"
+					}`}
+					title="Default"
+				>
+					<span className="text-[10px] text-gray-400">—</span>
+				</button>
+				{Object.entries(LABEL_ICONS).map(([key, IconComponent]) => (
+					<button
+						key={key}
+						type="button"
+						onClick={() => onChange(value === key ? null : key)}
+						className={`w-7 h-7 rounded flex items-center justify-center border transition-all text-gray-600 dark:text-gray-300 ${
+							value === key
+								? "border-gray-800 dark:border-white bg-gray-100 dark:bg-gray-800"
+								: "border-transparent hover:bg-gray-100 dark:hover:bg-gray-800"
+						}`}
+						title={key.charAt(0).toUpperCase() + key.slice(1)}
+					>
+						<IconComponent className={cls} />
+					</button>
+				))}
+			</div>
+		</div>
+	);
+}
+
 interface CreateLabelFormProps {
 	onCreated: () => void;
 	onClose: () => void;
@@ -51,6 +129,7 @@ interface CreateLabelFormProps {
 function CreateLabelForm({ onCreated, onClose }: CreateLabelFormProps) {
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<string | null>(null);
+	const [icon, setIcon] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 
@@ -64,7 +143,11 @@ function CreateLabelForm({ onCreated, onClose }: CreateLabelFormProps) {
 			if (!name.trim()) return;
 			setSaving(true);
 			try {
-				await api.labels.create({ name: name.trim(), color: color ?? undefined });
+				await api.labels.create({
+					name: name.trim(),
+					color: color ?? undefined,
+					icon,
+				});
 				toast(`Label "${name.trim()}" created`);
 				onCreated();
 				onClose();
@@ -74,7 +157,7 @@ function CreateLabelForm({ onCreated, onClose }: CreateLabelFormProps) {
 				setSaving(false);
 			}
 		},
-		[name, color, onCreated, onClose],
+		[name, color, icon, onCreated, onClose],
 	);
 
 	return (
@@ -99,6 +182,7 @@ function CreateLabelForm({ onCreated, onClose }: CreateLabelFormProps) {
 				</button>
 			</div>
 			<ColorPicker value={color} onChange={setColor} />
+			<IconPicker value={icon} onChange={setIcon} />
 			<button
 				type="submit"
 				disabled={!name.trim() || saving}
@@ -119,6 +203,7 @@ interface EditLabelFormProps {
 function EditLabelForm({ label, onUpdated, onClose }: EditLabelFormProps) {
 	const [name, setName] = useState(label.name);
 	const [color, setColor] = useState<string | null>(label.color);
+	const [icon, setIcon] = useState<string | null>(label.icon);
 	const [saving, setSaving] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 
@@ -136,6 +221,7 @@ function EditLabelForm({ label, onUpdated, onClose }: EditLabelFormProps) {
 				await api.labels.update(label.id, {
 					name: name.trim(),
 					color: color ?? undefined,
+					icon,
 				});
 				toast("Label updated");
 				onUpdated();
@@ -146,7 +232,7 @@ function EditLabelForm({ label, onUpdated, onClose }: EditLabelFormProps) {
 				setSaving(false);
 			}
 		},
-		[label.id, name, color, onUpdated, onClose],
+		[label.id, name, color, icon, onUpdated, onClose],
 	);
 
 	return (
@@ -171,6 +257,7 @@ function EditLabelForm({ label, onUpdated, onClose }: EditLabelFormProps) {
 				</button>
 			</div>
 			<ColorPicker value={color} onChange={setColor} />
+			<IconPicker value={icon} onChange={setIcon} />
 			<button
 				type="submit"
 				disabled={!name.trim() || saving}
@@ -382,7 +469,13 @@ export function MessageLabelPicker({ messageId, onLabelsChanged }: MessageLabelP
 					if (label) {
 						setMessageLabels((prev) => [
 							...prev,
-							{ id: label.id, name: label.name, color: label.color, source: label.source },
+							{
+								id: label.id,
+								name: label.name,
+								color: label.color,
+								icon: label.icon,
+								source: label.source,
+							},
 						]);
 					}
 				}
