@@ -19,6 +19,5 @@ playwright.config.ts
 playwright.screenshots.config.ts
 vitest.config.ts
 frontend/vitest.config.ts
-tsconfig.json
-frontend/tsconfig*.json
+
 coverage
