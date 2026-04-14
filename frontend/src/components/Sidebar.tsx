@@ -101,13 +101,12 @@ interface SidebarProps {
 	unifiedUnreadCount?: { total: number } | null;
 }
 
-/** Formats a duration in ms as "Xm Ys" or "Xs" */
+/** Formats a duration in ms as "M:SS" — fixed-width to prevent layout jumps */
 function formatDuration(ms: number): string {
 	const secs = Math.floor(ms / 1000);
-	if (secs < 60) return `${secs}s`;
 	const mins = Math.floor(secs / 60);
 	const rem = secs % 60;
-	return `${mins}m ${rem}s`;
+	return `${mins}:${String(rem).padStart(2, "0")}`;
 }
 
 /** Shows real-time sync progress details, ticking elapsed time once per second */
@@ -184,9 +183,9 @@ function SyncProgressDetail({ syncStatus }: { syncStatus: GlobalSyncStatus }) {
 							{progress.messagesNew} new {progress.messagesNew === 1 ? "message" : "messages"} found
 						</div>
 					)}
-					<div className="flex justify-between text-stork-500 dark:text-stork-500">
-						<span>Elapsed: {elapsedStr}</span>
-						{estimatedStr && <span>~{estimatedStr} remaining</span>}
+					<div className="flex justify-between text-stork-500 dark:text-stork-500 whitespace-nowrap tabular-nums">
+						<span>{elapsedStr} elapsed</span>
+						{estimatedStr && <span>~{estimatedStr} left</span>}
 					</div>
 				</>
 			) : (

@@ -306,8 +306,8 @@ describe("Sidebar", () => {
 		render(<Sidebar {...defaultProps} syncing={true} syncStatus={syncStatus} />);
 		await userEvent.click(screen.getByText("Syncing mail…"));
 		// Should show elapsed time and estimated remaining
-		expect(screen.getByText(/Elapsed: 1m 0s/)).toBeInTheDocument();
-		expect(screen.getByText(/~1m 0s remaining/)).toBeInTheDocument();
+		expect(screen.getByText(/1:00 elapsed/)).toBeInTheDocument();
+		expect(screen.getByText(/~1:00 left/)).toBeInTheDocument();
 	});
 
 	it("shows Connecting when progress is null", async () => {
@@ -394,7 +394,7 @@ describe("Sidebar", () => {
 		};
 		render(<Sidebar {...defaultProps} syncing={true} syncStatus={syncStatus} />);
 		await userEvent.click(screen.getByText("Syncing mail…"));
-		expect(screen.getByText(/Elapsed: 15s/)).toBeInTheDocument();
+		expect(screen.getByText(/0:15 elapsed/)).toBeInTheDocument();
 	});
 
 	it("shows singular message text for 1 new message", async () => {
