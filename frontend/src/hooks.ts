@@ -469,58 +469,69 @@ export function useMessageActions(opts: {
 		refetchUnreadCount,
 	]);
 
-	const archive = useCallback(async () => {
-		const msg = messages[messageListIndex];
-		if (!msg) return;
+	const archive = useCallback(
+		async (messageId?: number) => {
+			const msg = messageId
+				? (messages.find((m) => m.id === messageId) ?? null)
+				: (messages[messageListIndex] ?? null);
+			if (!msg) return;
 
-		// Archive = remove the Inbox label from the message. Only available from the Inbox view.
-		// In other views (All Mail, Unread, other labels), the archive action is disabled.
-		const currentLabel = labels?.find((l) => l.id === effectiveLabelId);
-		if (!currentLabel || isAllMail) {
-			toast("Archive is only available from Inbox", "error");
-			return;
-		}
+			// Archive = remove the current label from the message.
+			// Available from any real label view; disabled for All Mail / Unread / unified views.
+			const currentLabel = labels?.find((l) => l.id === effectiveLabelId);
+			if (!currentLabel || isAllMail) {
+				toast("Remove label is only available in label views", "error");
+				return;
+			}
 
-		// Optimistic: remove from list
-		setAllMessages((prev) => prev.filter((m) => m.id !== msg.id));
-		if (selectedMessageId === msg.id) setSelectedMessageId(null);
-		try {
-			await api.messages.removeLabel(msg.id, currentLabel.id);
-			refetchLabels();
-			refetchAllMailCount();
-			refetchUnreadCount?.();
-			toast("Archived", "success", {
-				label: "Undo",
-				onClick: () => {
-					api.messages
-						.addLabels(msg.id, [currentLabel.id])
-						.then(() => {
-							refetchMessages();
-							refetchLabels();
-							refetchAllMailCount();
-							refetchUnreadCount?.();
-						})
-						.catch(() => toast("Failed to undo", "error"));
-				},
-			});
-		} catch (err) {
-			refetchMessages(); // Revert on failure
-			toast(`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
-		}
-	}, [
-		messages,
-		messageListIndex,
-		labels,
-		effectiveLabelId,
-		isAllMail,
-		selectedMessageId,
-		setSelectedMessageId,
-		setAllMessages,
-		refetchMessages,
-		refetchLabels,
-		refetchAllMailCount,
-		refetchUnreadCount,
-	]);
+			const isInboxLabel = currentLabel.name.toLowerCase() === "inbox";
+			const successText = isInboxLabel ? "Archived" : `Removed from ${currentLabel.name}`;
+
+			// Optimistic: remove from list
+			setAllMessages((prev) => prev.filter((m) => m.id !== msg.id));
+			if (selectedMessageId === msg.id) setSelectedMessageId(null);
+			try {
+				await api.messages.removeLabel(msg.id, currentLabel.id);
+				refetchLabels();
+				refetchAllMailCount();
+				refetchUnreadCount?.();
+				toast(successText, "success", {
+					label: "Undo",
+					onClick: () => {
+						api.messages
+							.addLabels(msg.id, [currentLabel.id])
+							.then(() => {
+								refetchMessages();
+								refetchLabels();
+								refetchAllMailCount();
+								refetchUnreadCount?.();
+							})
+							.catch(() => toast("Failed to undo", "error"));
+					},
+				});
+			} catch (err) {
+				refetchMessages(); // Revert on failure
+				toast(
+					`Failed to archive: ${err instanceof Error ? err.message : "Unknown error"}`,
+					"error",
+				);
+			}
+		},
+		[
+			messages,
+			messageListIndex,
+			labels,
+			effectiveLabelId,
+			isAllMail,
+			selectedMessageId,
+			setSelectedMessageId,
+			setAllMessages,
+			refetchMessages,
+			refetchLabels,
+			refetchAllMailCount,
+			refetchUnreadCount,
+		],
+	);
 
 	const confirmDelete = useCallback(async () => {
 		if (pendingDelete === null) return;

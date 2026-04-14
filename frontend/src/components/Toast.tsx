@@ -96,8 +96,8 @@ function ToastItem({
 	onDismiss: (id: number) => void;
 }) {
 	useEffect(() => {
-		// Action toasts stay longer so the user can click the action
-		const timer = setTimeout(() => onDismiss(t.id), t.action ? 5000 : 3000);
+		// Action toasts stay longer so the user can click the action (7s for undo window)
+		const timer = setTimeout(() => onDismiss(t.id), t.action ? 7000 : 3000);
 		return () => clearTimeout(timer);
 	}, [t.id, t.action, onDismiss]);
 

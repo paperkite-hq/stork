@@ -2,7 +2,14 @@ import { memo, type RefObject, useEffect, useMemo, useRef } from "react";
 import type { Folder, InboundConnector, LabelSummary, MessageSummary } from "../api";
 import { isFlagged, isUnread } from "../utils";
 import { BulkActionsBar } from "./BulkActionsBar";
-import { AlertCircleIcon, InboxEmptyIcon, PaperclipIcon, RefreshIcon, StarIcon } from "./Icons";
+import {
+	AlertCircleIcon,
+	ArchiveIcon,
+	InboxEmptyIcon,
+	PaperclipIcon,
+	RefreshIcon,
+	StarIcon,
+} from "./Icons";
 
 interface ThreadGroup {
 	root: MessageSummary;
@@ -122,6 +129,10 @@ interface MessageListItemProps {
 	onSelect: (id: number) => void;
 	onToggleStar?: (id: number) => void;
 	onToggleSelect?: (id: number) => void;
+	/** Quick archive / remove-current-label action — shown on hover */
+	onArchive?: (id: number) => void;
+	/** Tooltip for the archive button (e.g. "Archive" or "Remove from Work") */
+	archiveLabel?: string;
 	selectedRef?: RefObject<HTMLButtonElement | null>;
 	/** Identity email shown as a badge — passed when viewing unified inbox */
 	identityLabel?: string;
@@ -145,6 +156,8 @@ const MessageListItem = memo(function MessageListItem({
 	onSelect,
 	onToggleStar,
 	onToggleSelect,
+	onArchive,
+	archiveLabel = "Archive",
 	selectedRef,
 	identityLabel,
 	threadChild,
@@ -171,6 +184,24 @@ const MessageListItem = memo(function MessageListItem({
 						: "hover:bg-gray-50 dark:hover:bg-gray-900"
 			}`}
 		>
+			{/* Archive button — shown on hover (quick remove-current-label action) */}
+			{onArchive && (
+				<button
+					type="button"
+					aria-label={archiveLabel}
+					title={archiveLabel}
+					onClick={(e) => {
+						e.stopPropagation();
+						onArchive(msg.id);
+					}}
+					className={`absolute z-10 transition-opacity duration-200 opacity-0 group-hover:opacity-100 ${
+						onToggleStar ? "right-8" : "right-2"
+					} top-1/2 -translate-y-1/2`}
+				>
+					<ArchiveIcon className="w-4 h-4 text-gray-300 dark:text-gray-600 hover:text-stork-500 dark:hover:text-stork-400" />
+				</button>
+			)}
+
 			{/* Star toggle — shown on hover or when starred */}
 			{onToggleStar && (
 				<button
@@ -352,6 +383,10 @@ interface MessageListProps {
 	onBulkMarkUnread?: () => void;
 	onBulkMove?: (folderId: number) => void;
 	onBulkArchive?: () => void;
+	/** Per-message archive action shown on hover — removes the current label */
+	onArchiveMessage?: (id: number) => void;
+	/** Tooltip for the per-message archive button */
+	archiveMessageLabel?: string;
 	folders?: Folder[];
 	/** Labels to suggest for intersection filtering — shown as clickable chips above the list */
 	suggestedLabels?: LabelSummary[];
@@ -387,6 +422,8 @@ export function MessageList({
 	onBulkMarkUnread,
 	onBulkMove,
 	onBulkArchive,
+	onArchiveMessage,
+	archiveMessageLabel,
 	folders = [],
 	totalCount,
 	suggestedLabels,
@@ -605,6 +642,8 @@ export function MessageList({
 								onSelect={onSelect}
 								onToggleStar={onToggleStar}
 								onToggleSelect={onToggleSelect}
+								onArchive={onArchiveMessage}
+								archiveLabel={archiveMessageLabel}
 								selectedRef={group.root.id === selectedId ? selectedRef : undefined}
 								identityLabel={rootConnector ? rootConnector.name : undefined}
 								threadCount={group.children.length}
@@ -624,6 +663,8 @@ export function MessageList({
 										onSelect={onSelect}
 										onToggleStar={onToggleStar}
 										onToggleSelect={onToggleSelect}
+										onArchive={onArchiveMessage}
+										archiveLabel={archiveMessageLabel}
 										selectedRef={child.id === selectedId ? selectedRef : undefined}
 										identityLabel={childConnector ? childConnector.name : undefined}
 										threadChild

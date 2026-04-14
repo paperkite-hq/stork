@@ -179,7 +179,10 @@ describe("useMessageActions", () => {
 		});
 		await act(() => result.current.archive());
 		expect(mockMove).not.toHaveBeenCalled();
-		expect(mockToast).toHaveBeenCalledWith("Archive is only available from Inbox", "error");
+		expect(mockToast).toHaveBeenCalledWith(
+			"Remove label is only available in label views",
+			"error",
+		);
 	});
 
 	it("archive reverts on label removal failure", async () => {
@@ -199,7 +202,10 @@ describe("useMessageActions", () => {
 		});
 		await act(() => result.current.archive());
 		expect(mockMove).not.toHaveBeenCalled();
-		expect(mockToast).toHaveBeenCalledWith("Archive is only available from Inbox", "error");
+		expect(mockToast).toHaveBeenCalledWith(
+			"Remove label is only available in label views",
+			"error",
+		);
 	});
 
 	it("confirmDelete does nothing when pendingDelete is null", async () => {
@@ -286,5 +292,43 @@ describe("useMessageActions", () => {
 		});
 
 		expect(mockToast).toHaveBeenCalledWith("Failed to undo", "error");
+	});
+
+	it("archive shows 'Removed from Work' toast for non-inbox label", async () => {
+		const workLabel = makeLabel({ id: 5, name: "Work" });
+		const { result } = renderActions({
+			effectiveLabelId: 5,
+			isAllMail: false,
+			labels: [workLabel],
+		});
+		await act(() => result.current.archive());
+		expect(mockRemoveLabel).toHaveBeenCalledWith(1, 5);
+		expect(mockToast).toHaveBeenCalledWith(
+			"Removed from Work",
+			"success",
+			expect.objectContaining({ label: "Undo" }),
+		);
+	});
+
+	it("archive by messageId archives the specified message instead of focused one", async () => {
+		const { result } = renderActions({
+			messageListIndex: 0,
+			effectiveLabelId: 1,
+			isAllMail: false,
+		});
+		// messages[0].id = 1, messages[1].id = 2 — archive message 2 (not focused)
+		await act(() => result.current.archive(2));
+		expect(mockRemoveLabel).toHaveBeenCalledWith(2, 1);
+		expect(mockToast).toHaveBeenCalledWith(
+			"Archived",
+			"success",
+			expect.objectContaining({ label: "Undo" }),
+		);
+	});
+
+	it("archive by messageId does nothing when id not in messages", async () => {
+		const { result } = renderActions({ effectiveLabelId: 1, isAllMail: false });
+		await act(() => result.current.archive(999));
+		expect(mockRemoveLabel).not.toHaveBeenCalled();
 	});
 });

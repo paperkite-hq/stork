@@ -125,20 +125,20 @@ describe("ToastContainer", () => {
 		expect(screen.queryByText("Archived")).not.toBeInTheDocument();
 	});
 
-	it("action toasts stay visible for 5 seconds instead of 3", () => {
+	it("action toasts stay visible for 7 seconds instead of 3", () => {
 		render(<ToastContainer />);
 		act(() => {
 			toast("Archived", "success", { label: "Undo", onClick: vi.fn() });
 		});
 		expect(screen.getByText("Archived")).toBeInTheDocument();
 
-		// Still visible at 3s
+		// Still visible at 5s
 		act(() => {
-			vi.advanceTimersByTime(3000);
+			vi.advanceTimersByTime(5000);
 		});
 		expect(screen.getByText("Archived")).toBeInTheDocument();
 
-		// Dismissed at 5s
+		// Dismissed at 7s
 		act(() => {
 			vi.advanceTimersByTime(2000);
 		});

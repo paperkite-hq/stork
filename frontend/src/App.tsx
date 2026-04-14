@@ -452,9 +452,15 @@ export function App() {
 		[allMessages, setAllMessages, refetchMessages],
 	);
 
-	// Archive = remove Inbox label. Only available when viewing the Inbox.
-	const archiveLabelId = inboxLabelId;
-	const archiveDisabled = !isInbox;
+	// Archive = remove the current label. Works from any real label view (Inbox or custom label).
+	// Not available from virtual views: All Mail, Unread, Unified.
+	const archiveLabelId =
+		isInbox && inboxLabelId
+			? inboxLabelId
+			: effectiveLabelId && effectiveLabelId > 0
+				? effectiveLabelId
+				: null;
+	const archiveDisabled = !archiveLabelId;
 
 	// Bulk selection (state + action handlers extracted to hook)
 	const bulk = useBulkSelection({
@@ -977,6 +983,14 @@ export function App() {
 								onBulkMarkUnread={bulk.markUnread}
 								onBulkMove={bulk.move}
 								onBulkArchive={!archiveDisabled ? bulk.archive : undefined}
+								onArchiveMessage={!archiveDisabled ? (id) => msgActions.archive(id) : undefined}
+								archiveMessageLabel={
+									isInbox
+										? "Archive"
+										: effectiveLabelId && effectiveLabelId > 0
+											? `Remove from ${labels?.find((l) => l.id === effectiveLabelId)?.name ?? "label"}`
+											: undefined
+								}
 								folders={folders ?? []}
 								suggestedLabels={relatedLabels ?? undefined}
 								onAddFilterLabel={handleToggleFilterLabel}
