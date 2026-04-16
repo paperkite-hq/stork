@@ -54,14 +54,20 @@ export function UnlockScreen({ onUnlocked, dark, onToggleDark }: UnlockScreenPro
 			}
 			failedAttempts.current = 0;
 			onUnlocked();
-		} catch (_err) {
-			failedAttempts.current++;
-			const nextDelay =
-				UNLOCK_DELAYS_SEC[Math.min(failedAttempts.current, UNLOCK_DELAYS_SEC.length - 1)] ?? 0;
-			if (nextDelay > 0) {
-				setCountdown(nextDelay);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : "";
+			// Only apply rate limiting for credential errors, not server errors
+			if (!msg.startsWith("Unlock succeeded")) {
+				failedAttempts.current++;
+				const nextDelay =
+					UNLOCK_DELAYS_SEC[Math.min(failedAttempts.current, UNLOCK_DELAYS_SEC.length - 1)] ?? 0;
+				if (nextDelay > 0) {
+					setCountdown(nextDelay);
+				}
+				setError(recoveryMode ? "Invalid recovery phrase or password." : "Incorrect password.");
+			} else {
+				setError(msg);
 			}
-			setError(recoveryMode ? "Invalid recovery phrase or password." : "Incorrect password.");
 		} finally {
 			setLoading(false);
 		}

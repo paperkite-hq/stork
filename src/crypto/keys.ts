@@ -54,11 +54,17 @@ function generateVaultKey(): Buffer {
 	return randomBytes(KEY_BYTES);
 }
 
-function deriveKEK(password: string, salt: Buffer): Buffer {
+interface KdfParams {
+	memoryCost: number;
+	timeCost: number;
+	parallelism: number;
+}
+
+function deriveKEK(password: string, salt: Buffer, params?: KdfParams): Buffer {
 	const key = argon2id(password, salt, {
-		m: ARGON2_MEMORY,
-		t: ARGON2_ITERATIONS,
-		p: ARGON2_PARALLELISM,
+		m: params?.memoryCost ?? ARGON2_MEMORY,
+		t: params?.timeCost ?? ARGON2_ITERATIONS,
+		p: params?.parallelism ?? ARGON2_PARALLELISM,
 		dkLen: KEY_BYTES,
 	});
 	return Buffer.from(key);
@@ -169,7 +175,7 @@ export function initializeEncryption(dataDir: string, password: string): string 
 export function unlockWithPassword(dataDir: string, password: string): Buffer {
 	const keysData = readKeysFile(dataDir);
 	const passwordSalt = Buffer.from(keysData.kdf.salt, "base64");
-	const kek = deriveKEK(password, passwordSalt);
+	const kek = deriveKEK(password, passwordSalt, keysData.kdf);
 	try {
 		const vaultKey = unwrapKey(keysData.wrappedMasterKey.password, kek);
 		zeroBuffer(kek);

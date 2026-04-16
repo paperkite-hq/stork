@@ -67,8 +67,8 @@ export function encryptionRoutes(context: ContainerContext): Hono {
 
 		const body = await c.req.json();
 
+		let vaultKey: Buffer;
 		try {
-			let vaultKey: Buffer;
 			if (body.recoveryMnemonic) {
 				vaultKey = unlockWithRecovery(context.dataDir, body.recoveryMnemonic);
 				if (!body.newPassword || typeof body.newPassword !== "string") {
@@ -80,14 +80,20 @@ export function encryptionRoutes(context: ContainerContext): Hono {
 			} else {
 				return c.json({ error: "password or recoveryMnemonic is required" }, 400);
 			}
-
-			failedUnlockAttempts = 0;
-			transitionToUnlocked(context, vaultKey);
-			return c.json({ ok: true });
 		} catch {
 			failedUnlockAttempts++;
 			lastFailedUnlockAt = Date.now();
 			return c.json({ error: "Invalid password or recovery key" }, 401);
+		}
+
+		failedUnlockAttempts = 0;
+		try {
+			transitionToUnlocked(context, vaultKey);
+			return c.json({ ok: true });
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			console.error("Unlock succeeded but failed to open database:", msg);
+			return c.json({ error: `Unlock succeeded but failed to open database: ${msg}` }, 500);
 		}
 	});
 

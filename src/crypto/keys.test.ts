@@ -61,6 +61,22 @@ describe("unlockWithPassword", () => {
 		initializeEncryption(dataDir, "correctpass123!");
 		expect(() => unlockWithPassword(dataDir, "wrongpassword!")).toThrow();
 	});
+
+	test("uses stored KDF params from key file, not hardcoded defaults", () => {
+		// Create key file — stores the KDF params used at creation time
+		initializeEncryption(dataDir, "correctpass123!");
+
+		// Tamper with stored memoryCost — if unlock reads stored params (correct
+		// behavior), it will derive a different KEK and fail. If it ignores stored
+		// params and uses hardcoded constants (old bug), it would still succeed.
+		const keysPath = path.join(dataDir, "stork.keys");
+		const keysData = JSON.parse(fs.readFileSync(keysPath, "utf8"));
+		keysData.kdf.memoryCost = keysData.kdf.memoryCost * 2;
+		fs.writeFileSync(keysPath, JSON.stringify(keysData, null, 2));
+
+		// Unlock must fail because the stored params no longer match
+		expect(() => unlockWithPassword(dataDir, "correctpass123!")).toThrow();
+	});
 });
 
 describe("unlockWithRecovery", () => {
