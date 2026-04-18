@@ -15,6 +15,7 @@ Performance, UI polish, and security improvements since v0.7.0.
 - **UI polish** — label dropdown checkboxes no longer shrink with long names; sync progress time display no longer causes layout jumps.
 - **`.env.example`** — configuration discovery file for Docker deployments.
 - **Test coverage** — new tests for cached count paths and label edge cases.
+- **Security** — resolved all `npm audit` advisories: `@hono/node-server` ≥1.19.13 (serveStatic slash bypass), `hono` ≥4.12.12 (cookie validation, IP restriction, toSSG path traversal, JSX injection), `nodemailer` ≥8.0.4 (SMTP CRLF injection via EHLO name), and transitive `vite` upgrade in frontend dev dependencies.
 
 ## v0.7.0 (2026-04-06)
 
