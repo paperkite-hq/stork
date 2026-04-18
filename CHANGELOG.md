@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+Performance, UI polish, and security improvements since v0.7.0.
+
+- **KDF parameter fix** — unlock now uses the KDF parameters stored at encryption time, not current defaults. Prevents lockout after a KDF strength upgrade. Clearer error separation between wrong-password and database-corruption failures.
+- **Hot/cold attachment storage** — attachment blobs moved to a separate database file (`attachments.db`), keeping the main database lean for faster queries on large mailboxes. IMAP label rename support added.
+- **Multi-stage Docker build** — production image no longer ships build tools, devDependencies, or source code. Significantly smaller runtime image.
+- **Threaded message view** — messages in the same thread are visually grouped in the message list with indentation and thread indicators.
+- **Customisable label icons** — pick from a built-in icon set for each label; icons appear in the sidebar and message list.
+- **Hover archive button** — archive messages directly from the message list on hover, with contextual toast ("Archived" for inbox, "Removed from \<label\>" for custom labels) and 7-second undo window.
+- **Performance fixes** — three root causes of ~60s page refresh on a 5.2 GB database identified and fixed (cached count queries, optimised label lookups, reduced re-renders).
+- **Label sync fix** — user label removals now persist across sync cycles instead of being re-applied from server state.
+- **UI polish** — label dropdown checkboxes no longer shrink with long names; sync progress time display no longer causes layout jumps.
+- **`.env.example`** — configuration discovery file for Docker deployments.
+- **Test coverage** — new tests for cached count paths and label edge cases.
+
 ## v0.7.0 (2026-04-06)
 
 Connector polish, storage compression, and onboarding improvements.
