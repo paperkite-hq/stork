@@ -410,6 +410,28 @@ Returns messages with this label, sorted by date (newest first). This is the pri
 
 **Response**: `200 OK` — same format as folder message listing.
 
+### Get related filter labels
+
+```
+GET /api/labels/filter/related?ids=1,5&limit=10
+```
+
+Returns labels that appear on messages carrying ALL of the given label IDs — useful for drill-down filter suggestions. Every returned label is guaranteed to intersect the current filter set (so clicking it always narrows the view to a non-empty result). Results are ordered by co-occurrence frequency within the intersection, excluding the filter labels themselves.
+
+**Query parameters**:
+- `ids` (required) — comma-separated list of label IDs to intersect
+- `limit` (default: 10) — cap on the number of suggestions returned
+
+**Response**: `200 OK`
+```json
+[
+  { "id": 7, "name": "Urgent", "color": "#ff0000", "source": "user", "count": 5 },
+  { "id": 9, "name": "Clients", "color": null, "source": "user", "count": 3 }
+]
+```
+
+Returns `400 Bad Request` if `ids` is missing or all IDs are invalid.
+
 ### Get labels for a message
 
 ```
@@ -1043,6 +1065,50 @@ POST /api/connectors/inbound/:connectorId/sync
 Triggers an immediate sync for the connector.
 
 **Response**: `200 OK` | `404 Not Found`
+
+#### Count synced messages on server
+
+```
+GET /api/connectors/inbound/:connectorId/synced-count
+```
+
+Returns the number of messages that are stored locally in Stork and still known to exist on the upstream server (`deleted_from_server = 0`). Used by the connector transition wizard to tell the user how much mail would be affected by a clean-server action.
+
+**Response**: `200 OK`
+```json
+{ "count": 12345 }
+```
+
+#### Clean messages from the upstream server
+
+```
+POST /api/connectors/inbound/:connectorId/clean-server
+```
+
+For IMAP connectors only. Bulk-deletes every message on the upstream IMAP server that Stork has already synced (in batches of 100 UIDs per folder). Stork's encrypted local copies are unaffected. Typically invoked after the transition wizard confirms a mirror-mode → connector-mode switch with "remove from server" selected. This cannot be undone.
+
+**Response**: `200 OK`
+```json
+{ "deleted": 12345 }
+```
+
+- `400 Bad Request` — the connector is not of type `imap`
+- `404 Not Found` — no connector with that ID
+- `500 Internal Server Error` — scheduler rejected the request (e.g. connector not registered) or the IMAP session errored mid-delete; the response body includes `error`
+
+#### Re-label messages from the upstream server
+
+```
+POST /api/connectors/inbound/:connectorId/re-label-from-server
+```
+
+For IMAP connectors only. Performs a bounded on-demand reconciliation pass: fetches the current UID list per folder via IMAP `SEARCH ALL`, compares against locally-stored folder memberships, detects cross-folder moves via RFC 5322 `Message-ID`, and updates folder labels accordingly (stale labels removed, destination labels confirmed). Useful when messages were moved or relabelled server-side while Stork was offline.
+
+**Response**: `200 OK` — result object from the scheduler describing changes applied.
+
+- `400 Bad Request` — the connector is not of type `imap`
+- `404 Not Found` — no connector with that ID
+- `500 Internal Server Error` — scheduler rejected the request or the IMAP session errored; the response body includes `error`
 
 #### List folders for inbound connector
 
