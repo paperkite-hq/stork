@@ -33,7 +33,7 @@
 		"@playwright/test": "^1.59.1",
 		"@types/mailparser": "^3.4.6",
 		"@types/node": "^22.19.17",
-		"@types/nodemailer": "^7.0.11",
+		"@types/nodemailer": "^8.0.0",
 		"@vitest/coverage-v8": "^4.1.0",
 		"esbuild": "^0.28.0",
 		"happy-dom": "^20.8.4",
