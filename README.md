@@ -175,6 +175,7 @@ The UI walks you through this choice when you connect your first email, and surf
 - **[Getting Started](docs/getting-started.md)** — first launch, encryption setup, connecting your email
 - **[Provider Guides](docs/providers/index.md)** — setup instructions for Gmail, Fastmail, Mailcow, ProtonMail, and more
 - **[User Guide](docs/user-guide.md)** — search tips, backups, reverse proxy
+- **[Keyboard Shortcuts](docs/keyboard-shortcuts.md)** — cheatsheet of every shortcut
 - **[Use Cases](docs/use-cases.md)** — encrypted Gmail backup, Mailcow replacement, VPN access
 - **[Configuration](docs/configuration.md)** — environment variables, Docker options
 - **[API Reference](docs/api.md)** — REST API documentation

@@ -146,6 +146,8 @@ Search covers the subject, sender name, sender address, recipient addresses, and
 
 Press `?` to see available keyboard shortcuts. Navigation, compose, and search actions are all available via keyboard.
 
+See the [keyboard shortcuts cheatsheet](keyboard-shortcuts.md) for the full list.
+
 ### Dark Mode
 
 Toggle dark mode from the settings or use the theme button. Your preference is saved in the browser.
