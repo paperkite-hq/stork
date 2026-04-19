@@ -14,7 +14,7 @@
 	"dependencies": {
 		"dompurify": "^3.2.4",
 		"react": "^19.0.0",
-		"react-dom": "^19.0.0"
+		"react-dom": "^19.2.5"
 	},
 	"devDependencies": {
 		"@testing-library/jest-dom": "^6.9.1",
