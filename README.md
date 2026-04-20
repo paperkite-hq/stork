@@ -17,7 +17,13 @@
 
 **[Try the read-only demo →](https://stork-demo.paperkite.sh)** — no install needed, sample data pre-loaded.
 
-![Stork inbox](docs/screenshots/inbox.png)
+<!-- Animated screencast (inbox → thread → live search). Falls back to the
+     static inbox screenshot on renderers that don't play GIFs inline. -->
+<p align="center">
+  <a href="https://stork-demo.paperkite.sh">
+    <img src="docs/screencast.gif" alt="Stork — inbox, thread view, and live search" width="800">
+  </a>
+</p>
 
 Stork syncs your email from any IMAP server, stores it locally with **AES-256 encryption at rest**, full-text search, and a modern web interface. Keep using your existing mail server for sending and receiving — Stork handles storage, search, and the UI.
 

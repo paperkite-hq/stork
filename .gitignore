@@ -11,6 +11,10 @@ playwright-report/
 coverage/
 frontend/tsconfig.tsbuildinfo
 
+# Screencast capture intermediates (docs/screencast.{gif,webm} are committed)
+docs/screencast-video/
+docs/.screencast-palette.png
+
 # Local-only hooks
 .githooks/pre-push
 .githooks/commit-msg
