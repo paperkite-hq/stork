@@ -24,10 +24,12 @@ Stork syncs your email from any IMAP server, stores it locally with **AES-256 en
 - **Encryption at rest** — AES-256 via SQLCipher. Container boots locked; your password unlocks it.
 - **Sync from any IMAP server** — Mailcow, Dovecot, Fastmail, whatever you've got
 - **Full-text search** — FTS5-powered search across your entire mailbox, instantly
-- **Compose & send** — reply, reply-all, forward, and compose via your SMTP server
+- **Threaded conversations** — messages grouped by `In-Reply-To` / `References`, with reply, reply-all, and forward inline
+- **Compose & send** — compose via your SMTP server, with attachments and sent-folder sync
 - **Labels, not folders** — Gmail-style labels replace rigid folder hierarchies ([why?](docs/design-decisions.md))
 - **Multi-identity** — connect multiple email identities; unified inbox shows all messages in one view
 - **Mirror & Connector modes** — test the waters with your provider as backup, then flip to Connector mode when you're ready to commit
+- **Storage efficient** — zlib compression for large message bodies and hash-based attachment deduplication shrinks the on-disk archive
 - **Desktop notifications** — new mail alerts as messages arrive
 - **Recovery key** — 24-word BIP39 mnemonic so a forgotten password doesn't mean lost mail
 - **Single container** — one `docker run` command and you're running. No PHP, no external DB.
