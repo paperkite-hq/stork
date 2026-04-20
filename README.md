@@ -233,6 +233,7 @@ Re-run the benchmark on your own hardware: `npx tsx scripts/benchmark.ts --size=
 
 ## Documentation
 
+- **[Why Stork?](docs/why-stork.md)** — the case for self-hosting the client, not the server
 - **[Getting Started](docs/getting-started.md)** — first launch, encryption setup, connecting your email
 - **[Provider Guides](docs/providers/index.md)** — setup instructions for Gmail, Fastmail, Mailcow, ProtonMail, and more
 - **[User Guide](docs/user-guide.md)** — search tips, backups, reverse proxy
