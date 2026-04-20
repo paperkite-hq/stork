@@ -190,6 +190,19 @@ The UI walks you through this choice when you connect your first email, and surf
 
 **Detailed comparisons:** [vs Roundcube](docs/comparisons/vs-roundcube.md) · [vs Thunderbird](docs/comparisons/vs-thunderbird.md) · [vs Bichon](docs/comparisons/vs-bichon.md)
 
+## Performance
+
+Rough numbers on a single vCPU (AMD Ryzen, 24 GiB RAM), using the reproducible benchmark in [`scripts/benchmark.ts`](scripts/benchmark.ts):
+
+| Mailbox size | On-disk size | Common-term search (cold) | Rare-term search | RSS |
+|---|---:|---:|---:|---:|
+| 50,000 messages | 132 MiB | ~20 ms | <1 ms | ~200 MiB |
+| 500,000 messages | 1.3 GiB | ~230 ms | <1 ms | ~230 MiB |
+
+Per-message footprint is ~2.8 KB with zlib compression and SQLCipher AES-256 both enabled. Full methodology, more query shapes, and ingest throughput numbers are in [docs/performance.md](docs/performance.md).
+
+Re-run the benchmark on your own hardware: `npx tsx scripts/benchmark.ts --size=50000`.
+
 ## Roadmap
 
 - [x] IMAP sync engine (incremental, resumable)
@@ -225,6 +238,7 @@ The UI walks you through this choice when you connect your first email, and surf
 - **[User Guide](docs/user-guide.md)** — search tips, backups, reverse proxy
 - **[Keyboard Shortcuts](docs/keyboard-shortcuts.md)** — cheatsheet of every shortcut
 - **[Use Cases](docs/use-cases.md)** — encrypted Gmail backup, Mailcow replacement, VPN access
+- **[Performance](docs/performance.md)** — measured search latency, storage footprint, and ingest throughput
 - **[Configuration](docs/configuration.md)** — environment variables, Docker options
 - **[API Reference](docs/api.md)** — REST API documentation
 - **[Architecture](docs/architecture.md)** — system design and codebase walkthrough
