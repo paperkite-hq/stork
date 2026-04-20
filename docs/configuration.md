@@ -77,6 +77,27 @@ For security, bind to `127.0.0.1` so Stork is not accessible from the network:
       - "127.0.0.1:3100:3100"
 ```
 
+## Podman
+
+The Stork image is OCI-compatible, so `podman run` and `podman compose` accept the same flags and compose file shown above. A few notes for rootless setups (Fedora, RHEL, and other SELinux-enforcing distros):
+
+- **Bind mounts need `:Z`** so SELinux relabels the directory for the container:
+  ```bash
+  podman run -v ~/stork-data:/app/data:Z ...
+  ```
+  Named volumes (`-v stork-data:/app/data`) work without any label suffix.
+- **Drop `mem_swappiness`** — rootless Podman cannot set it. It's a best-effort hint; rootful Podman accepts it normally.
+- **`--init`** uses `catatonit` (bundled with Podman) instead of Docker's `tini`.
+- **Ports < 1024** require tweaking `net.ipv4.ip_unprivileged_port_start` or publishing on a higher host port. Stork's default `3100` is unaffected.
+- **Auto-start on boot** via a generated systemd user unit:
+  ```bash
+  podman generate systemd --new --name stork --files
+  systemctl --user enable --now container-stork.service
+  loginctl enable-linger $USER
+  ```
+
+Everything else — health checks, environment variables, encryption, volume layout — behaves identically.
+
 ## Demo Mode
 
 Set `STORK_DEMO_MODE=1` to run Stork as a read-only demo with pre-seeded sample data. In demo mode:

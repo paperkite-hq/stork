@@ -80,6 +80,46 @@ docker compose up -d
 </details>
 
 <details>
+<summary>Podman (rootless)</summary>
+
+Stork runs unchanged under Podman — the image is OCI-compatible and the flags map one-to-one. Rootless works on Fedora, RHEL, and any distro with cgroups v2.
+
+```bash
+podman run -d --init \
+  -p 127.0.0.1:3100:3100 \
+  -v ~/stork-data:/app/data:Z \
+  --ulimit core=0 \
+  --security-opt no-new-privileges \
+  --restart unless-stopped \
+  ghcr.io/paperkite-hq/stork:latest
+```
+
+A few differences from the Docker invocation above:
+
+- **`:Z` on the bind mount** — relabels the host directory for SELinux so the container can read/write it. Skip this on non-SELinux hosts (Debian, Ubuntu, Arch) or when using a named volume.
+- **`--memory-swappiness` is dropped** — rootless Podman can't set this, and it's a best-effort hint anyway. Rootful Podman accepts it if you want it back.
+- **`--init`** uses `catatonit` (shipped with Podman) instead of `tini`; behaviour is the same.
+
+Ports above 1024 (like 3100) work out of the box. For lower ports under rootless, adjust `net.ipv4.ip_unprivileged_port_start` or publish on a higher host port.
+
+**podman-compose / `podman compose`** works with the same `docker-compose.yml` shown above. On Podman 4.4+:
+
+```bash
+podman compose up -d
+```
+
+On older versions, install `podman-compose` from your package manager and run `podman-compose up -d`. You may want to drop `mem_swappiness: 0` from the compose file under rootless.
+
+**Generate a systemd unit** to start Stork on boot without Docker Desktop:
+
+```bash
+podman generate systemd --new --name stork --files
+systemctl --user enable --now container-stork.service
+loginctl enable-linger $USER   # keep the user session alive after logout
+```
+</details>
+
+<details>
 <summary>Build from source</summary>
 
 ```bash
