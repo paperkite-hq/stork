@@ -47,3 +47,51 @@ The step-by-step for Gmail specifically (enable 2SV, generate an app password, p
 ## Will full-text search scale to a large mailbox?
 
 Yes. Stork uses SQLite's [FTS5](https://www.sqlite.org/fts5.html) extension, which is designed for exactly this. FTS5 maintains an inverted index that handles millions of rows efficiently — 10+ years of email (hundreds of thousands of messages) is well within its comfort zone. Combined with WAL mode (enabled by default), searches stay fast even while new messages are being synced in the background.
+
+## I forgot my password — what happens? When does the recovery key save me vs doom me?
+
+You have exactly two ways back into an encrypted vault: your **password** or the **24-word BIP39 recovery mnemonic** Stork showed you at first-run setup. Both independently wrap the same vault key (see [encryption design](./encryption-design.md)). There is no third way.
+
+**Recovery key saves you** when you've forgotten your password but still have the 24-word mnemonic. Enter it on the unlock screen, set a new password, and you're back in. The recovery mnemonic itself stays valid — you can keep using it after a password reset. This is an O(1) operation regardless of database size because only the key envelope is re-wrapped, not the data.
+
+**Recovery key dooms you** when you don't have it. If you lose *both* your password and the mnemonic, your data is unrecoverable — there is no backdoor, no master key, no password reset email, no "contact support." SQLCipher AES-256 with a random 32-byte vault key is mathematically out of reach; a brute-force attack on the password is defeated by Argon2id at 64 MiB memory cost.
+
+**Practical advice:** Write the 24 words down on paper at setup and store them the same way you'd store a hardware-wallet seed phrase — somewhere physical, offline, separate from the machine running Stork. Treat the mnemonic as equivalent to your password in sensitivity: anyone who gets both the `stork.keys` file and the mnemonic can unwrap your vault. If you think the phrase has leaked, rotate it from Settings > Security (also O(1)).
+
+## Does Stork support IMAP IDLE for push notifications?
+
+**Not yet — Stork is poll-based today.** The sync scheduler checks each IMAP identity on a configurable interval (default: 5 minutes), so new mail lands in the vault within that window rather than instantly. For the vast majority of self-hosters this is fine; the UI stays snappy because new messages appear in search the moment they're synced, not at some future indexing step.
+
+IMAP IDLE (RFC 2177, long-lived server-push connections) is on the roadmap but not currently wired up. In the meantime you can shorten the sync interval if 5 minutes feels long — see [Configuration](./configuration.md) for the knob. Push-based connectors like the [Cloudflare Email Worker ingest path](./writing-connectors.md) already deliver messages as they arrive (no polling), so if sub-minute delivery matters to you today, that's the path to use.
+
+## How large does the SQLite database get?
+
+About **2.8 KB per message** for the base headers + bodies footprint on a synthetic corpus — so a 100k-message mailbox lands around **280 MiB**, and a 500k-message mailbox around **1.3 GiB**. That's with zlib compression on HTML bodies and SQLCipher AES-256 encryption both enabled (they're both on by default). See [Performance](./performance.md#storage-efficiency) for the full benchmark.
+
+Real-world mail varies — a terse reply might be 500 bytes; a marketing HTML email with inline images might be 100 KB — so expect your average to land somewhere between half and three times the synthetic number. **Attachments are stored separately** in `stork-blobs.db` and deduplicated by SHA-256, so a 5 MB PDF attached to 20 messages takes ~5 MB on disk, not 100 MB.
+
+Memory stays modest too: ~230 MiB resident for a half-million-message vault. The default Docker container has headroom at 256 MiB and is comfortable at 512 MiB for large mailboxes.
+
+## Can I run Stork without Docker?
+
+**Yes, but Docker is the supported path.** Docker is what CI tests against, what the release pipeline publishes to `ghcr.io/paperkite-hq/stork:latest`, and what the security flags in the Quick Start assume. Running from source is supported for development and for self-hosters who have a reason to avoid Docker — but if you hit something unexpected, the first debugging step is "does it reproduce under Docker?"
+
+To run from source you need Node.js 22 or later:
+
+```bash
+git clone https://github.com/paperkite-hq/stork.git
+cd stork
+npm install
+cd frontend && npm install && npm run build && cd ..
+npm run build && npm start
+```
+
+The README has a [systemd unit generator](../README.md) for running Stork on boot without Docker Desktop on Linux hosts. On non-Linux, you'll need to supply your own service manager (launchd, nssm, etc.) — the binary is just `node dist/index.js` with the same env vars the Docker image reads.
+
+## What data leaves my machine?
+
+**The only outbound traffic Stork initiates is IMAP to your mail provider (to fetch mail) and SMTP to your provider (to send mail).** That's it. No telemetry. No phone-home. No analytics. No crash reports shipped to a vendor. No update checks. The container doesn't talk to paperkite.sh, doesn't talk to GitHub, doesn't talk to anyone except the providers you explicitly configure.
+
+Incoming HTML mail is treated as untrusted — the renderer strips tracking pixels, known tracking URL patterns, and remote images by default, so opening an email doesn't leak a "read" signal back to the sender either (see the [architecture doc](./architecture.md) on HTML sanitization).
+
+If you run Stork behind a reverse proxy, bind it to `127.0.0.1:3100` (the default in the Quick Start) so the web UI is reachable only from your own machine or your own LAN. The Docker Quick Start already does this with `-p 127.0.0.1:3100:3100`.
