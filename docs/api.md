@@ -337,7 +337,7 @@ The `source` field indicates how the label was created:
 |--------|-----------|---------|----------|---------------------|
 | `imap` | Auto-created during IMAP sync from folder names | Inbox, Sent, Work | No | Yes |
 | `user` | Manually created by the user | Important, Follow-up | Yes | Yes |
-| `connector` | Auto-created when adding a mail account (one label per account) | work-imap | No | Yes |
+| `connector` | Auto-created for each identity (one label per identity) | work-imap | No | Yes |
 
 Only `user`-source labels can be renamed, recolored, or deleted by the user — `imap` and `connector` labels are managed automatically by the sync engine.
 

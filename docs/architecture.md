@@ -329,7 +329,7 @@ The sandbox attribute alone is sufficient — it is enforced by the browser's se
 
 Stork uses a unified-first multi-identity model: all identities share one SQLite database, and unified views (All Inboxes, All Unread, All Mail) span all identities by default. Per-identity views remain available for focused workflows.
 
-See [Multi-Identity Support](./multi-account.md) for the full philosophy and UX model.
+See [Multi-Identity Support](./multi-identity.md) for the full philosophy and UX model.
 
 ## Design Principles
 

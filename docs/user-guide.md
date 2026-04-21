@@ -128,7 +128,7 @@ The interface has three panels:
 
 Click the compose button to write a new message. When viewing a message, use the Reply or Reply All buttons.
 
-Composing requires SMTP credentials configured on the account. If you only set up IMAP, you can read mail but not send.
+Composing requires an outbound connector (SMTP or SES). If you only configured an inbound connector (IMAP or Cloudflare Email), you can read mail but not send — the compose button walks you through adding an outbound connector on first use.
 
 ### Search
 
@@ -152,9 +152,9 @@ See the [keyboard shortcuts cheatsheet](keyboard-shortcuts.md) for the full list
 
 Toggle dark mode from the settings or use the theme button. Your preference is saved in the browser.
 
-### Multiple Accounts
+### Multiple Identities
 
-You can connect multiple email accounts from the Settings panel. Each account syncs independently on its own schedule. The sidebar shows all accounts with their labels.
+You can connect multiple email identities from the Settings panel. Each inbound connector syncs independently on its own schedule, and unified views (Inbox, Unread, All Mail) span every connected identity. See [Multi-Identity Support](multi-identity.md) for the full model.
 
 ### Mail Organization Philosophy
 
@@ -163,7 +163,7 @@ Stork uses a **labels, not folders** model inspired by Gmail. Every IMAP folder 
 **Promoted views** (always at the top of the sidebar):
 - **Inbox** — your landing view. Shows messages with the Inbox label. This is portable across providers because every IMAP server has an INBOX folder, which Stork syncs as a label.
 - **Unread** — shows all unread messages across every label. This is a Stork-internal unread bit and does not flow back to the IMAP server. Useful when your IMAP server auto-sorts emails into folders — new messages in those folders will surface here.
-- **All Mail** — every message for the account, regardless of labels. Nothing is hidden from this view.
+- **All Mail** — every message across every identity, regardless of labels. Nothing is hidden from this view.
 
 **Labels** (below the divider):
 - All other labels (Sent, Drafts, Trash, Spam, custom labels, etc.) appear in the lower section.
@@ -206,7 +206,7 @@ Stork syncs mail using the IMAP protocol:
 2. **Message sync** — for each folder, fetches messages newer than what Stork already has (incremental sync using IMAP UIDs).
 3. **Flag sync** — updates read/unread/starred status for existing messages.
 
-Sync runs automatically every 5 minutes per account. You can also trigger a manual sync from the UI.
+Sync runs automatically every 5 minutes per inbound connector. You can also trigger a manual sync from the UI.
 
 ### What Stork Does NOT Do (by default)
 
@@ -317,4 +317,4 @@ Transient network errors are normal. Stork retries with backoff. If errors persi
 
 ### Search returns no results
 
-The FTS index is built automatically as messages are synced. If you just connected an account, wait for the initial sync to complete. The search covers subject, sender, recipients, and body text.
+The FTS index is built automatically as messages are synced. If you just connected a new inbound connector, wait for the initial sync to complete. The search covers subject, sender, recipients, and body text.
