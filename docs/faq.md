@@ -28,6 +28,18 @@ Stork has two sync philosophies, selectable per-connector in Settings > Inbound:
 
 A UID (Unique Identifier) is a stable number that an IMAP server assigns to each message in a mailbox. Unlike sequence numbers (which shift when messages are deleted), UIDs never change or get reused within a mailbox — IMAP servers guarantee this monotonically increasing property. Stork uses UIDs to track sync position: it remembers the highest UID it has seen and, on the next sync, only fetches messages with higher UIDs. This makes incremental sync efficient and correct even after messages are deleted from the server.
 
+## Why IMAP and app passwords instead of Gmail OAuth?
+
+Gmail (and most large providers) offer OAuth 2 as a "modern" alternative to IMAP + app passwords, and it's a reasonable question why Stork doesn't use it. The short answer: OAuth trades some security theater for a pile of operational friction that doesn't fit a self-hosted, offline-capable client.
+
+**Verification friction.** Google's OAuth flow requires the client app to be registered and — for access to mail data — put through Google's app-verification review process. Every self-hoster would need to either register their own Google Cloud project and plug their `client_id` into Stork, or Stork would need to ship a shared `client_id` that's visible in every copy of an OSS codebase (which Google explicitly doesn't support for unverified production apps). Neither story preserves the "one `docker run` and you're done" promise.
+
+**Provider-agnostic by design.** Stork is designed to work identically with any IMAP-capable mail source — Fastmail, Mailcow, Dovecot, Proton Bridge, your ISP's webmail. Building around OAuth would mean each provider with an OAuth flow gets a first-class path and everyone else is a second-class citizen. IMAP + password puts every provider on equal footing, which is exactly what a self-hosted archive tool wants.
+
+**App passwords are actually narrower-scoped.** A Gmail app password grants IMAP/SMTP/POP mail access *only* — it cannot read Calendar, Drive, Contacts, or your account settings. The OAuth mail scopes (`https://mail.google.com/`) grant the same mail-level access but require the broader OAuth plumbing. From a blast-radius perspective, the app password is a narrower credential that you can revoke per-device at any time.
+
+The step-by-step for Gmail specifically (enable 2SV, generate an app password, plug into Stork) lives in the [Gmail provider guide](./providers/gmail.md).
+
 ## Will my data survive an upgrade?
 
 **Yes.** Schema migrations run automatically when the container starts — no manual steps needed. Pull the new image, restart, and your encrypted database carries forward. See the [Upgrading guide](./upgrading.md) for backup recommendations and details on how migrations work.
