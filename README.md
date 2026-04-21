@@ -135,6 +135,43 @@ docker compose up --build
 ```
 </details>
 
+<details>
+<summary>Behind a reverse proxy (TLS)</summary>
+
+Stork binds to `127.0.0.1:3100` so it's only reachable from the host by default. To expose it on your LAN or the internet with HTTPS, front it with a reverse proxy on the same host.
+
+**Caddy** — one-liner with automatic Let's Encrypt certs (no certbot, no cron):
+
+```caddyfile
+mail.example.com {
+    reverse_proxy localhost:3100
+}
+```
+
+Point `mail.example.com` at your server first, drop that into your `Caddyfile`, run `caddy reload`, and you're done.
+
+**Nginx** — minimal HTTPS block (assumes a cert is already in place, e.g. via certbot):
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name mail.example.com;
+    ssl_certificate     /etc/letsencrypt/live/mail.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mail.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3100;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+See the [User Guide](docs/user-guide.md#reverse-proxy) for Traefik, auth-proxy layering (Authelia/Authentik), and LAN-only deployment notes.
+</details>
+
 ## Screenshots
 
 **Threaded conversations** — messages grouped by thread with expand/collapse, reply, reply-all, and forward:
