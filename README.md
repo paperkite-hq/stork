@@ -210,20 +210,21 @@ The UI walks you through this choice when you connect your first email, and surf
 
 ## How Stork Compares
 
-| | Stork | Roundcube | Bichon | Mailu |
-|---|---|---|---|---|
-| **What it is** | Email client | Webmail client | Email archiver | Full mail server |
-| **Deployment** | Docker (single container) | PHP + web server + DB | Docker / binary | Docker (multi-container) |
-| **Encryption at rest** | ✅ AES-256 SQLCipher | ❌ | ❌ | ❌ |
-| **Local storage** | ✅ SQLite | ✅ MySQL/PostgreSQL | ✅ EML files + Tantivy | ✅ (full server) |
-| **Full-text search** | ✅ FTS5 (fast, indexed) | ⚠️ basic | ✅ Tantivy | ✅ Solr |
-| **Web UI** | ✅ React | ✅ jQuery | ✅ React | ✅ (Roundcube/Rainloop) |
-| **Label-based org** | ✅ | ❌ (folders only) | ❌ | ❌ (folders only) |
-| **Compose/send** | ✅ SMTP | ✅ | ❌ (read-only) | ✅ (full MTA) |
-| **Recovery key** | ✅ BIP39 mnemonic | ❌ | ❌ | ❌ |
-| **Self-contained** | ✅ (no PHP, no extra DB) | ❌ | ✅ | ❌ (many services) |
+| | Stork | Thunderbird | Roundcube | Bichon | Mailu |
+|---|---|---|---|---|---|
+| **What it is** | Email client | Desktop email client | Webmail client | Email archiver | Full mail server |
+| **Deployment** | Docker (single container) | Desktop installer | PHP + web server + DB | Docker / binary | Docker (multi-container) |
+| **Access from any device** | ✅ Any browser | ❌ (one machine) | ✅ Any browser | ✅ Any browser | ✅ Any browser |
+| **Encryption at rest** | ✅ AES-256 SQLCipher | ❌ (unencrypted profile) | ❌ | ❌ | ❌ |
+| **Local storage** | ✅ SQLite | ✅ mbox/maildir | ✅ MySQL/PostgreSQL | ✅ EML files + Tantivy | ✅ (full server) |
+| **Full-text search** | ✅ FTS5 (fast, indexed) | ✅ Gloda | ⚠️ basic | ✅ Tantivy | ✅ Solr |
+| **Web UI** | ✅ React | ❌ (desktop only) | ✅ jQuery | ✅ React | ✅ (Roundcube/Rainloop) |
+| **Label-based org** | ✅ | ⚠️ tags (folder-primary) | ❌ (folders only) | ❌ | ❌ (folders only) |
+| **Compose/send** | ✅ SMTP | ✅ SMTP | ✅ | ❌ (read-only) | ✅ (full MTA) |
+| **Recovery key** | ✅ BIP39 mnemonic | ❌ | ❌ | ❌ | ❌ |
+| **Self-contained** | ✅ (no PHP, no extra DB) | ✅ (desktop app) | ❌ | ✅ | ❌ (many services) |
 
-**Roundcube** is the most mature option with the deepest plugin ecosystem — better for calendar integration or multi-user shared hosting. **Bichon** is focused on email archiving — better for long-term preservation of large mailboxes. **Mailu** is a complete mail server stack — use it if you need to replace your mail infrastructure entirely. Stork is a client that connects to your existing server.
+**Thunderbird** is the mainstream desktop client — pick it if you want a native app tied to one machine with built-in calendar, contacts, and OpenPGP. Stork trades the desktop-native feel for browser access from any device and an encrypted server-side mailbox. **Roundcube** is the most mature webmail option with the deepest plugin ecosystem — better for calendar integration or multi-user shared hosting. **Bichon** is focused on email archiving — better for long-term preservation of large mailboxes. **Mailu** is a complete mail server stack — use it if you need to replace your mail infrastructure entirely. Stork is a client that connects to your existing server.
 
 **Detailed comparisons:** [vs Roundcube](docs/comparisons/vs-roundcube.md) · [vs Thunderbird](docs/comparisons/vs-thunderbird.md) · [vs Bichon](docs/comparisons/vs-bichon.md)
 
