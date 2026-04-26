@@ -19,7 +19,7 @@
 		"db:migrate": "tsx src/storage/migrate.ts"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.19.12",
+		"@hono/node-server": "^2.0.0",
 		"@noble/hashes": "^2.0.1",
 		"better-sqlite3-multiple-ciphers": "^12.8.0",
 		"bip39": "^3.1.0",
